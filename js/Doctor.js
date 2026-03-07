@@ -1,3 +1,6 @@
+import { fillRoundRect, strokeRoundRect } from './utils.js'
+import { getRandomItem, getItemById, getItemImage, isMedicine } from './Items.js'
+
 export default class Doctor {
   constructor(id, bedArea) {
     this.id = id
@@ -25,23 +28,83 @@ export default class Doctor {
     this.blinkTimer = 0
     this.isBlinking = false
     
+    // 治疗流程相关
+    this.requiredItem = null // 需要的物品对象 {id, name, icon, color}
+    this.hasReceivedItem = false // 是否已收到物品
+    
+    // 外观差异
+    this.hairColor = '#5D4037' // 默认深棕色
+    this.eyeSizeX = 4 // 眼睛横向大小
+    this.eyeSizeY = 5 // 眼睛纵向大小
+    
     this.pickRandomTarget()
   }
 
   pickRandomTarget() {
-    // 在治疗区内随机移动
-    const margin = this.bedArea.width * 0.12
-    this.targetX = this.bedArea.x + margin + Math.random() * (this.bedArea.width - margin * 2)
-    this.targetY = this.bedArea.y + margin + Math.random() * (this.bedArea.height - margin * 2)
+    // 只在走道区域行走（不能在床的上方）
+    const walkableAreas = this.bedArea.getWalkableAreas()
+    if (walkableAreas.length > 0) {
+      // 随机选择一个走道区域
+      const area = walkableAreas[Math.floor(Math.random() * walkableAreas.length)]
+      // 在该走道区域内随机选择目标点
+      const margin = 10
+      this.targetX = area.x + margin + Math.random() * (area.width - margin * 2)
+      this.targetY = area.y + margin + Math.random() * (area.height - margin * 2)
+    } else {
+      // 如果没有走道区域，则在治疗区边缘移动
+      const margin = 20
+      const side = Math.floor(Math.random() * 4)
+      switch(side) {
+        case 0: // 上边
+          this.targetX = this.bedArea.x + margin + Math.random() * (this.bedArea.width - margin * 2)
+          this.targetY = this.bedArea.y + margin
+          break
+        case 1: // 右边
+          this.targetX = this.bedArea.x + this.bedArea.width - margin
+          this.targetY = this.bedArea.y + margin + Math.random() * (this.bedArea.height - margin * 2)
+          break
+        case 2: // 下边
+          this.targetX = this.bedArea.x + margin + Math.random() * (this.bedArea.width - margin * 2)
+          this.targetY = this.bedArea.y + this.bedArea.height - margin
+          break
+        case 3: // 左边
+          this.targetX = this.bedArea.x + margin
+          this.targetY = this.bedArea.y + margin + Math.random() * (this.bedArea.height - margin * 2)
+          break
+      }
+    }
     this.state = 'moving'
   }
 
   assignToBed(bed) {
     this.targetBed = bed
-    // 根据床位大小调整目标位置
-    this.targetX = bed.x + bed.width / 2
-    this.targetY = bed.y + bed.height / 2 + bed.height * 0.08
+    // 走到病床旁边的走道区域，不能踩在病床上方
+    this.targetX = this.getWalkablePointNearBed(bed).x
+    this.targetY = this.getWalkablePointNearBed(bed).y
     this.state = 'moving'
+  }
+
+  // 获取病床旁边靠墙侧的走道点（医生必须走到病床和墙壁之间）
+  getWalkablePointNearBed(bed) {
+    // 根据床的ID确定走到哪一侧
+    // 0号床（左上）：走到床和左墙之间
+    // 1号床（右上）：走到床和右墙之间
+    // 2号床（左下）：走到床和左墙之间
+    // 3号床（右下）：走到床和右墙之间
+    
+    if (bed.id === 0 || bed.id === 2) {
+      // 左列的床（0号和2号）：走到床和左墙之间
+      return {
+        x: bed.x - 15,
+        y: bed.y + bed.height / 2
+      }
+    } else {
+      // 右列的床（1号和3号）：走到床和右墙之间
+      return {
+        x: bed.x + bed.width + 15,
+        y: bed.y + bed.height / 2
+      }
+    }
   }
 
   update(deltaTime, bedArea) {
@@ -63,11 +126,14 @@ export default class Doctor {
         
         if (this.idleTime > 2000 + Math.random() * 2000) {
           const occupiedBeds = bedArea.getOccupiedBeds()
+          // 只寻找未被分配医生的病床
           const needsTreatment = occupiedBeds.find(bed => 
-            bed.patient && !bed.patient.isCured && bed.treatmentProgress < 1
+            bed.patient && !bed.patient.isCured && bed.treatmentProgress < 1 && !bed.assignedDoctor
           )
           
           if (needsTreatment && !this.targetBed && Math.random() > 0.4) {
+            // 标记病床已被分配
+            needsTreatment.assignedDoctor = this
             this.assignToBed(needsTreatment)
           } else {
             this.pickRandomTarget()
@@ -78,6 +144,16 @@ export default class Doctor {
         
       case 'moving':
         this.bounceOffset = Math.abs(Math.sin(this.animationTime / 120)) * -4
+        
+        // 如果正在前往病床，检查病床是否还有效
+        if (this.targetBed && (!this.targetBed.patient || this.targetBed.patient.isCured)) {
+          // 病床无效，取消前往
+          this.targetBed.assignedDoctor = null
+          this.targetBed = null
+          this.state = 'idle'
+          this.pickRandomTarget()
+          break
+        }
         
         const dx = this.targetX - this.x
         const dy = this.targetY - this.y
@@ -102,17 +178,71 @@ export default class Doctor {
         this.treatAnimation += deltaTime
         this.bounceOffset = Math.sin(this.animationTime / 80) * -2
         
-        if (this.targetBed && this.targetBed.patient && !this.targetBed.patient.isCured) {
-          this.targetBed.treatmentProgress += deltaTime / (this.targetBed.patient.condition.treatmentTime * 400)
-        }
-        
-        if (this.treatAnimation > 2500 || (this.targetBed && this.targetBed.isEmpty())) {
+        // 检查病床是否还有效（有病人且未治愈）
+        if (!this.targetBed || !this.targetBed.patient || this.targetBed.patient.isCured) {
+          // 病床无效，回到空闲状态
+          if (this.targetBed) {
+            this.targetBed.assignedDoctor = null
+          }
+          this.requiredItem = null
+          this.hasReceivedItem = false
           this.targetBed = null
           this.state = 'idle'
           this.pickRandomTarget()
+          break
+        }
+        
+        // 治疗流程
+        if (!this.requiredItem) {
+          // 第一步：医生刚到达，随机申请具体物品
+          this.requiredItem = getRandomItem()
+        } else if (!this.hasReceivedItem) {
+          // 第二步：等待用户拖动物品给医生
+          // 这里不做处理，等待Game类中的拖动逻辑
+        } else {
+          // 第三步：收到物品后，直接开始治疗，3秒后完成
+          this.targetBed.treatmentProgress += deltaTime / 3000 // 3秒完成治疗
+          
+          // 治疗完成
+          if (this.targetBed.treatmentProgress >= 1) {
+            this.targetBed.patient.isCured = true
+            // 清除病床的分配标记
+            this.targetBed.assignedDoctor = null
+            // 重置医生状态
+            this.requiredItem = null
+            this.hasReceivedItem = false
+            this.targetBed = null
+            this.state = 'idle'
+            this.pickRandomTarget()
+          }
         }
         break
     }
+  }
+
+  // 医生接收物品
+  receiveItem(itemId) {
+    if (this.state === 'treating' && this.requiredItem && this.requiredItem.id === itemId && !this.hasReceivedItem) {
+      this.hasReceivedItem = true
+      return true
+    }
+    return false
+  }
+
+  // 获取医生当前需要的物品
+  getRequiredItem() {
+    if (this.state === 'treating' && this.requiredItem && !this.hasReceivedItem) {
+      return this.requiredItem
+    }
+    return null
+  }
+  
+  // 获取需要的物品ID
+  getRequiredItemId() {
+    if (this.state === 'treating' && this.requiredItem && !this.hasReceivedItem) {
+      return this.requiredItem.id
+    }
+    return null
   }
 
   render(ctx) {
@@ -206,7 +336,7 @@ export default class Doctor {
     ctx.fill()
     
     // 头发
-    ctx.fillStyle = '#5D4037'
+    ctx.fillStyle = this.hairColor
     ctx.beginPath()
     ctx.arc(0, -16 * scale, 17 * scale, Math.PI * 1.1, Math.PI * -0.1)
     ctx.fill()
@@ -285,8 +415,8 @@ export default class Doctor {
     } else {
       ctx.fillStyle = '#2C3E50'
       ctx.beginPath()
-      ctx.ellipse(-6 * scale, -16 * scale, 4 * scale, 5 * scale, 0, 0, Math.PI * 2)
-      ctx.ellipse(6 * scale, -16 * scale, 4 * scale, 5 * scale, 0, 0, Math.PI * 2)
+      ctx.ellipse(-6 * scale, -16 * scale, this.eyeSizeX * scale, this.eyeSizeY * scale, 0, 0, Math.PI * 2)
+      ctx.ellipse(6 * scale, -16 * scale, this.eyeSizeX * scale, this.eyeSizeY * scale, 0, 0, Math.PI * 2)
       ctx.fill()
       
       ctx.fillStyle = '#FFF'
@@ -298,38 +428,68 @@ export default class Doctor {
     
     ctx.restore()
     
-    // 状态指示器（动态位置）
-    ctx.save()
-    ctx.translate(this.x, this.y - 45 * scale + this.bounceOffset)
-    
-    let statusEmoji = ''
-    let bubbleColor = ''
-    if (this.state === 'idle') {
-      statusEmoji = '💤'
-      bubbleColor = '#95A5A6'
-    } else if (this.state === 'moving') {
-      statusEmoji = '💨'
-      bubbleColor = '#3498DB'
-    } else if (this.state === 'treating') {
-      statusEmoji = '💉'
-      bubbleColor = '#E74C3C'
+    // 显示需要的物品（大泡泡 - 只显示icon）
+    if (this.state === 'treating' && this.requiredItem && !this.hasReceivedItem) {
+      ctx.save()
+      ctx.translate(this.x, this.y - 65 * scale)
+      
+      const item = this.requiredItem
+      const bubbleSize = 32 * scale // 正方形气泡
+      
+      // 根据物品类型确定气泡颜色：药品=红色，器械=绿色
+      const bubbleColor = isMedicine(item.id) ? '#E74C3C' : '#27AE60'
+      
+      // 泡泡背景
+      ctx.fillStyle = '#FFF'
+      fillRoundRect(ctx, -bubbleSize/2, -bubbleSize/2, bubbleSize, bubbleSize, 8)
+      ctx.strokeStyle = bubbleColor
+      ctx.lineWidth = 3
+      strokeRoundRect(ctx, -bubbleSize/2, -bubbleSize/2, bubbleSize, bubbleSize, 8)
+      
+      // 小三角形指向医生
+      ctx.fillStyle = bubbleColor
+      ctx.beginPath()
+      ctx.moveTo(-8, bubbleSize/2)
+      ctx.lineTo(0, bubbleSize/2 + 8)
+      ctx.lineTo(8, bubbleSize/2)
+      ctx.fill()
+      ctx.strokeStyle = bubbleColor
+      ctx.stroke()
+      
+      // 物品图标（居中显示，优先使用图片）
+      const itemImage = getItemImage(item.id)
+      if (itemImage) {
+        const imgSize = 24 * scale
+        ctx.drawImage(itemImage, -imgSize/2, -imgSize/2, imgSize, imgSize)
+      } else {
+        ctx.fillStyle = '#2C3E50'
+        ctx.font = `${22 * scale}px sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(item.icon, 0, 0)
+      }
+      
+      ctx.restore()
     }
     
-    const bubbleSize = 10 * scale
-    ctx.fillStyle = bubbleColor
-    ctx.beginPath()
-    ctx.arc(0, 0, bubbleSize, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.strokeStyle = '#FFF'
-    ctx.lineWidth = 2 * scale
-    ctx.stroke()
-    
-    ctx.fillStyle = '#FFF'
-    ctx.font = `${10 * scale}px sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(statusEmoji, 0, 0)
-    
-    ctx.restore()
+    // 显示治疗进度条（收到物品后开始显示）
+    if (this.state === 'treating' && this.hasReceivedItem && this.targetBed) {
+      ctx.save()
+      ctx.translate(this.x, this.y - 55 * scale)
+      
+      const barW = 40 * scale
+      const barH = 6 * scale
+      
+      // 背景
+      ctx.fillStyle = '#E0E0E0'
+      ctx.fillRect(-barW/2, -barH/2, barW, barH)
+      
+      // 进度
+      ctx.fillStyle = '#27AE60'
+      ctx.fillRect(-barW/2, -barH/2, barW * this.targetBed.treatmentProgress, barH)
+      
+      ctx.restore()
+    }
   }
+
 }

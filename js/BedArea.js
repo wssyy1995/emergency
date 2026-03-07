@@ -9,6 +9,7 @@ class Bed {
     this.height = height
     this.patient = null
     this.treatmentProgress = 0
+    this.assignedDoctor = null // 被分配到这个病床的医生
   }
 
   assignPatient(patient) {
@@ -25,6 +26,12 @@ class Bed {
   clear() {
     this.patient = null
     this.treatmentProgress = 0
+    this.assignedDoctor = null
+    this.scoreAdded = false
+    if (this.leaveTimer) {
+      clearTimeout(this.leaveTimer)
+      this.leaveTimer = null
+    }
   }
 
   isEmpty() {
@@ -37,107 +44,131 @@ class Bed {
   }
 
   render(ctx) {
-    // 阴影
-    ctx.fillStyle = 'rgba(0,0,0,0.08)'
-    ctx.beginPath()
-    ctx.ellipse(this.x + this.width / 2, this.y + this.height - this.height * 0.02, this.width / 2 - this.width * 0.02, this.height * 0.05, 0, 0, Math.PI * 2)
-    ctx.fill()
+    const boardWidth = this.width * 0.08
+    
+    // 有人躺上时，去掉阴影和特效，简化绘制
+    if (!this.patient) {
+      // 空闲时的阴影
+      ctx.fillStyle = 'rgba(0,0,0,0.08)'
+      ctx.beginPath()
+      ctx.ellipse(this.x + this.width / 2, this.y + this.height - this.height * 0.02, this.width / 2 - this.width * 0.02, this.height * 0.05, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
     
     // 床头板
     ctx.fillStyle = '#81D4C1'
-    const boardWidth = this.width * 0.06
     fillRoundRect(ctx, this.x, this.y, boardWidth, this.height, boardWidth / 2)
     
     // 床尾板
     fillRoundRect(ctx, this.x + this.width - boardWidth, this.y, boardWidth, this.height, boardWidth / 2)
     
-    // 床垫
-    ctx.fillStyle = this.patient ? '#E8F5E9' : '#F5F5F5'
+    // 床垫（有人时简化颜色）
+    ctx.fillStyle = this.patient ? '#FFF' : '#F5F5F5'
     ctx.fillRect(this.x + boardWidth + this.width * 0.01, this.y + this.height * 0.04, this.width - boardWidth * 2 - this.width * 0.02, this.height * 0.92)
     
-    // 枕头
+    // 枕头（四角微突的枕头形状）
     ctx.fillStyle = '#FFF'
+    const pillowW = this.width * 0.32
+    const pillowH = this.height * 0.13
+    const cx = this.x + this.width / 2
+    const cy = this.y + this.height * 0.18
+    const w = pillowW / 2
+    const h = pillowH / 2
+    
+    // 绘制枕头主体（四边微凹，四角微突）
     ctx.beginPath()
-    ctx.ellipse(this.x + this.width * 0.15, this.y + this.height * 0.15, this.width * 0.06, this.height * 0.06, 0, 0, Math.PI * 2)
+    ctx.moveTo(cx - w * 0.8, cy - h)
+    ctx.quadraticCurveTo(cx, cy - h * 1.3, cx + w * 0.8, cy - h)
+    ctx.quadraticCurveTo(cx + w * 1.15, cy, cx + w * 0.8, cy + h)
+    ctx.quadraticCurveTo(cx, cy + h * 1.3, cx - w * 0.8, cy + h)
+    ctx.quadraticCurveTo(cx - w * 1.15, cy, cx - w * 0.8, cy - h)
+    ctx.closePath()
     ctx.fill()
     
-    // 被子
-    if (this.patient) {
-      ctx.fillStyle = '#A5D6A7'
-      const coverWidth = this.width - boardWidth * 2 - this.width * 0.03
-      const coverHeight = this.height * 0.7
-      fillRoundRect(ctx, this.x + boardWidth + this.width * 0.015, this.y + this.height * 0.25, coverWidth, coverHeight, this.width * 0.015)
+    // 枕头边框
+    ctx.strokeStyle = '#BDBDBD'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+    
+    // 空闲时才有枕头阴影
+    if (!this.patient) {
+      ctx.fillStyle = 'rgba(0,0,0,0.08)'
+      ctx.beginPath()
+      ctx.ellipse(cx, cy + h + 2, w * 0.7, 3, 0, 0, Math.PI * 2)
+      ctx.fill()
     }
     
-    // 床边框
-    ctx.strokeStyle = this.patient ? '#66BB6A' : '#BDBDBD'
+    // 被子（白色，完全盖住身体）
+    if (this.patient) {
+      ctx.fillStyle = '#FFF'
+      const coverWidth = this.width - boardWidth * 2 - this.width * 0.02
+      const coverY = this.y + this.height * 0.32
+      const coverHeight = this.y + this.height * 0.92 - coverY
+      fillRoundRect(ctx, this.x + boardWidth + this.width * 0.01, coverY, coverWidth, coverHeight, this.width * 0.02)
+      // 简化边框
+      ctx.strokeStyle = '#E0E0E0'
+      ctx.lineWidth = 1
+      strokeRoundRect(ctx, this.x + boardWidth + this.width * 0.01, coverY, coverWidth, coverHeight, this.width * 0.02)
+    }
+    
+    // 床边框（有人时去掉颜色变化）
+    ctx.strokeStyle = '#BDBDBD'
     ctx.lineWidth = Math.max(1, this.width * 0.008)
     ctx.strokeRect(this.x + boardWidth + this.width * 0.01, this.y + this.height * 0.04, this.width - boardWidth * 2 - this.width * 0.02, this.height * 0.92)
     
     // 床位号
     ctx.fillStyle = '#FFF'
     ctx.beginPath()
-    ctx.arc(this.x + this.width / 2, this.y - this.height * 0.03, this.width * 0.06, 0, Math.PI * 2)
+    ctx.arc(this.x + this.width / 2, this.y - this.height * 0.03, this.width * 0.08, 0, Math.PI * 2)
     ctx.fill()
     ctx.strokeStyle = '#81D4C1'
     ctx.lineWidth = Math.max(1, this.width * 0.01)
     ctx.stroke()
     
     ctx.fillStyle = '#27AE60'
-    ctx.font = `bold ${Math.max(8, this.width * 0.08)}px sans-serif`
+    ctx.font = `bold ${Math.max(8, this.width * 0.1)}px sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(`${this.id + 1}`, this.x + this.width / 2, this.y - this.height * 0.03)
     
-    // 病人头像
+    // 绘制床上的病人（保持完整发型和脸型，头大小为枕头宽度的2/3）
     if (this.patient && !this.patient.isCured) {
-      const headSize = this.width * 0.1
-      ctx.fillStyle = this.patient.skinColor
-      ctx.beginPath()
-      ctx.arc(this.x + this.width / 2, this.y + this.height * 0.18, headSize, 0, Math.PI * 2)
-      ctx.fill()
+      // 保存原始状态
+      const originalX = this.patient.x
+      const originalY = this.patient.y
+      const originalWidth = this.patient.width
+      const originalHeight = this.patient.height
       
-      // 头发
-      ctx.fillStyle = this.patient.hairColor
-      ctx.beginPath()
-      ctx.arc(this.x + this.width / 2, this.y + this.height * 0.15, headSize, Math.PI, 0)
-      ctx.fill()
+      // 计算头大小比例
+      const pillowW = this.width * 0.32
+      const targetHeadWidth = pillowW * 2 / 3
+      const originalHeadWidth = 28 // Patient.js中头部宽度
+      const scaleRatio = targetHeadWidth / originalHeadWidth
       
-      // 眼睛
-      ctx.fillStyle = '#2C3E50'
-      ctx.beginPath()
-      ctx.arc(this.x + this.width / 2 - headSize * 0.3, this.y + this.height * 0.18, headSize * 0.15, 0, Math.PI * 2)
-      ctx.arc(this.x + this.width / 2 + headSize * 0.3, this.y + this.height * 0.18, headSize * 0.15, 0, Math.PI * 2)
-      ctx.fill()
+      // 设置病人在床上的位置和大小
+      // 头中心对齐枕头中心，再往下偏移
+      const headCenterX = this.x + this.width / 2
+      const headCenterY = this.y + this.height * 0.26 // 调整这个值来改变头的上下位置
       
-      // 病情图标
-      ctx.fillStyle = this.patient.condition.color
-      ctx.beginPath()
-      ctx.arc(this.x + this.width * 0.85, this.y + this.height * 0.1, this.width * 0.05, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.fillStyle = '#FFF'
-      ctx.font = `${Math.max(6, this.width * 0.05)}px sans-serif`
-      ctx.fillText(this.patient.condition.icon, this.x + this.width * 0.85, this.y + this.height * 0.1)
-    }
-    
-    // 治疗进度条
-    if (this.patient && !this.patient.isCured && this.treatmentProgress > 0) {
-      const barWidth = this.width * 0.7
-      const barHeight = this.height * 0.04
-      const barX = this.x + this.width * 0.15
-      const barY = this.y + this.height + this.height * 0.02
+      this.patient.width = originalWidth * scaleRatio
+      this.patient.height = originalHeight * scaleRatio
+      this.patient.x = headCenterX - this.patient.width / 2
+      this.patient.y = headCenterY - this.patient.height / 2 + this.patient.height * 0.3
       
-      ctx.fillStyle = '#E0E0E0'
-      fillRoundRect(ctx, barX, barY, barWidth, barHeight, barHeight / 2)
+      // 绘制完整病人（去掉裁剪，显示全身）
+      this.patient.render(ctx)
       
-      ctx.fillStyle = '#66BB6A'
-      fillRoundRect(ctx, barX, barY, barWidth * Math.min(this.treatmentProgress, 1), barHeight, barHeight / 2)
+      // 恢复原始值
+      this.patient.x = originalX
+      this.patient.y = originalY
+      this.patient.width = originalWidth
+      this.patient.height = originalHeight
     }
     
     // 空闲标记
     if (!this.patient) {
       ctx.fillStyle = '#BDBDBD'
-      ctx.font = `${Math.max(10, this.width * 0.12)}px sans-serif`
+      ctx.font = `${Math.max(10, this.width * 0.15)}px sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText('💤', this.x + this.width / 2, this.y + this.height / 2)
@@ -158,18 +189,18 @@ export default class BedArea {
   }
 
   initBeds() {
-    // 2列3行布局
+    // 2列2行布局（4个床位）
     const cols = 2
-    const rows = 3
+    const rows = 2
     
-    // 更小的床位尺寸（占区域比例更小）
-    const bedWidth = this.width * 0.32
-    const bedHeight = this.height * 0.22
+    // 床位尺寸（宽度减小，留出更多走道）
+    const bedWidth = this.width * 0.30
+    const bedHeight = this.height * 0.38
     const gapX = (this.width - bedWidth * cols) / (cols + 1)
     const gapY = (this.height - bedHeight * rows) / (rows + 1)
     
     const startX = this.x + gapX
-    const startY = this.y + gapY + this.height * 0.05
+    const startY = this.y + gapY + this.height * 0.03
     
     for (let i = 0; i < this.bedCount; i++) {
       const col = i % cols
@@ -178,6 +209,46 @@ export default class BedArea {
       const bedY = startY + row * (bedHeight + gapY)
       this.beds.push(new Bed(i, bedX, bedY, bedWidth, bedHeight))
     }
+  }
+
+  // 获取走道区域（医生可以在这些区域行走）
+  getWalkableAreas() {
+    const areas = []
+    const cols = 2
+    const rows = 2
+    const bedWidth = this.width * 0.30
+    const bedHeight = this.height * 0.38
+    const gapX = (this.width - bedWidth * cols) / (cols + 1)
+    const gapY = (this.height - bedHeight * rows) / (rows + 1)
+    const startX = this.x + gapX
+    const startY = this.y + gapY + this.height * 0.1
+
+    // 水平走道（床之间的横向走道）
+    for (let row = 0; row < rows; row++) {
+      const bedY = startY + row * (bedHeight + gapY)
+      // 走道在床的下方（除了最后一排）
+      if (row < rows - 1) {
+        areas.push({
+          x: this.x,
+          y: bedY + bedHeight,
+          width: this.width,
+          height: gapY
+        })
+      }
+    }
+
+    // 垂直走道（床之间的纵向走道）
+    for (let col = 0; col < cols - 1; col++) {
+      const bedX = startX + col * (bedWidth + gapX)
+      areas.push({
+        x: bedX + bedWidth,
+        y: this.y,
+        width: gapX,
+        height: this.height
+      })
+    }
+
+    return areas
   }
 
   findEmptyBed() {
@@ -207,41 +278,7 @@ export default class BedArea {
   }
 
   render(ctx) {
-    // 医疗设备柜（动态尺寸）
-    const cabinetWidth = this.width * 0.1
-    const cabinetHeight = this.height * 0.2
-    const cabinetX = this.x + this.width - cabinetWidth - this.width * 0.02
-    const cabinetY = this.y + this.height * 0.06
-    
-    ctx.fillStyle = '#E8F5E9'
-    fillRoundRect(ctx, cabinetX, cabinetY, cabinetWidth, cabinetHeight, cabinetWidth * 0.1)
-    ctx.strokeStyle = '#81C784'
-    ctx.lineWidth = Math.max(1, this.width * 0.005)
-    strokeRoundRect(ctx, cabinetX, cabinetY, cabinetWidth, cabinetHeight, cabinetWidth * 0.1)
-    
-    // 柜子门
-    ctx.strokeStyle = '#A5D6A7'
-    ctx.beginPath()
-    ctx.moveTo(cabinetX + cabinetWidth / 2, cabinetY)
-    ctx.lineTo(cabinetX + cabinetWidth / 2, cabinetY + cabinetHeight)
-    ctx.stroke()
-    
-    // 把手
-    ctx.fillStyle = '#FFD54F'
-    ctx.beginPath()
-    ctx.arc(cabinetX + cabinetWidth * 0.35, cabinetY + cabinetHeight / 2, cabinetWidth * 0.06, 0, Math.PI * 2)
-    ctx.arc(cabinetX + cabinetWidth * 0.65, cabinetY + cabinetHeight / 2, cabinetWidth * 0.06, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 医疗箱
-    ctx.fillStyle = '#EF5350'
-    const boxSize = cabinetWidth * 0.35
-    fillRoundRect(ctx, cabinetX + cabinetWidth * 0.1, cabinetY + cabinetHeight * 0.12, boxSize, boxSize * 0.7, boxSize * 0.1)
-    ctx.fillStyle = '#FFF'
-    const crossWidth = boxSize * 0.25
-    const crossHeight = boxSize * 0.1
-    ctx.fillRect(cabinetX + cabinetWidth * 0.1 + boxSize / 2 - crossWidth / 2, cabinetY + cabinetHeight * 0.12 + boxSize * 0.3, crossWidth, crossHeight)
-    ctx.fillRect(cabinetX + cabinetWidth * 0.1 + boxSize / 2 - crossHeight / 2, cabinetY + cabinetHeight * 0.12 + boxSize * 0.2, crossHeight, crossWidth)
+    // 治疗区右上角的柜子已去掉
     
     // 绘制床位
     this.beds.forEach(bed => bed.render(ctx))

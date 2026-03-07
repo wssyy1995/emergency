@@ -29,7 +29,7 @@ export default class WaitingArea {
     const seatWidth = this.width * 0.18
     const seatHeight = this.height * 0.14
     const gapX = (this.width - seatWidth * seatsPerRow) / (seatsPerRow + 1)
-    const gapY = this.height * 0.10
+    const gapY = this.height * 0.15
     
     // 起始位置（前台下方）
     const startY = this.y + this.height * 0.55
