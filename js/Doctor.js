@@ -7,11 +7,11 @@ export default class Doctor {
     this.bedArea = bedArea
     this.name = '白医生'
     
-    // 位置和尺寸（动态计算，与病人一致）- 已缩小25%
+    // 位置和尺寸（动态计算，与病人一致）
     this.x = 0
     this.y = 0
-    this.width = 21  // 基础宽度，与Patient一致
-    this.height = 33.75 // 基础高度，与Patient一致
+    this.width = 21
+    this.height = 33.75
     
     this.targetX = 0
     this.targetY = 0
@@ -29,8 +29,13 @@ export default class Doctor {
     this.isBlinking = false
     
     // 治疗流程相关
-    this.requiredItem = null // 需要的物品对象 {id, name, icon, color}
-    this.hasReceivedItem = false // 是否已收到物品
+    this.requiredItems = [] // 需要的物品数组 [{id, name, icon, color}, ...]
+    this.receivedItems = [] // 已收到的物品ID数组
+    this.currentLevel = 0 // 当前关卡，用于决定申请物品数量
+    
+    // 兼容旧代码的别名
+    this.requiredItem = null
+    this.hasReceivedItem = false
     
     // 外观差异
     this.hairColor = '#5D4037' // 默认深棕色
@@ -184,6 +189,8 @@ export default class Doctor {
           if (this.targetBed) {
             this.targetBed.assignedDoctor = null
           }
+          this.requiredItems = []
+          this.receivedItems = []
           this.requiredItem = null
           this.hasReceivedItem = false
           this.targetBed = null
@@ -193,15 +200,28 @@ export default class Doctor {
         }
         
         // 治疗流程
-        if (!this.requiredItem) {
-          // 第一步：医生刚到达，随机申请具体物品
-          this.requiredItem = getRandomItem()
-        } else if (!this.hasReceivedItem) {
-          // 第二步：等待用户拖动物品给医生
-          // 这里不做处理，等待Game类中的拖动逻辑
+        if (this.requiredItems.length === 0) {
+          // 第一步：医生刚到达，根据关卡决定申请物品数量
+          // 第0关: 1个物品, 第1关: 2个物品
+          const itemCount = this.currentLevel >= 1 ? 2 : 1
+          const usedIds = new Set()
+          for (let i = 0; i < itemCount; i++) {
+            let item = getRandomItem()
+            // 避免重复
+            while (usedIds.has(item.id)) {
+              item = getRandomItem()
+            }
+            usedIds.add(item.id)
+            this.requiredItems.push(item)
+          }
+          // 兼容旧代码
+          this.requiredItem = this.requiredItems[0]
+        } else if (!this.hasReceivedAllItems()) {
+          // 第二步：等待用户配送物品
+          // 这里不做处理，等待Game类中的配送逻辑
         } else {
-          // 第三步：收到物品后，直接开始治疗，3秒后完成
-          this.targetBed.treatmentProgress += deltaTime / 3000 // 3秒完成治疗
+          // 第三步：收到物品后，直接开始治疗，2秒后完成
+          this.targetBed.treatmentProgress += deltaTime / 2000 // 2秒完成治疗
           
           // 治疗完成
           if (this.targetBed.treatmentProgress >= 1) {
@@ -209,6 +229,8 @@ export default class Doctor {
             // 清除病床的分配标记
             this.targetBed.assignedDoctor = null
             // 重置医生状态
+            this.requiredItems = []
+            this.receivedItems = []
             this.requiredItem = null
             this.hasReceivedItem = false
             this.targetBed = null
@@ -222,27 +244,66 @@ export default class Doctor {
 
   // 医生接收物品
   receiveItem(itemId) {
-    if (this.state === 'treating' && this.requiredItem && this.requiredItem.id === itemId && !this.hasReceivedItem) {
-      this.hasReceivedItem = true
+    // 检查是否是需要且未收到的物品
+    if (this.state === 'treating' && this.isRequiredItem(itemId) && !this.checkItemReceived(itemId)) {
+      this.receivedItems.push(itemId)
+      // 更新兼容属性
+      this.hasReceivedItem = this.hasReceivedAllItems()
       return true
     }
     return false
   }
 
-  // 获取医生当前需要的物品
+  // 检查是否是需要且未收到的物品
+  isRequiredItem(itemId) {
+    return this.requiredItems.some(item => item.id === itemId)
+  }
+
+  // 检查物品是否已收到
+  checkItemReceived(itemId) {
+    return this.receivedItems.includes(itemId)
+  }
+
+  // 是否已收到所有物品
+  hasReceivedAllItems() {
+    if (this.requiredItems.length === 0) return false
+    return this.requiredItems.every(item => this.receivedItems.includes(item.id))
+  }
+
+  // 获取医生当前需要的物品（第一个未收到的）
   getRequiredItem() {
-    if (this.state === 'treating' && this.requiredItem && !this.hasReceivedItem) {
-      return this.requiredItem
+    if (this.state === 'treating' && this.requiredItems.length > 0) {
+      for (const item of this.requiredItems) {
+        if (!this.receivedItems.includes(item.id)) {
+          return item
+        }
+      }
     }
     return null
   }
   
-  // 获取需要的物品ID
+  // 获取需要的物品ID（第一个未收到的）
   getRequiredItemId() {
-    if (this.state === 'treating' && this.requiredItem && !this.hasReceivedItem) {
-      return this.requiredItem.id
+    const item = this.getRequiredItem()
+    return item ? item.id : null
+  }
+
+  // 获取所有需要的物品ID
+  getRequiredItemIds() {
+    if (this.state === 'treating' && this.requiredItems.length > 0) {
+      return this.requiredItems
+        .filter(item => !this.receivedItems.includes(item.id))
+        .map(item => item.id)
     }
-    return null
+    return []
+  }
+
+  // 获取所有需要的物品（未收到的）
+  getAllRequiredItems() {
+    if (this.state === 'treating' && this.requiredItems.length > 0) {
+      return this.requiredItems.filter(item => !this.receivedItems.includes(item.id))
+    }
+    return []
   }
 
   render(ctx) {
@@ -428,52 +489,64 @@ export default class Doctor {
     
     ctx.restore()
     
-    // 显示需要的物品（大泡泡 - 只显示icon）
-    if (this.state === 'treating' && this.requiredItem && !this.hasReceivedItem) {
+    // 显示需要的物品（大泡泡 - 所有物品在同一个气泡中）
+    const requiredItems = this.getAllRequiredItems()
+    if (this.state === 'treating' && requiredItems.length > 0) {
+      const itemCount = requiredItems.length
+      const itemSize = 36 * scale
+      const padding = 8 * scale
+      const gap = 6 * scale
+      const bubbleWidth = itemCount * itemSize + (itemCount - 1) * gap + padding * 2
+      const bubbleHeight = itemSize + padding * 2
+      const bubbleX = this.x - bubbleWidth / 2
+      const bubbleY = this.y - 70 * scale - bubbleHeight / 2
+      
       ctx.save()
-      ctx.translate(this.x, this.y - 65 * scale)
+      ctx.translate(this.x, this.y - 70 * scale)
       
-      const item = this.requiredItem
-      const bubbleSize = 32 * scale // 正方形气泡
+      // 泡泡边缘统一使用红色
+      const bubbleColor = '#E74C3C'
       
-      // 根据物品类型确定气泡颜色：药品=红色，器械=绿色
-      const bubbleColor = isMedicine(item.id) ? '#E74C3C' : '#27AE60'
-      
-      // 泡泡背景
+      // 泡泡背景（根据物品数量调整宽度）
       ctx.fillStyle = '#FFF'
-      fillRoundRect(ctx, -bubbleSize/2, -bubbleSize/2, bubbleSize, bubbleSize, 8)
+      fillRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 12)
       ctx.strokeStyle = bubbleColor
-      ctx.lineWidth = 3
-      strokeRoundRect(ctx, -bubbleSize/2, -bubbleSize/2, bubbleSize, bubbleSize, 8)
+      ctx.lineWidth = 4
+      strokeRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 12)
       
       // 小三角形指向医生
       ctx.fillStyle = bubbleColor
       ctx.beginPath()
-      ctx.moveTo(-8, bubbleSize/2)
-      ctx.lineTo(0, bubbleSize/2 + 8)
-      ctx.lineTo(8, bubbleSize/2)
+      ctx.moveTo(-12, bubbleHeight/2)
+      ctx.lineTo(0, bubbleHeight/2 + 12)
+      ctx.lineTo(12, bubbleHeight/2)
       ctx.fill()
       ctx.strokeStyle = bubbleColor
+      ctx.lineWidth = 2
       ctx.stroke()
       
-      // 物品图标（居中显示，优先使用图片）
-      const itemImage = getItemImage(item.id)
-      if (itemImage) {
-        const imgSize = 24 * scale
-        ctx.drawImage(itemImage, -imgSize/2, -imgSize/2, imgSize, imgSize)
-      } else {
-        ctx.fillStyle = '#2C3E50'
-        ctx.font = `${22 * scale}px sans-serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(item.icon, 0, 0)
-      }
+      // 绘制所有物品图标（水平排列在同一个气泡中）
+      const startIconX = -(itemCount * itemSize + (itemCount - 1) * gap) / 2 + itemSize / 2
+      requiredItems.forEach((item, index) => {
+        const iconX = startIconX + index * (itemSize + gap)
+        
+        const itemImage = getItemImage(item.id)
+        if (itemImage) {
+          ctx.drawImage(itemImage, iconX - itemSize/2, -itemSize/2, itemSize, itemSize)
+        } else {
+          ctx.fillStyle = '#2C3E50'
+          ctx.font = `${itemSize}px sans-serif`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(item.icon, iconX, 0)
+        }
+      })
       
       ctx.restore()
     }
     
-    // 显示治疗进度条（收到物品后开始显示）
-    if (this.state === 'treating' && this.hasReceivedItem && this.targetBed) {
+    // 显示治疗进度条（收到所有物品后开始显示）
+    if (this.state === 'treating' && this.hasReceivedAllItems() && this.targetBed) {
       ctx.save()
       ctx.translate(this.x, this.y - 55 * scale)
       

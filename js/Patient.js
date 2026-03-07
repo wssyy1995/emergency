@@ -47,7 +47,7 @@ export default class Patient {
     this.facing = 1
     this.isMoving = false
     
-    this.patience = 20
+    this.patience = 30
     this.maxPatience = this.patience
     this.isAngry = false
     this.inBed = false
@@ -714,7 +714,16 @@ export default class Patient {
       ctx.save()
       ctx.fillStyle = 'rgba(0,0,0,0.3)'
       ctx.fillRect(centerX - 18 * scale, this.y - 28 * scale + this.bounceOffset, 36 * scale, 5 * scale)
-      ctx.fillStyle = patiencePercent > 0.3 ? '#2ECC71' : '#E74C3C'
+      // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色
+      let barColor
+      if (patiencePercent > 0.5) {
+        barColor = '#2ECC71' // 绿色
+      } else if (patiencePercent > 0.3) {
+        barColor = '#F39C12' // 橙色
+      } else {
+        barColor = '#E74C3C' // 红色
+      }
+      ctx.fillStyle = barColor
       ctx.fillRect(centerX - 18 * scale, this.y - 28 * scale + this.bounceOffset, 36 * scale * patiencePercent, 5 * scale)
       ctx.restore()
     }
@@ -740,36 +749,38 @@ export default class Patient {
       ctx.restore()
     }
     
-    // 小火焰（到达前台后显示在头顶）
+    // 小火焰（到达前台后显示在头顶）- 更贴近头顶
     if (this.tomatoThrown) {
       ctx.save()
-      ctx.translate(centerX, this.y - 35 * scale + this.bounceOffset)
+      // 靠近头顶的位置：再往上挪一点
+      ctx.translate(centerX, centerY - 40 * scale + this.bounceOffset)
       
-      const flameTime = this.animationTime / 60
-      const wobble = Math.sin(flameTime) * 2 * scale
+      const flameTime = this.animationTime / 50
+      const flicker = Math.sin(flameTime) * 0.3 + 1 // 闪烁效果
+      const lean = Math.sin(flameTime * 0.7) * 2 * scale // 左右倾斜
       
-      // 外焰（红色）- 会摇摆
+      // 底层火焰（红色）- 变大
       ctx.fillStyle = '#FF4444'
       ctx.beginPath()
-      ctx.moveTo(-6 * scale + wobble, 0)
-      ctx.quadraticCurveTo(-4 * scale + wobble * 0.5, -12 * scale, 0 + wobble * 0.3, -18 * scale)
-      ctx.quadraticCurveTo(4 * scale + wobble * 0.5, -12 * scale, 6 * scale + wobble, 0)
+      ctx.moveTo(-5 * scale + lean * 0.3, 0)
+      ctx.quadraticCurveTo(-4 * scale + lean * 0.5, -8 * scale * flicker, lean * 0.2, -13 * scale * flicker)
+      ctx.quadraticCurveTo(4 * scale + lean * 0.5, -8 * scale * flicker, 5 * scale + lean * 0.3, 0)
       ctx.fill()
       
-      // 内焰（橙色）
-      ctx.fillStyle = '#FF8800'
+      // 中层火焰（橙色）- 变大
+      ctx.fillStyle = '#FF7700'
       ctx.beginPath()
-      ctx.moveTo(-4 * scale + wobble * 0.7, 0)
-      ctx.quadraticCurveTo(-2 * scale + wobble * 0.3, -8 * scale, 0, -14 * scale)
-      ctx.quadraticCurveTo(2 * scale + wobble * 0.3, -8 * scale, 4 * scale + wobble * 0.7, 0)
+      ctx.moveTo(-4 * scale + lean * 0.3, 0)
+      ctx.quadraticCurveTo(-3 * scale + lean * 0.5, -6 * scale * flicker, lean * 0.2, -10 * scale * flicker)
+      ctx.quadraticCurveTo(3 * scale + lean * 0.5, -6 * scale * flicker, 4 * scale + lean * 0.3, 0)
       ctx.fill()
       
-      // 焰心（黄色）
-      ctx.fillStyle = '#FFDD00'
+      // 焰心（黄色）- 变大
+      ctx.fillStyle = '#FFDD33'
       ctx.beginPath()
-      ctx.moveTo(-2 * scale, 0)
-      ctx.quadraticCurveTo(-1 * scale, -5 * scale, 0, -8 * scale)
-      ctx.quadraticCurveTo(1 * scale, -5 * scale, 2 * scale, 0)
+      ctx.moveTo(-2.5 * scale, 0)
+      ctx.quadraticCurveTo(-1.5 * scale, -4 * scale * flicker, 0, -6 * scale * flicker)
+      ctx.quadraticCurveTo(1.5 * scale, -4 * scale * flicker, 2.5 * scale, 0)
       ctx.fill()
       
       ctx.restore()
@@ -777,7 +788,10 @@ export default class Patient {
   }
 
   contains(x, y) {
-    return x >= this.x && x <= this.x + this.width &&
-           y >= this.y && y <= this.y + this.height
+    // 扩大点击范围（水平15像素，垂直20像素，特别扩大下方范围便于点击下半身）
+    const paddingX = 15
+    const paddingY = 20
+    return x >= this.x - paddingX && x <= this.x + this.width + paddingX &&
+           y >= this.y - paddingY && y <= this.y + this.height + paddingY * 1.5
   }
 }

@@ -10,6 +10,27 @@ class Bed {
     this.patient = null
     this.treatmentProgress = 0
     this.assignedDoctor = null // 被分配到这个病床的医生
+    
+    // 加载空闲图标
+    this.freeImage = null
+    this.pillowImage = null
+    this.loadImages()
+  }
+  
+  loadImages() {
+    // 加载空闲图标
+    const freeImg = wx.createImage()
+    freeImg.onload = () => {
+      this.freeImage = freeImg
+    }
+    freeImg.src = 'images/free.png'
+    
+    // 加载枕头图片
+    const pillowImg = wx.createImage()
+    pillowImg.onload = () => {
+      this.pillowImage = pillowImg
+    }
+    pillowImg.src = 'images/pillow.png'
   }
 
   assignPatient(patient) {
@@ -66,35 +87,41 @@ class Bed {
     ctx.fillStyle = this.patient ? '#FFF' : '#F5F5F5'
     ctx.fillRect(this.x + boardWidth + this.width * 0.01, this.y + this.height * 0.04, this.width - boardWidth * 2 - this.width * 0.02, this.height * 0.92)
     
-    // 枕头（四角微突的枕头形状）
-    ctx.fillStyle = '#FFF'
-    const pillowW = this.width * 0.32
-    const pillowH = this.height * 0.13
+    // 枕头
     const cx = this.x + this.width / 2
     const cy = this.y + this.height * 0.18
-    const w = pillowW / 2
-    const h = pillowH / 2
     
-    // 绘制枕头主体（四边微凹，四角微突）
-    ctx.beginPath()
-    ctx.moveTo(cx - w * 0.8, cy - h)
-    ctx.quadraticCurveTo(cx, cy - h * 1.3, cx + w * 0.8, cy - h)
-    ctx.quadraticCurveTo(cx + w * 1.15, cy, cx + w * 0.8, cy + h)
-    ctx.quadraticCurveTo(cx, cy + h * 1.3, cx - w * 0.8, cy + h)
-    ctx.quadraticCurveTo(cx - w * 1.15, cy, cx - w * 0.8, cy - h)
-    ctx.closePath()
-    ctx.fill()
-    
-    // 枕头边框
-    ctx.strokeStyle = '#BDBDBD'
-    ctx.lineWidth = 1.5
-    ctx.stroke()
+    if (this.pillowImage && this.pillowImage.width > 0) {
+      // 使用图片绘制枕头，宽度优先
+      const drawWidth = this.width * 0.5  // 直接控制宽度
+      const drawHeight = this.height * 0.3  // 直接控制高度
+      
+      ctx.drawImage(this.pillowImage, cx - drawWidth / 2, cy - drawHeight / 2, drawWidth, drawHeight)
+    } else {
+      // 图片未加载时的备用绘制
+      const pillowW = this.width * 0.32
+      const pillowH = this.height * 0.13
+      ctx.fillStyle = '#FFF'
+      const w = pillowW / 2
+      const h = pillowH / 2
+      ctx.beginPath()
+      ctx.moveTo(cx - w * 0.8, cy - h)
+      ctx.quadraticCurveTo(cx, cy - h * 1.3, cx + w * 0.8, cy - h)
+      ctx.quadraticCurveTo(cx + w * 1.15, cy, cx + w * 0.8, cy + h)
+      ctx.quadraticCurveTo(cx, cy + h * 1.3, cx - w * 0.8, cy + h)
+      ctx.quadraticCurveTo(cx - w * 1.15, cy, cx - w * 0.8, cy - h)
+      ctx.closePath()
+      ctx.fill()
+      ctx.strokeStyle = '#BDBDBD'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
     
     // 空闲时才有枕头阴影
     if (!this.patient) {
       ctx.fillStyle = 'rgba(0,0,0,0.08)'
       ctx.beginPath()
-      ctx.ellipse(cx, cy + h + 2, w * 0.7, 3, 0, 0, Math.PI * 2)
+      ctx.ellipse(cx, cy + this.height * 0.065 + 2, this.width * 0.16, 3, 0, 0, Math.PI * 2)
       ctx.fill()
     }
     
@@ -167,11 +194,17 @@ class Bed {
     
     // 空闲标记
     if (!this.patient) {
-      ctx.fillStyle = '#BDBDBD'
-      ctx.font = `${Math.max(10, this.width * 0.15)}px sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText('💤', this.x + this.width / 2, this.y + this.height / 2)
+      const iconSize = this.width * 0.25
+      if (this.freeImage) {
+        ctx.drawImage(this.freeImage, this.x + this.width / 2 - iconSize / 2, this.y + this.height / 2 - iconSize / 2, iconSize, iconSize)
+      } else {
+        // 图片未加载时显示备用文字
+        ctx.fillStyle = '#BDBDBD'
+        ctx.font = `${Math.max(10, this.width * 0.15)}px sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('空闲', this.x + this.width / 2, this.y + this.height / 2)
+      }
     }
   }
 }
@@ -193,14 +226,16 @@ export default class BedArea {
     const cols = 2
     const rows = 2
     
-    // 床位尺寸（宽度减小，留出更多走道）
+    // 床位尺寸（高度减小，留出底部空间放托盘）
     const bedWidth = this.width * 0.30
-    const bedHeight = this.height * 0.38
+    const bedHeight = this.height * 0.28
     const gapX = (this.width - bedWidth * cols) / (cols + 1)
-    const gapY = (this.height - bedHeight * rows) / (rows + 1)
+    // 减小行间距，让12和34床位更紧凑
+    const gapY = (this.height - bedHeight * rows) / (rows + 1) * 0.7
     
     const startX = this.x + gapX
-    const startY = this.y + gapY + this.height * 0.03
+    // 第一行（12床位）往下移动
+    const startY = this.y + gapY + this.height * 0.06
     
     for (let i = 0; i < this.bedCount; i++) {
       const col = i % cols
@@ -217,11 +252,11 @@ export default class BedArea {
     const cols = 2
     const rows = 2
     const bedWidth = this.width * 0.30
-    const bedHeight = this.height * 0.38
+    const bedHeight = this.height * 0.28
     const gapX = (this.width - bedWidth * cols) / (cols + 1)
-    const gapY = (this.height - bedHeight * rows) / (rows + 1)
+    const gapY = (this.height - bedHeight * rows) / (rows + 1) * 0.7
     const startX = this.x + gapX
-    const startY = this.y + gapY + this.height * 0.1
+    const startY = this.y + gapY + this.height * 0.06
 
     // 水平走道（床之间的横向走道）
     for (let row = 0; row < rows; row++) {

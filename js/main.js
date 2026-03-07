@@ -14,8 +14,14 @@ const game = new Game()
 
 // 启动游戏
 wx.onShow(() => {
-  game.start()
+  if (!game.isRunning) {
+    game.start()
+  }
 })
 
-// 立即启动
-game.start()
+// 首次启动（延迟确保环境准备好）
+setTimeout(() => {
+  if (!game.isRunning) {
+    game.start()
+  }
+}, 100)

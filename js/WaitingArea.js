@@ -71,6 +71,7 @@ export default class WaitingArea {
     if (emptySeat) {
       emptySeat.occupied = true
       emptySeat.patient = patient
+      emptySeat.patientSeated = false  // 病人还未坐下
       patient.seat = emptySeat
       // 设置病人尺寸（等候区专用，较小）
       patient.width = 16
@@ -97,6 +98,7 @@ export default class WaitingArea {
       if (patient.seat) {
         patient.seat.occupied = false
         patient.seat.patient = null
+        patient.seat.patientSeated = false
         patient.seat = null
       }
       if (patient.queuePos) {
@@ -124,6 +126,7 @@ export default class WaitingArea {
           const seat = this.seats[seatIndex]
           seat.occupied = true
           seat.patient = patient
+          seat.patientSeated = false  // 病人还未坐下
           patient.seat = seat
           // 设置病人尺寸（等候区专用，较小）
           patient.width = 16
@@ -153,6 +156,7 @@ export default class WaitingArea {
     this.seats.forEach(seat => {
       seat.occupied = false
       seat.patient = null
+      seat.patientSeated = false
     })
     this.queuePositions.forEach(pos => {
       pos.occupied = false
@@ -176,6 +180,22 @@ export default class WaitingArea {
 
   update(deltaTime) {
     this.nurse.update(deltaTime)
+    
+    // 检查病人是否已坐下
+    this.seats.forEach(seat => {
+      if (seat.occupied && seat.patient && !seat.patientSeated) {
+        const patient = seat.patient
+        // 检查病人是否已到达座位位置（停止移动）
+        if (!patient.isMoving) {
+          const dx = patient.x - (seat.x + (seat.width - patient.width) / 2)
+          const dy = patient.y - (seat.y - patient.height * 0.2)
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist < 5) {
+            seat.patientSeated = true
+          }
+        }
+      }
+    })
   }
 
   render(ctx) {
@@ -236,20 +256,20 @@ export default class WaitingArea {
       ctx.lineTo(seat.x + seat.width * 0.9, seat.y + seat.height * 0.6)
       ctx.stroke()
       
-      // 座面（天蓝色）
-      ctx.fillStyle = seat.occupied ? '#5DADE2' : '#87CEEB'
+      // 座面（天蓝色）- 只有病人坐下后才变色
+      ctx.fillStyle = seat.patientSeated ? '#5DADE2' : '#87CEEB'
       ctx.fillRect(seat.x + seat.width * 0.05, seat.y + seat.height * 0.5, seat.width * 0.9, seat.height * 0.18)
-      ctx.strokeStyle = seat.occupied ? '#2E86AB' : '#5DADE2'
+      ctx.strokeStyle = seat.patientSeated ? '#2E86AB' : '#5DADE2'
       ctx.lineWidth = 1.5
       ctx.strokeRect(seat.x + seat.width * 0.05, seat.y + seat.height * 0.5, seat.width * 0.9, seat.height * 0.18)
       
-      // 靠背（天蓝色）
-      ctx.fillStyle = seat.occupied ? '#5DADE2' : '#87CEEB'
+      // 靠背（天蓝色）- 只有病人坐下后才变色
+      ctx.fillStyle = seat.patientSeated ? '#5DADE2' : '#87CEEB'
       ctx.fillRect(seat.x + seat.width * 0.05, seat.y, seat.width * 0.9, seat.height * 0.5)
-      ctx.strokeStyle = seat.occupied ? '#2E86AB' : '#5DADE2'
+      ctx.strokeStyle = seat.patientSeated ? '#2E86AB' : '#5DADE2'
       ctx.strokeRect(seat.x + seat.width * 0.05, seat.y, seat.width * 0.9, seat.height * 0.5)
       
-      // 座位号
+      // 座位号（只有座位空闲时显示）
       if (!seat.occupied) {
         ctx.fillStyle = '#2E86AB'
         ctx.font = `bold ${Math.max(8, seat.width * 0.18)}px sans-serif`

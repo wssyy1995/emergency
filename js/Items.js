@@ -33,10 +33,10 @@ export const MEDICINES = [
 // 工具定义
 export const TOOLS = [
   {
-    id: 'stethoscope',
-    name: '听诊器',
-    icon: '🩺',
-    imagePath: 'images/stethoscope.png',
+    id: 'aed',
+    name: 'AED',
+    icon: '⚡',
+    imagePath: 'images/aed.png',
     color: '#F38181'
   },
   {
