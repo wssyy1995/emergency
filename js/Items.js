@@ -41,7 +41,7 @@ export const TOOLS = [
   },
   {
     id: 'tape',
-    name: '医用胶带',
+    name: '医用绷带',
     icon: '🩹',
     imagePath: 'images/tape.png',
     color: '#AA96DA'

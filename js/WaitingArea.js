@@ -1,4 +1,4 @@
-import { fillRoundRect, strokeRoundRect } from './utils.js'
+import { fillRoundRect } from './utils.js'
 import Nurse from './Nurse.js'
 
 export default class WaitingArea {
@@ -10,7 +10,7 @@ export default class WaitingArea {
     this.patients = []
     
     // 创建护士（放在护士台后面，只显示上半身）
-    this.nurse = new Nurse(this.x + this.width / 2, this.y + this.height * 0.20)
+    this.nurse = new Nurse(this.x + this.width / 2, this.y + this.height * 0.23)
     this.nurse.setScale(this.width)
     
     this.seats = []
@@ -18,6 +18,33 @@ export default class WaitingArea {
     
     this.queuePositions = []
     this.initQueuePositions()
+    
+    // 加载椅子图片
+    this.seatFreeImage = null
+    this.seatOccupiedImage = null
+    this.loadImages()
+  }
+
+  loadImages() {
+    // 加载空闲椅子图片
+    const freeImg = wx.createImage()
+    freeImg.onload = () => {
+      this.seatFreeImage = freeImg
+    }
+    freeImg.onerror = () => {
+      console.warn('Failed to load seat free image: images/seat_free.png')
+    }
+    freeImg.src = 'images/seat_free.png'
+    
+    // 加载占用椅子图片
+    const occupiedImg = wx.createImage()
+    occupiedImg.onload = () => {
+      this.seatOccupiedImage = occupiedImg
+    }
+    occupiedImg.onerror = () => {
+      console.warn('Failed to load seat occupied image: images/seat_occupied.png')
+    }
+    occupiedImg.src = 'images/seat_occupied.png'
   }
 
   initSeats() {
@@ -26,19 +53,21 @@ export default class WaitingArea {
     const seatsPerRow = 4
     
     // 根据区域大小计算座位尺寸
-    const seatWidth = this.width * 0.18
-    const seatHeight = this.height * 0.14
-    const gapX = (this.width - seatWidth * seatsPerRow) / (seatsPerRow + 1)
-    const gapY = this.height * 0.15
+    const seatWidth = this.width * 0.25
+    const seatHeight = this.height * 0.16
+    const gapX = this.width * 0.0001  // 固定间隔，更紧凑
+    const gapY = this.height * 0.1  // 行间距也减小
     
     // 起始位置（前台下方）
     const startY = this.y + this.height * 0.55
     
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < seatsPerRow; col++) {
+        // 第一排往上移动，第二排保持不变
+        const rowOffset = row === 0 ? -10 : 0  // 调整此值改变第一排位置（负数往上，单位：像素）
         this.seats.push({
           x: this.x + gapX + col * (seatWidth + gapX),
-          y: startY + row * (seatHeight + gapY),
+          y: startY + row * (seatHeight + gapY) + rowOffset,
           width: seatWidth,
           height: seatHeight,
           occupied: false,
@@ -53,7 +82,7 @@ export default class WaitingArea {
     for (let i = 0; i < 2; i++) {
       this.queuePositions.push({
         x: this.x + this.width * 0.2 + i * this.width * 0.3,
-        y: this.y + this.height * 0.78,
+        y: this.y + this.height * 2,
         occupied: false,
         patient: null
       })
@@ -71,12 +100,14 @@ export default class WaitingArea {
     if (emptySeat) {
       emptySeat.occupied = true
       emptySeat.patient = patient
-      emptySeat.patientSeated = false  // 病人还未坐下
       patient.seat = emptySeat
       // 设置病人尺寸（等候区专用，较小）
       patient.width = 16
       patient.height = 26
-      patient.moveTo(emptySeat.x + (emptySeat.width - patient.width) / 2, emptySeat.y - patient.height * 0.2)
+      // 病人坐在椅子中央，靠下一点
+      const targetX = emptySeat.x + (emptySeat.width - patient.width) / 2
+      const targetY = emptySeat.y + emptySeat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
+      patient.moveTo(targetX, targetY)
       return
     }
     
@@ -98,7 +129,6 @@ export default class WaitingArea {
       if (patient.seat) {
         patient.seat.occupied = false
         patient.seat.patient = null
-        patient.seat.patientSeated = false
         patient.seat = null
       }
       if (patient.queuePos) {
@@ -126,12 +156,14 @@ export default class WaitingArea {
           const seat = this.seats[seatIndex]
           seat.occupied = true
           seat.patient = patient
-          seat.patientSeated = false  // 病人还未坐下
           patient.seat = seat
           // 设置病人尺寸（等候区专用，较小）
           patient.width = 16
           patient.height = 26
-          patient.moveTo(seat.x + (seat.width - patient.width) / 2, seat.y - patient.height * 0.2)
+          // 病人坐在椅子中央，靠下一点
+          const targetX = seat.x + (seat.width - patient.width) / 2
+          const targetY = seat.y + seat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
+          patient.moveTo(targetX, targetY)
         } else {
           while (queueIndex < this.queuePositions.length && this.queuePositions[queueIndex].occupied) {
             queueIndex++
@@ -156,7 +188,6 @@ export default class WaitingArea {
     this.seats.forEach(seat => {
       seat.occupied = false
       seat.patient = null
-      seat.patientSeated = false
     })
     this.queuePositions.forEach(pos => {
       pos.occupied = false
@@ -180,22 +211,6 @@ export default class WaitingArea {
 
   update(deltaTime) {
     this.nurse.update(deltaTime)
-    
-    // 检查病人是否已坐下
-    this.seats.forEach(seat => {
-      if (seat.occupied && seat.patient && !seat.patientSeated) {
-        const patient = seat.patient
-        // 检查病人是否已到达座位位置（停止移动）
-        if (!patient.isMoving) {
-          const dx = patient.x - (seat.x + (seat.width - patient.width) / 2)
-          const dy = patient.y - (seat.y - patient.height * 0.2)
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          if (dist < 5) {
-            seat.patientSeated = true
-          }
-        }
-      }
-    })
   }
 
   render(ctx) {
@@ -208,9 +223,9 @@ export default class WaitingArea {
 
   renderReception(ctx) {
     const centerX = this.x + this.width / 2
-    const deskY = this.y + this.height * 0.23
-    const deskWidth = this.width * 0.65
-    const deskHeight = this.height * 0.1
+    const deskY = this.y + this.height * 0.26
+    const deskWidth = this.width * 0.60
+    const deskHeight = this.height * 0.09
     
     // 护士台主体 - 上直边，下弧形
     ctx.fillStyle = '#FFF'
@@ -244,35 +259,23 @@ export default class WaitingArea {
 
   renderSeats(ctx) {
     this.seats.forEach((seat, i) => {
-      // 椅子腿
-      ctx.strokeStyle = '#8B4513'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.moveTo(seat.x + seat.width * 0.1, seat.y + seat.height)
-      ctx.lineTo(seat.x + seat.width * 0.1, seat.y + seat.height * 0.6)
-      ctx.stroke()
-      ctx.beginPath()
-      ctx.moveTo(seat.x + seat.width * 0.9, seat.y + seat.height)
-      ctx.lineTo(seat.x + seat.width * 0.9, seat.y + seat.height * 0.6)
-      ctx.stroke()
+      // 根据座位状态选择图片
+      const currentImage = seat.occupied ? this.seatOccupiedImage : this.seatFreeImage
       
-      // 座面（天蓝色）- 只有病人坐下后才变色
-      ctx.fillStyle = seat.patientSeated ? '#5DADE2' : '#87CEEB'
-      ctx.fillRect(seat.x + seat.width * 0.05, seat.y + seat.height * 0.5, seat.width * 0.9, seat.height * 0.18)
-      ctx.strokeStyle = seat.patientSeated ? '#2E86AB' : '#5DADE2'
-      ctx.lineWidth = 1.5
-      ctx.strokeRect(seat.x + seat.width * 0.05, seat.y + seat.height * 0.5, seat.width * 0.9, seat.height * 0.18)
-      
-      // 靠背（天蓝色）- 只有病人坐下后才变色
-      ctx.fillStyle = seat.patientSeated ? '#5DADE2' : '#87CEEB'
-      ctx.fillRect(seat.x + seat.width * 0.05, seat.y, seat.width * 0.9, seat.height * 0.5)
-      ctx.strokeStyle = seat.patientSeated ? '#2E86AB' : '#5DADE2'
-      ctx.strokeRect(seat.x + seat.width * 0.05, seat.y, seat.width * 0.9, seat.height * 0.5)
+      if (currentImage && currentImage.width > 0) {
+        // 使用图片绘制椅子，保持比例
+        const targetHeight = seat.height * 1.3
+        const imageScale = targetHeight / currentImage.height
+        const drawWidth = currentImage.width * imageScale
+        const drawHeight = targetHeight
+        
+        ctx.drawImage(currentImage, seat.x + (seat.width - drawWidth) / 2, seat.y + (seat.height - drawHeight) / 2, drawWidth, drawHeight)
+      }
       
       // 座位号（只有座位空闲时显示）
       if (!seat.occupied) {
         ctx.fillStyle = '#2E86AB'
-        ctx.font = `bold ${Math.max(8, seat.width * 0.18)}px sans-serif`
+        ctx.font = `bold ${Math.max(8, seat.width * 0.18)}px "PingFang SC", "Microsoft YaHei", sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(`${i + 1}`, seat.x + seat.width / 2, seat.y + seat.height * 0.25)

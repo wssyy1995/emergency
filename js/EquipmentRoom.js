@@ -97,7 +97,7 @@ export default class EquipmentRoom {
     ctx.lineWidth = 2
     ctx.strokeRect(cabinetX, cabinetY - this.height * 0.07, cabinetWidth, this.height * 0.07)
     ctx.fillStyle = '#555555'
-    ctx.font = `bold ${Math.max(14, this.width * 0.05)}px sans-serif`
+    ctx.font = `bold ${Math.max(14, this.width * 0.05)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
     ctx.fillText('药品柜', cabinetX + cabinetWidth / 2, cabinetY - this.height * 0.035)
   }
@@ -149,7 +149,7 @@ export default class EquipmentRoom {
     ctx.lineWidth = 2
     ctx.strokeRect(cabinetX, cabinetY - this.height * 0.07, cabinetWidth, this.height * 0.07)
     ctx.fillStyle = '#555555'
-    ctx.font = `bold ${Math.max(14, this.width * 0.05)}px sans-serif`
+    ctx.font = `bold ${Math.max(14, this.width * 0.05)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
     ctx.fillText('器械柜', cabinetX + cabinetWidth / 2, cabinetY - this.height * 0.035)
   }
@@ -185,7 +185,7 @@ export default class EquipmentRoom {
     } else {
       // 使用emoji回退 - 变大
       ctx.fillStyle = '#2C3E50'
-      ctx.font = `${iconSize * 1.2}px sans-serif`
+      ctx.font = `${iconSize * 1.2}px "PingFang SC", "Microsoft YaHei", sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(item.icon, iconX + iconSize/2, iconY)
@@ -193,7 +193,7 @@ export default class EquipmentRoom {
     
     // 物品名称 - 字体变大，长名称换行显示
     ctx.fillStyle = '#2C3E50'
-    ctx.font = `bold ${Math.max(11, width * 0.13)}px sans-serif`
+    ctx.font = `bold ${Math.max(11, width * 0.13)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'left'
     
     // 处理长名称换行（医用胶带、肾上腺素）
@@ -272,8 +272,8 @@ export default class EquipmentRoom {
         const iconX = startX + index * (iconSize * 1.5 + spacing)
         const iconY = trayY + trayHeight / 2
         
-        // 物品背景圆圈 - 统一使用灰色
-        ctx.fillStyle = '#CCCCCC'
+        // 物品背景圆圈 - 统一使用浅灰色
+        ctx.fillStyle = '#E0E0E0'
         ctx.beginPath()
         ctx.arc(iconX, iconY, iconSize * 0.85, 0, Math.PI * 2)
         ctx.fill()
@@ -285,7 +285,7 @@ export default class EquipmentRoom {
           ctx.drawImage(itemImage, iconX - imgSize/2, iconY - imgSize/2, imgSize, imgSize)
         } else {
           ctx.fillStyle = '#2C3E50'
-          ctx.font = `${iconSize * 1.2}px sans-serif`
+          ctx.font = `${iconSize * 1.2}px "PingFang SC", "Microsoft YaHei", sans-serif`
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
           ctx.fillText(item.icon, iconX, iconY)
@@ -294,7 +294,7 @@ export default class EquipmentRoom {
     } else {
       // 空托盘提示文字
       ctx.fillStyle = '#999'
-      ctx.font = '14px sans-serif'
+      ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText('点击器材并配送', trayX + trayWidth / 2, trayY + trayHeight / 2)
@@ -330,7 +330,7 @@ export default class EquipmentRoom {
     
     // 重置图标（✕ 清除）
     ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 16px sans-serif'
+    ctx.font = 'bold 16px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText('✕', resetBtnX + btnSize / 2, btnY + btnSize / 2)
@@ -359,7 +359,7 @@ export default class EquipmentRoom {
     
     // 发送图标（纸飞机）
     ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 14px sans-serif'
+    ctx.font = 'bold 14px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText('➤', sendBtnX + btnSize / 2, btnY + btnSize / 2)

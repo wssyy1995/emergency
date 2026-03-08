@@ -12,14 +12,17 @@ export default class Game {
     this.canvas = wx.createCanvas()
     this.ctx = this.canvas.getContext('2d')
     
-    // 获取屏幕尺寸（横屏模式）
+    // 获取屏幕尺寸和设备像素比（横屏模式）
     const sysInfo = wx.getSystemInfoSync()
     this.screenWidth = sysInfo.windowWidth
     this.screenHeight = sysInfo.windowHeight
+    this.pixelRatio = sysInfo.pixelRatio || 1
     
-    // 设置画布大小为屏幕尺寸
-    this.canvas.width = this.screenWidth
-    this.canvas.height = this.screenHeight
+    // 设置画布实际尺寸为屏幕尺寸的 pixelRatio 倍（高清显示）
+    this.canvas.width = this.screenWidth * this.pixelRatio
+    this.canvas.height = this.screenHeight * this.pixelRatio
+    // 缩放绘图上下文，使坐标系统保持与屏幕尺寸一致
+    this.ctx.scale(this.pixelRatio, this.pixelRatio)
     
     // 计算地图尺寸（留边距）
     this.mapX = 10
@@ -36,10 +39,10 @@ export default class Game {
     this.doctorIdCounter = 1
     
     // 关卡系统
-    this.currentLevel = 0  // 默认第0关
+    this.currentLevel = 0  // 内部从0开始，显示为第1关
     this.levelConfig = [
-      { maxPatients: 8, spawnInterval: 3000 },   // 第0关：8人，3秒间隔
-      { maxPatients: 10, spawnInterval: 2500 },  // 第1关：10人，2.5秒间隔
+      { maxPatients: 8, spawnInterval: 3000 },   // 第1关：8人，3秒间隔
+      { maxPatients: 10, spawnInterval: 2500 },  // 第2关：10人，2.5秒间隔
     ]
     this.spawnedPatientsCount = 0  // 本关卡已出现的病人数
     this.levelComplete = false     // 当前关卡是否完成
@@ -137,10 +140,12 @@ export default class Game {
     const headerHeight = 45
     // 底部留白
     const bottomMargin = 10
+    // 顶部状态栏与三个区域之间的间距
+    const topPadding = 12
     
     // 可用区域
-    const availableY = this.mapY + headerHeight
-    const availableHeight = this.mapHeight - headerHeight - bottomMargin
+    const availableY = this.mapY + headerHeight + topPadding
+    const availableHeight = this.mapHeight - headerHeight - bottomMargin - topPadding
     
     // 三个区域的间距
     const gap = 10
@@ -171,12 +176,6 @@ export default class Game {
     // 获取走道区域
     const walkableAreas = this.bedArea.getWalkableAreas()
     
-    // 医生外观配置
-    const doctorStyles = [
-      { hairColor: '#2C3E50', eyeSizeX: 3.5, eyeSizeY: 4.5 },
-      { hairColor: '#8B4513', eyeSizeX: 4.5, eyeSizeY: 5.5 }
-    ]
-    
     // 备用位置（如果 walkableAreas 为空）
     const fallbackPositions = [
       { x: this.bedArea.x + this.bedArea.width * 0.25, y: this.bedArea.y + this.bedArea.height * 0.5 },
@@ -185,12 +184,6 @@ export default class Game {
     
     for (let i = 0; i < count; i++) {
       const doctor = new Doctor(this.doctorIdCounter++, this.bedArea)
-      
-      // 设置外观差异
-      const style = doctorStyles[i % doctorStyles.length]
-      doctor.hairColor = style.hairColor
-      doctor.eyeSizeX = style.eyeSizeX
-      doctor.eyeSizeY = style.eyeSizeY
       
       // 将医生放在走道区域
       if (walkableAreas.length > 0) {
@@ -333,7 +326,7 @@ export default class Game {
         patient.isAngry = true
         // 计算前台位置（护士台前方）
         const frontDeskX = this.waitingArea.x + this.waitingArea.width / 2
-        const frontDeskY = this.waitingArea.y + this.waitingArea.height * 0.35
+        const frontDeskY = this.waitingArea.y + this.waitingArea.height * 0.45
         patient.startLeaving(frontDeskX, frontDeskY)
         // 爱心减1（生命值减少）
         this.treatedCount--
@@ -383,10 +376,10 @@ export default class Game {
       const emptyQueue = this.waitingArea.queuePositions.find(q => q.patient === patient)
       
       if (emptySeat) {
-        patient.moveTo(
-          emptySeat.x + (emptySeat.width - patient.width) / 2,
-          emptySeat.y - patient.height * 0.2
-        )
+        // 使用与 WaitingArea.js 中一致的位置计算
+        const targetX = emptySeat.x + (emptySeat.width - patient.width) / 2
+        const targetY = emptySeat.y + emptySeat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
+        patient.moveTo(targetX, targetY)
       } else if (emptyQueue) {
         patient.moveTo(emptyQueue.x - patient.width / 2, emptyQueue.y - patient.height)
       }
@@ -474,7 +467,7 @@ export default class Game {
         } else {
           // 如果没有图片，使用emoji
           ctx.fillStyle = ft.color
-          ctx.font = 'bold 28px sans-serif'
+          ctx.font = 'bold 28px cursive, sans-serif'
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
           ctx.fillText(ft.item.icon, ft.x, ft.y + ft.offsetY)
@@ -488,7 +481,7 @@ export default class Game {
       } else {
         // 绘制文字
         ctx.fillStyle = ft.color
-        ctx.font = 'bold 24px sans-serif'
+        ctx.font = 'bold 24px cursive, sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         
@@ -571,33 +564,41 @@ export default class Game {
     // 标题（垂直居中）
     const titleY = this.mapY + headerHeight / 2
     ctx.fillStyle = '#FFF'
-    ctx.font = `bold ${Math.max(16, this.screenWidth * 0.025)}px sans-serif`
+    ctx.font = `${Math.max(16, this.screenWidth * 0.025)}px cursive, sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     ctx.fillText('🏥 急症室模拟器', this.mapX + 15, titleY)
     
-    // 关卡数显示（从第0关开始）
+    // 关卡数显示
     ctx.fillStyle = '#FFF'
-    ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px sans-serif`
-    ctx.fillText(`第${this.currentLevel}关`, this.mapX + 180, titleY)
+    ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
+    ctx.fillText(`第${this.currentLevel + 1}关`, this.mapX + 180, titleY)
     
     // 统计
     const fontSize = Math.max(12, this.screenWidth * 0.018)
-    ctx.font = `${fontSize}px sans-serif`
+    ctx.font = `${fontSize}px cursive, sans-serif`
     
-    const statsX = this.mapX + this.mapWidth - 100
-    
-    // 荣誉点图标 + 数值（移到右上角原来爱心的位置）
+    // 荣誉点图标 + 数值（右上角）
+    const honorX = this.mapX + this.mapWidth - 200
     if (this.honorImage) {
-      ctx.drawImage(this.honorImage, statsX, this.mapY + (headerHeight - 20) / 2, 20, 20)
+      ctx.drawImage(this.honorImage, honorX, this.mapY + (headerHeight - 20) / 2, 20, 20)
     }
     ctx.fillStyle = '#FFF'
-    ctx.fillText(`${this.score}`, statsX + 28, titleY)
+    ctx.fillText(`${this.score}`, honorX + 28, titleY)
+    
+    // 爱心图标 + 数值（荣誉点旁边）
+    const heartX = this.mapX + this.mapWidth - 130
+    if (this.heartImage) {
+      ctx.drawImage(this.heartImage, heartX, this.mapY + (headerHeight - 20) / 2, 20, 20)
+      ctx.fillText(`${this.treatedCount}`, heartX + 28, titleY)
+    } else {
+      ctx.fillText(`❤️ ${this.treatedCount}`, heartX, titleY)
+    }
     
     // 区域标题
-    const areaTitleY = this.mapY + headerHeight + 20
+    const areaTitleY = this.mapY + headerHeight + 32
     const titleFontSize = Math.max(12, this.screenWidth * 0.018)
-    ctx.font = `bold ${titleFontSize}px sans-serif`
+    ctx.font = `${titleFontSize}px cursive, sans-serif`
     ctx.textBaseline = 'middle'
     
     // 等候区标题 - 显示已出现病人数/本关卡总病人数
@@ -609,21 +610,8 @@ export default class Game {
     ctx.fillText(waitingText, waitingX + 6, areaTitleY)
     this.renderAreaIcon(ctx, 'waiting', waitingX - ctx.measureText(waitingText).width / 2 - 4, areaTitleY, 18)
     
-    // 爱心（在治疗区上方居中，Y坐标与顶部栏对齐）
-    const treatmentX = this.bedArea.x + this.bedArea.width / 2
-    const heartY = this.mapY + 28  // 与急症室模拟器、荣誉点同一水平线
-    
-    // 画爱心在治疗区上方
-    if (this.heartImage) {
-      ctx.drawImage(this.heartImage, treatmentX - 14, heartY - 10, 20, 20)
-      ctx.fillStyle = '#FFF'
-      ctx.fillText(`${this.treatedCount}`, treatmentX + 18, heartY)
-    } else {
-      ctx.fillStyle = '#FFF'
-      ctx.fillText(`❤️ ${this.treatedCount}`, treatmentX, heartY)
-    }
-    
     // 治疗区标题
+    const treatmentX = this.bedArea.x + this.bedArea.width / 2
     const treatmentText = '治疗区'
     ctx.fillStyle = '#27AE60'
     ctx.fillText(treatmentText, treatmentX + 6, areaTitleY)
@@ -649,7 +637,7 @@ export default class Game {
         'treatment': '🛏️',
         'equipment': '🏥'
       }
-      ctx.font = `${size}px sans-serif`
+      ctx.font = `${size}px cursive, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(emojiMap[areaId] || '', x, y)
@@ -691,12 +679,6 @@ export default class Game {
         const trayItems = this.equipmentRoom.getTrayItems()
         if (trayItems.length > 0) {
           this.equipmentRoom.clearTray()
-          console.log('托盘已清空')
-          wx.showToast({
-            title: '托盘已清空',
-            icon: 'none',
-            duration: 1000
-          })
         }
         return
       }
@@ -883,7 +865,7 @@ export default class Game {
     // 显示自定义轻量提示
     this.levelToast = {
       visible: true,
-      message: `第${this.currentLevel}关完成，下一波即将来临...`,
+      message: `下一波病人即将来临...`,
       showTime: Date.now()
     }
     
@@ -896,9 +878,15 @@ export default class Game {
   
   // 处理游戏胜利弹窗的点击
   handleGameWinTouch(x, y) {
-    if (!this.gameWinModal || !this.gameWinModal.visible) return false
+    console.log('handleGameWinTouch called', x, y, this.gameWinModal)
+    if (!this.gameWinModal || !this.gameWinModal.visible) {
+      console.log('gameWinModal not visible or null')
+      return false
+    }
     
     const btn = this.gameWinModal
+    console.log('Button bounds:', btn.buttonX, btn.buttonY, btn.buttonWidth, btn.buttonHeight)
+    
     if (x >= btn.buttonX && x <= btn.buttonX + btn.buttonWidth &&
         y >= btn.buttonY && y <= btn.buttonY + btn.buttonHeight) {
       console.log('点击了重新开始按钮')
@@ -907,6 +895,7 @@ export default class Game {
       this.restart()
       return true
     }
+    console.log('Click not in button bounds')
     return false
   }
   
@@ -1003,7 +992,7 @@ export default class Game {
       if (partialMatches.length > 0) {
         // 有部分匹配，但托盘里有不属于这些医生的物品
         wx.showToast({
-          title: '托盘包含其他医生物品',
+          title: '一次仅能配送一位医生',
           icon: 'none',
           duration: 2000
         })
@@ -1131,6 +1120,7 @@ export default class Game {
     this.treatedCount = 0
     this.gameTime = 0
     this.patientIdCounter = 1
+    this.doctorIdCounter = 1  // 重置医生ID计数器
     this.waitingArea.clear()
     this.bedArea.clear()
     
@@ -1172,14 +1162,14 @@ export default class Game {
     
     // 标题
     ctx.fillStyle = '#E74C3C'
-    ctx.font = 'bold 18px sans-serif'
+    ctx.font = 'bold 18px cursive, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
     ctx.fillText('游戏结束', modalX + modalWidth / 2, modalY + 20)
     
     // 内容文字
     ctx.fillStyle = '#333'
-    ctx.font = '14px sans-serif'
+    ctx.font = '14px cursive, sans-serif'
     ctx.fillText('口碑破产，急诊室关闭', modalX + modalWidth / 2, modalY + 55)
     
     // 按钮
@@ -1198,7 +1188,7 @@ export default class Game {
       
       // 按钮文字
       ctx.fillStyle = '#FFF'
-      ctx.font = 'bold 14px sans-serif'
+      ctx.font = 'bold 14px cursive, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(btn.text, btn.x + btn.width / 2, btn.y + btn.height / 2)
@@ -1228,14 +1218,14 @@ export default class Game {
     
     // 标题
     ctx.fillStyle = '#27AE60'
-    ctx.font = 'bold 20px sans-serif'
+    ctx.font = 'bold 20px cursive, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
     ctx.fillText(this.levelCompleteModal.title, modalX + modalWidth / 2, modalY + 25)
     
     // 内容
     ctx.fillStyle = '#333'
-    ctx.font = '16px sans-serif'
+    ctx.font = '16px cursive, sans-serif'
     ctx.fillText(this.levelCompleteModal.content, modalX + modalWidth / 2, modalY + 65)
     
     // 按钮
@@ -1250,7 +1240,7 @@ export default class Game {
     
     // 按钮文字
     ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 16px sans-serif'
+    ctx.font = 'bold 16px cursive, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.levelCompleteModal.buttonText, modalX + modalWidth / 2, btnY + btnHeight / 2)
@@ -1280,14 +1270,14 @@ export default class Game {
     
     // 标题 - 金色
     ctx.fillStyle = '#FFD700'
-    ctx.font = 'bold 24px sans-serif'
+    ctx.font = 'bold 24px cursive, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
     ctx.fillText(this.gameWinModal.title, modalX + modalWidth / 2, modalY + 20)
     
     // 内容（分成两行显示）
     ctx.fillStyle = '#333'
-    ctx.font = '16px sans-serif'
+    ctx.font = '16px cursive, sans-serif'
     ctx.fillText('您已完成所有关卡！', modalX + modalWidth / 2, modalY + 65)
     ctx.fillText(`最终得分: ${this.score}`, modalX + modalWidth / 2, modalY + 90)
     
@@ -1307,7 +1297,7 @@ export default class Game {
     
     // 按钮文字
     ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 16px sans-serif'
+    ctx.font = 'bold 16px cursive, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.gameWinModal.buttonText, modalX + modalWidth / 2, btnY + btnHeight / 2)
@@ -1329,7 +1319,7 @@ export default class Game {
     
     // 文字
     ctx.fillStyle = '#FFF'
-    ctx.font = '14px sans-serif'
+    ctx.font = '14px cursive, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.levelToast.message, this.screenWidth / 2, toastY + toastHeight / 2)

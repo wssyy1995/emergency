@@ -11,26 +11,20 @@ class Bed {
     this.treatmentProgress = 0
     this.assignedDoctor = null // 被分配到这个病床的医生
     
-    // 加载空闲图标
-    this.freeImage = null
-    this.pillowImage = null
-    this.loadImages()
+    // 加载病床图片
+    this.bedImage = null
+    this.loadImage()
   }
   
-  loadImages() {
-    // 加载空闲图标
-    const freeImg = wx.createImage()
-    freeImg.onload = () => {
-      this.freeImage = freeImg
+  loadImage() {
+    const img = wx.createImage()
+    img.onload = () => {
+      this.bedImage = img
     }
-    freeImg.src = 'images/free.png'
-    
-    // 加载枕头图片
-    const pillowImg = wx.createImage()
-    pillowImg.onload = () => {
-      this.pillowImage = pillowImg
+    img.onerror = () => {
+      console.warn('Failed to load bed image: images/bed.png')
     }
-    pillowImg.src = 'images/pillow.png'
+    img.src = 'images/bed.png'
   }
 
   assignPatient(patient) {
@@ -65,83 +59,19 @@ class Bed {
   }
 
   render(ctx) {
-    const boardWidth = this.width * 0.08
-    
-    // 有人躺上时，去掉阴影和特效，简化绘制
-    if (!this.patient) {
-      // 空闲时的阴影
-      ctx.fillStyle = 'rgba(0,0,0,0.08)'
-      ctx.beginPath()
-      ctx.ellipse(this.x + this.width / 2, this.y + this.height - this.height * 0.02, this.width / 2 - this.width * 0.02, this.height * 0.05, 0, 0, Math.PI * 2)
-      ctx.fill()
+    // 绘制病床图片（2号和4号病床左右镜像翻转）
+    if (this.bedImage && this.bedImage.width > 0) {
+      // 2号(id=1)和4号(id=3)病床进行水平翻转
+      if (this.id === 1 || this.id === 3) {
+        ctx.save()
+        ctx.translate(this.x + this.width, this.y)
+        ctx.scale(-1, 1)
+        ctx.drawImage(this.bedImage, 0, 0, this.width, this.height)
+        ctx.restore()
+      } else {
+        ctx.drawImage(this.bedImage, this.x, this.y, this.width, this.height)
+      }
     }
-    
-    // 床头板
-    ctx.fillStyle = '#81D4C1'
-    fillRoundRect(ctx, this.x, this.y, boardWidth, this.height, boardWidth / 2)
-    
-    // 床尾板
-    fillRoundRect(ctx, this.x + this.width - boardWidth, this.y, boardWidth, this.height, boardWidth / 2)
-    
-    // 床垫（有人时简化颜色）
-    ctx.fillStyle = this.patient ? '#FFF' : '#F5F5F5'
-    ctx.fillRect(this.x + boardWidth + this.width * 0.01, this.y + this.height * 0.04, this.width - boardWidth * 2 - this.width * 0.02, this.height * 0.92)
-    
-    // 枕头
-    const cx = this.x + this.width / 2
-    const cy = this.y + this.height * 0.18
-    
-    if (this.pillowImage && this.pillowImage.width > 0) {
-      // 使用图片绘制枕头，宽度优先
-      const drawWidth = this.width * 0.5  // 直接控制宽度
-      const drawHeight = this.height * 0.3  // 直接控制高度
-      
-      ctx.drawImage(this.pillowImage, cx - drawWidth / 2, cy - drawHeight / 2, drawWidth, drawHeight)
-    } else {
-      // 图片未加载时的备用绘制
-      const pillowW = this.width * 0.32
-      const pillowH = this.height * 0.13
-      ctx.fillStyle = '#FFF'
-      const w = pillowW / 2
-      const h = pillowH / 2
-      ctx.beginPath()
-      ctx.moveTo(cx - w * 0.8, cy - h)
-      ctx.quadraticCurveTo(cx, cy - h * 1.3, cx + w * 0.8, cy - h)
-      ctx.quadraticCurveTo(cx + w * 1.15, cy, cx + w * 0.8, cy + h)
-      ctx.quadraticCurveTo(cx, cy + h * 1.3, cx - w * 0.8, cy + h)
-      ctx.quadraticCurveTo(cx - w * 1.15, cy, cx - w * 0.8, cy - h)
-      ctx.closePath()
-      ctx.fill()
-      ctx.strokeStyle = '#BDBDBD'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-    }
-    
-    // 空闲时才有枕头阴影
-    if (!this.patient) {
-      ctx.fillStyle = 'rgba(0,0,0,0.08)'
-      ctx.beginPath()
-      ctx.ellipse(cx, cy + this.height * 0.065 + 2, this.width * 0.16, 3, 0, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    
-    // 被子（白色，完全盖住身体）
-    if (this.patient) {
-      ctx.fillStyle = '#FFF'
-      const coverWidth = this.width - boardWidth * 2 - this.width * 0.02
-      const coverY = this.y + this.height * 0.32
-      const coverHeight = this.y + this.height * 0.92 - coverY
-      fillRoundRect(ctx, this.x + boardWidth + this.width * 0.01, coverY, coverWidth, coverHeight, this.width * 0.02)
-      // 简化边框
-      ctx.strokeStyle = '#E0E0E0'
-      ctx.lineWidth = 1
-      strokeRoundRect(ctx, this.x + boardWidth + this.width * 0.01, coverY, coverWidth, coverHeight, this.width * 0.02)
-    }
-    
-    // 床边框（有人时去掉颜色变化）
-    ctx.strokeStyle = '#BDBDBD'
-    ctx.lineWidth = Math.max(1, this.width * 0.008)
-    ctx.strokeRect(this.x + boardWidth + this.width * 0.01, this.y + this.height * 0.04, this.width - boardWidth * 2 - this.width * 0.02, this.height * 0.92)
     
     // 床位号
     ctx.fillStyle = '#FFF'
@@ -153,12 +83,12 @@ class Bed {
     ctx.stroke()
     
     ctx.fillStyle = '#27AE60'
-    ctx.font = `bold ${Math.max(8, this.width * 0.1)}px sans-serif`
+    ctx.font = `bold ${Math.max(8, this.width * 0.1)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(`${this.id + 1}`, this.x + this.width / 2, this.y - this.height * 0.03)
     
-    // 绘制床上的病人（保持完整发型和脸型，头大小为枕头宽度的2/3）
+    // 绘制床上的病人（图片居中显示在床上）
     if (this.patient && !this.patient.isCured) {
       // 保存原始状态
       const originalX = this.patient.x
@@ -166,23 +96,28 @@ class Bed {
       const originalWidth = this.patient.width
       const originalHeight = this.patient.height
       
-      // 计算头大小比例
-      const pillowW = this.width * 0.32
-      const targetHeadWidth = pillowW * 2 / 3
-      const originalHeadWidth = 28 // Patient.js中头部宽度
-      const scaleRatio = targetHeadWidth / originalHeadWidth
+      // 计算病人图片在床上的合适大小（床宽度的75%）
+      const targetPatientWidth = this.width * 0.75
+      const patientScale = targetPatientWidth / this.patient.baseWidth
       
-      // 设置病人在床上的位置和大小
-      // 头中心对齐枕头中心，再往下偏移
-      const headCenterX = this.x + this.width / 2
-      const headCenterY = this.y + this.height * 0.26 // 调整这个值来改变头的上下位置
+      // 设置病人在床上的位置（每个床位可独立调整）
+      this.patient.width = this.patient.baseWidth * patientScale
+      this.patient.height = this.patient.baseHeight * patientScale
       
-      this.patient.width = originalWidth * scaleRatio
-      this.patient.height = originalHeight * scaleRatio
-      this.patient.x = headCenterX - this.patient.width / 2
-      this.patient.y = headCenterY - this.patient.height / 2 + this.patient.height * 0.3
+      // 根据床位ID设置不同的位置偏移（id: [x偏移系数, y偏移系数]）
+      // x偏移：0左侧，1右侧； y偏移：负数向上，正数向下
+      const patientOffsets = {
+        0: { x: 0.7, y: -0.1 },   // 1号床：居中，略微靠上
+        1: { x: 0.3, y: -0.1 },   // 2号床：居中，略微靠上
+        2: { x: 0.7, y: -0.1 },   // 3号床：居中，略微靠上
+        3: { x: 0.3, y: -0.1 }    // 4号床：居中，略微靠上
+      }
+      const offset = patientOffsets[this.id] || { x: 0.5, y: -0.11 }
       
-      // 绘制完整病人（去掉裁剪，显示全身）
+      this.patient.x = this.x + (this.width - this.patient.width) * offset.x
+      this.patient.y = this.y + this.height * offset.y
+      
+      // 绘制病人
       this.patient.render(ctx)
       
       // 恢复原始值
@@ -190,21 +125,6 @@ class Bed {
       this.patient.y = originalY
       this.patient.width = originalWidth
       this.patient.height = originalHeight
-    }
-    
-    // 空闲标记
-    if (!this.patient) {
-      const iconSize = this.width * 0.25
-      if (this.freeImage) {
-        ctx.drawImage(this.freeImage, this.x + this.width / 2 - iconSize / 2, this.y + this.height / 2 - iconSize / 2, iconSize, iconSize)
-      } else {
-        // 图片未加载时显示备用文字
-        ctx.fillStyle = '#BDBDBD'
-        ctx.font = `${Math.max(10, this.width * 0.15)}px sans-serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText('空闲', this.x + this.width / 2, this.y + this.height / 2)
-      }
     }
   }
 }
@@ -227,8 +147,8 @@ export default class BedArea {
     const rows = 2
     
     // 床位尺寸（高度减小，留出底部空间放托盘）
-    const bedWidth = this.width * 0.30
-    const bedHeight = this.height * 0.28
+    const bedWidth = this.width * 0.45
+    const bedHeight = this.height * 0.32
     const gapX = (this.width - bedWidth * cols) / (cols + 1)
     // 减小行间距，让12和34床位更紧凑
     const gapY = (this.height - bedHeight * rows) / (rows + 1) * 0.7
@@ -251,8 +171,8 @@ export default class BedArea {
     const areas = []
     const cols = 2
     const rows = 2
-    const bedWidth = this.width * 0.30
-    const bedHeight = this.height * 0.28
+    const bedWidth = this.width * 0.45
+    const bedHeight = this.height * 0.32
     const gapX = (this.width - bedWidth * cols) / (cols + 1)
     const gapY = (this.height - bedHeight * rows) / (rows + 1) * 0.7
     const startX = this.x + gapX

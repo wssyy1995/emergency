@@ -33,16 +33,40 @@ export default class Doctor {
     this.receivedItems = [] // 已收到的物品ID数组
     this.currentLevel = 0 // 当前关卡，用于决定申请物品数量
     
-    // 兼容旧代码的别名
-    this.requiredItem = null
-    this.hasReceivedItem = false
-    
-    // 外观差异
-    this.hairColor = '#5D4037' // 默认深棕色
-    this.eyeSizeX = 4 // 眼睛横向大小
-    this.eyeSizeY = 5 // 眼睛纵向大小
+    // 加载两种状态的图片
+    this.idleImage = null
+    this.treatImage = null
+    this.loadImages()
     
     this.pickRandomTarget()
+  }
+
+  loadImages() {
+    // 根据医生ID确定图片文件名
+    // 医生1: doctor_1_idle.png / doctor_1_treat.png
+    // 医生2: doctor_2_idle.png / doctor_2_treat.png
+    const idlePath = `images/doctor_${this.id}_idle.png`
+    const treatPath = `images/doctor_${this.id}_treat.png`
+    
+    // 加载空闲状态图片
+    const idleImg = wx.createImage()
+    idleImg.onload = () => {
+      this.idleImage = idleImg
+    }
+    idleImg.onerror = () => {
+      console.warn(`Failed to load doctor idle image: ${idlePath}`)
+    }
+    idleImg.src = idlePath
+    
+    // 加载治疗状态图片
+    const treatImg = wx.createImage()
+    treatImg.onload = () => {
+      this.treatImage = treatImg
+    }
+    treatImg.onerror = () => {
+      console.warn(`Failed to load doctor treat image: ${treatPath}`)
+    }
+    treatImg.src = treatPath
   }
 
   pickRandomTarget() {
@@ -129,20 +153,20 @@ export default class Doctor {
         this.idleTime += deltaTime
         this.bounceOffset = Math.sin(this.animationTime / 600) * -2
         
-        if (this.idleTime > 2000 + Math.random() * 2000) {
-          const occupiedBeds = bedArea.getOccupiedBeds()
-          // 只寻找未被分配医生的病床
-          const needsTreatment = occupiedBeds.find(bed => 
-            bed.patient && !bed.patient.isCured && bed.treatmentProgress < 1 && !bed.assignedDoctor
-          )
-          
-          if (needsTreatment && !this.targetBed && Math.random() > 0.4) {
-            // 标记病床已被分配
-            needsTreatment.assignedDoctor = this
-            this.assignToBed(needsTreatment)
-          } else {
-            this.pickRandomTarget()
-          }
+        // 立即检查是否有病人需要治疗（优先级最高）
+        const occupiedBeds = bedArea.getOccupiedBeds()
+        const needsTreatment = occupiedBeds.find(bed => 
+          bed.patient && !bed.patient.isCured && bed.treatmentProgress < 1 && !bed.assignedDoctor
+        )
+        
+        // 如果有病人需要治疗，立即前往（无需等待）
+        if (needsTreatment && !this.targetBed) {
+          needsTreatment.assignedDoctor = this
+          this.assignToBed(needsTreatment)
+          this.idleTime = 0
+        } else if (this.idleTime > 1500 + Math.random() * 1000) {
+          // 没有病人时，短暂休息后继续巡逻
+          this.pickRandomTarget()
           this.idleTime = 0
         }
         break
@@ -321,170 +345,16 @@ export default class Doctor {
     ctx.ellipse(0, 28 * scale, 18 * scale, 6 * scale, 0, 0, Math.PI * 2)
     ctx.fill()
     
-    // Q版医生身体（动态比例）
-    ctx.fillStyle = '#C7CEEA'
-    ctx.beginPath()
-    ctx.ellipse(0, 15 * scale, 13 * scale, 11 * scale, 0, 0, Math.PI * 2)
-    ctx.fill()
+    // 根据状态选择图片
+    const currentImage = this.state === 'treating' ? this.treatImage : this.idleImage
     
-    // 白大褂
-    ctx.fillStyle = 'rgba(255,255,255,0.9)'
-    ctx.beginPath()
-    ctx.moveTo(-11 * scale, 8 * scale)
-    ctx.quadraticCurveTo(-14 * scale, 22 * scale, -11 * scale, 30 * scale)
-    ctx.lineTo(11 * scale, 30 * scale)
-    ctx.quadraticCurveTo(14 * scale, 22 * scale, 11 * scale, 8 * scale)
-    ctx.fill()
-    
-    // 听诊器
-    ctx.strokeStyle = '#7F8C8D'
-    ctx.lineWidth = 2 * scale
-    ctx.beginPath()
-    ctx.moveTo(-10 * scale, 10 * scale)
-    ctx.quadraticCurveTo(-5 * scale, 22 * scale, 0, 18 * scale)
-    ctx.quadraticCurveTo(5 * scale, 22 * scale, 10 * scale, 10 * scale)
-    ctx.stroke()
-    ctx.fillStyle = '#95A5A6'
-    ctx.beginPath()
-    ctx.arc(5 * scale, 22 * scale, 3 * scale, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 腿
-    ctx.fillStyle = '#FFDFC4'
-    ctx.beginPath()
-    ctx.ellipse(-7 * scale, 32 * scale, 4 * scale, 6 * scale, 0, 0, Math.PI * 2)
-    ctx.ellipse(7 * scale, 32 * scale, 4 * scale, 6 * scale, 0, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 鞋子
-    ctx.fillStyle = '#5D6D7E'
-    ctx.beginPath()
-    ctx.ellipse(-7 * scale, 36 * scale, 5 * scale, 3 * scale, 0, 0, Math.PI * 2)
-    ctx.ellipse(7 * scale, 36 * scale, 5 * scale, 3 * scale, 0, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 手臂
-    ctx.fillStyle = '#FFDFC4'
-    ctx.beginPath()
-    ctx.ellipse(-18 * scale, 14 * scale, 4 * scale, 7 * scale, -0.4, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.beginPath()
-    ctx.ellipse(18 * scale, 14 * scale, 4 * scale, 7 * scale, 0.4, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 治疗时的工具
-    if (this.state === 'treating') {
-      ctx.fillStyle = '#3498DB'
-      ctx.fillRect(14 * scale, 8 * scale, 10 * scale, 8 * scale)
-      ctx.fillStyle = '#FFF'
-      ctx.fillRect(16 * scale, 10 * scale, 6 * scale, 4 * scale)
-      ctx.fillStyle = '#E74C3C'
-      ctx.fillRect(18 * scale, 11 * scale, 2 * scale, 1 * scale)
-      ctx.fillRect(18.5 * scale, 10 * scale, 1 * scale, 2 * scale)
-    }
-    
-    // 大头（与病人比例一致）
-    ctx.fillStyle = '#FFDFC4'
-    ctx.beginPath()
-    ctx.arc(0, -12 * scale, 16 * scale, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 腮红
-    ctx.fillStyle = 'rgba(255,150,150,0.25)'
-    ctx.beginPath()
-    ctx.arc(-9 * scale, -8 * scale, 4 * scale, 0, Math.PI * 2)
-    ctx.arc(9 * scale, -8 * scale, 4 * scale, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 头发
-    ctx.fillStyle = this.hairColor
-    ctx.beginPath()
-    ctx.arc(0, -16 * scale, 17 * scale, Math.PI * 1.1, Math.PI * -0.1)
-    ctx.fill()
-    
-    // 刘海
-    ctx.beginPath()
-    ctx.ellipse(-7 * scale, -22 * scale, 6 * scale, 4 * scale, -0.4, 0, Math.PI)
-    ctx.fill()
-    ctx.beginPath()
-    ctx.ellipse(7 * scale, -22 * scale, 6 * scale, 4 * scale, 0.4, 0, Math.PI)
-    ctx.fill()
-    
-    // 医生帽
-    ctx.fillStyle = '#FFF'
-    ctx.beginPath()
-    ctx.moveTo(-16 * scale, -26 * scale)
-    ctx.lineTo(-14 * scale, -38 * scale)
-    ctx.quadraticCurveTo(0, -42 * scale, 14 * scale, -38 * scale)
-    ctx.lineTo(16 * scale, -26 * scale)
-    ctx.quadraticCurveTo(0, -30 * scale, -16 * scale, -26 * scale)
-    ctx.fill()
-    
-    // 十字
-    ctx.fillStyle = '#E74C3C'
-    ctx.fillRect(-3 * scale, -36 * scale, 6 * scale, 2 * scale)
-    ctx.fillRect(-1 * scale, -38 * scale, 2 * scale, 6 * scale)
-    
-    // 口罩
-    ctx.fillStyle = '#B5EAD7'
-    ctx.beginPath()
-    ctx.moveTo(-12 * scale, -5 * scale)
-    ctx.lineTo(-12 * scale, 4 * scale)
-    ctx.quadraticCurveTo(-12 * scale, 8 * scale, -8 * scale, 8 * scale)
-    ctx.lineTo(8 * scale, 8 * scale)
-    ctx.quadraticCurveTo(12 * scale, 8 * scale, 12 * scale, 4 * scale)
-    ctx.lineTo(12 * scale, -5 * scale)
-    ctx.quadraticCurveTo(12 * scale, -9 * scale, 8 * scale, -9 * scale)
-    ctx.lineTo(-8 * scale, -9 * scale)
-    ctx.quadraticCurveTo(-12 * scale, -9 * scale, -12 * scale, -5 * scale)
-    ctx.fill()
-    
-    // 口罩褶皱
-    ctx.strokeStyle = '#81D4C7'
-    ctx.lineWidth = 1 * scale
-    ctx.beginPath()
-    ctx.moveTo(-8 * scale, -1 * scale)
-    ctx.lineTo(8 * scale, -1 * scale)
-    ctx.moveTo(-8 * scale, 3 * scale)
-    ctx.lineTo(8 * scale, 3 * scale)
-    ctx.stroke()
-    
-    // 挂绳
-    ctx.strokeStyle = '#81D4C7'
-    ctx.lineWidth = 1.5 * scale
-    ctx.beginPath()
-    ctx.moveTo(-12 * scale, -3 * scale)
-    ctx.quadraticCurveTo(-18 * scale, -8 * scale, -18 * scale, -18 * scale)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.moveTo(12 * scale, -3 * scale)
-    ctx.quadraticCurveTo(18 * scale, -8 * scale, 18 * scale, -18 * scale)
-    ctx.stroke()
-    
-    // 眼睛
-    if (this.isBlinking) {
-      ctx.strokeStyle = '#2C3E50'
-      ctx.lineWidth = 2 * scale
-      ctx.beginPath()
-      ctx.moveTo(-10 * scale, -16 * scale)
-      ctx.quadraticCurveTo(-6 * scale, -12 * scale, -2 * scale, -16 * scale)
-      ctx.stroke()
-      ctx.beginPath()
-      ctx.moveTo(2 * scale, -16 * scale)
-      ctx.quadraticCurveTo(6 * scale, -12 * scale, 10 * scale, -16 * scale)
-      ctx.stroke()
-    } else {
-      ctx.fillStyle = '#2C3E50'
-      ctx.beginPath()
-      ctx.ellipse(-6 * scale, -16 * scale, this.eyeSizeX * scale, this.eyeSizeY * scale, 0, 0, Math.PI * 2)
-      ctx.ellipse(6 * scale, -16 * scale, this.eyeSizeX * scale, this.eyeSizeY * scale, 0, 0, Math.PI * 2)
-      ctx.fill()
-      
-      ctx.fillStyle = '#FFF'
-      ctx.beginPath()
-      ctx.arc(-4 * scale, -18 * scale, 1.5 * scale, 0, Math.PI * 2)
-      ctx.arc(8 * scale, -18 * scale, 1.5 * scale, 0, Math.PI * 2)
-      ctx.fill()
+    if (currentImage && currentImage.width > 0) {
+      // 使用图片绘制医生
+      const targetDisplayWidth = 75 // 医生显示宽度（像素），调整此值改变医生大小
+      const imageScale = targetDisplayWidth / currentImage.width
+      const drawWidth = currentImage.width * imageScale
+      const drawHeight = currentImage.height * imageScale
+      ctx.drawImage(currentImage, -drawWidth / 2, -drawHeight / 2 + 5, drawWidth, drawHeight)
     }
     
     ctx.restore()
@@ -504,8 +374,8 @@ export default class Doctor {
       ctx.save()
       ctx.translate(this.x, this.y - 70 * scale)
       
-      // 泡泡边缘统一使用红色
-      const bubbleColor = '#E74C3C'
+      // 泡泡边缘统一使用绿色
+      const bubbleColor = '#27AE60'
       
       // 泡泡背景（根据物品数量调整宽度）
       ctx.fillStyle = '#FFF'
@@ -535,7 +405,7 @@ export default class Doctor {
           ctx.drawImage(itemImage, iconX - itemSize/2, -itemSize/2, itemSize, itemSize)
         } else {
           ctx.fillStyle = '#2C3E50'
-          ctx.font = `${itemSize}px sans-serif`
+          ctx.font = `${itemSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
           ctx.fillText(item.icon, iconX, 0)
