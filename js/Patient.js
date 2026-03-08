@@ -12,7 +12,7 @@ const CONDITIONS = [
 ]
 
 export default class Patient {
-  constructor(id) {
+  constructor(id, initialPatience = 30) {
     this.id = id
     // 使用代号作为名字（1-8号）
     this.name = `${id}号`
@@ -35,7 +35,7 @@ export default class Patient {
     this.facing = 1
     this.isMoving = false
     
-    this.patience = 30
+    this.patience = initialPatience  // 使用配置的初始耐心值
     this.maxPatience = this.patience
     this.isAngry = false
     this.inBed = false
@@ -47,6 +47,7 @@ export default class Patient {
     this.tomatoThrown = false
     this.leaveTargetX = 0
     this.leaveTargetY = 0
+    this.showHeartEffect = false  // 开始走向左上角时触发爱心-1效果
     
     // 病人图片编号（1-14 号按顺序循环使用）
     this.patientType = ((id - 1) % 14) + 1
@@ -98,13 +99,24 @@ export default class Patient {
         this.isMoving = false
         this.bounceOffset = 0
         
-        // 如果正在离开且到达前台位置，显示大火焰
+        // 如果正在离开且到达前台位置，停留2秒后走向左上角
         if (this.isLeaving && !this.tomatoThrown) {
           this.tomatoThrown = true
-          // 大火焰停留1.5秒钟后离开
+          // 停留2秒钟后走向左上角
           setTimeout(() => {
+            // 设置左上角为目标位置
+            this.moveTo(this.leaveTargetX - 100, this.leaveTargetY - 100)
+            // 触发爱心-1动效标记
+            this.showHeartEffect = true
+          }, 2000)
+        } else if (this.isLeaving && this.tomatoThrown && !this.shouldRemove) {
+          // 检查是否到达左上角
+          const dx = this.x - (this.leaveTargetX - 100)
+          const dy = this.y - (this.leaveTargetY - 100)
+          const dist = Math.hypot(dx, dy)
+          if (dist < 5) {
             this.shouldRemove = true
-          }, 1500)
+          }
         }
       }
     } else {

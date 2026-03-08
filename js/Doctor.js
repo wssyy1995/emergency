@@ -1,5 +1,6 @@
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getRandomItem, getItemById, getItemImage, isMedicine } from './Items.js'
+import { getDoctorItemCount } from './GameConfig.js'
 
 export default class Doctor {
   constructor(id, bedArea) {
@@ -10,6 +11,8 @@ export default class Doctor {
     // 位置和尺寸（动态计算，与病人一致）
     this.x = 0
     this.y = 0
+    this.baseWidth = 28  // 基础宽度，用于计算缩放
+    this.baseHeight = 45 // 基础高度
     this.width = 21
     this.height = 33.75
     
@@ -226,8 +229,8 @@ export default class Doctor {
         // 治疗流程
         if (this.requiredItems.length === 0) {
           // 第一步：医生刚到达，根据关卡决定申请物品数量
-          // 第0关: 1个物品, 第1关: 2个物品
-          const itemCount = this.currentLevel >= 1 ? 2 : 1
+          // 从 GameConfig.js 获取
+          const itemCount = getDoctorItemCount(this.currentLevel)
           const usedIds = new Set()
           for (let i = 0; i < itemCount; i++) {
             let item = getRandomItem()
@@ -332,8 +335,7 @@ export default class Doctor {
 
   render(ctx) {
     // 根据病人尺寸计算缩放（保持与病人一致）
-    const baseWidth = 28
-    const scale = this.width / baseWidth
+    const scale = this.width / this.baseWidth
     
     ctx.save()
     ctx.translate(this.x, this.y + this.bounceOffset)
@@ -358,6 +360,12 @@ export default class Doctor {
     }
     
     ctx.restore()
+  }
+  
+  // 单独渲染气泡（在所有病人渲染完成后调用，确保气泡在最上层）
+  renderBubble(ctx) {
+    // 根据基础尺寸计算缩放比例
+    const scale = this.width / this.baseWidth
     
     // 显示需要的物品（大泡泡 - 所有物品在同一个气泡中）
     const requiredItems = this.getAllRequiredItems()

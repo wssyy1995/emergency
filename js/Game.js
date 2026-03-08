@@ -5,6 +5,8 @@ import Patient from './Patient.js'
 import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
+import { audioManager } from './AudioManager.js'
+import { GameConfig, getLevelConfig } from './GameConfig.js'
 
 export default class Game {
   constructor() {
@@ -12,11 +14,12 @@ export default class Game {
     this.canvas = wx.createCanvas()
     this.ctx = this.canvas.getContext('2d')
     
-    // 获取屏幕尺寸和设备像素比（横屏模式）
+    // 获取屏幕尺寸和设备信息（横屏模式）
     const sysInfo = wx.getSystemInfoSync()
     this.screenWidth = sysInfo.windowWidth
     this.screenHeight = sysInfo.windowHeight
     this.pixelRatio = sysInfo.pixelRatio || 1
+    this.platform = sysInfo.platform  // 'ios', 'android', 或 'devtools'
     
     // 设置画布实际尺寸为屏幕尺寸的 pixelRatio 倍（高清显示）
     this.canvas.width = this.screenWidth * this.pixelRatio
@@ -38,12 +41,8 @@ export default class Game {
     this.patientIdCounter = 1
     this.doctorIdCounter = 1
     
-    // 关卡系统
+    // 关卡系统 - 使用 GameConfig.js 中的配置
     this.currentLevel = 0  // 内部从0开始，显示为第1关
-    this.levelConfig = [
-      { maxPatients: 8, spawnInterval: 3000 },   // 第1关：8人，3秒间隔
-      { maxPatients: 10, spawnInterval: 2500 },  // 第2关：10人，2.5秒间隔
-    ]
     this.spawnedPatientsCount = 0  // 本关卡已出现的病人数
     this.levelComplete = false     // 当前关卡是否完成
     
@@ -74,7 +73,18 @@ export default class Game {
     this.gameWinModal = null
     this.levelToast = null
     
+    // 音量按钮状态
+    this.isMuted = false
+    this.volumeBtnBounds = null
+    
     this.initTouch()
+  }
+
+  // 触发震动（仅在真机上生效，开发者工具中不震动）
+  vibrate() {
+    if (this.platform !== 'devtools') {
+      wx.vibrateShort({ type: 'light' })
+    }
   }
 
   loadIcons() {
@@ -104,6 +114,20 @@ export default class Game {
       opacity: 1,
       offsetY: 0,
       life: 1000 // 1秒动画
+    })
+  }
+  
+  // 添加浮动爱心图标和文字（用于爱心-1动效）
+  addFloatingHeartWithText(text, x, y) {
+    this.floatingTexts.push({
+      type: 'heartText',
+      text,
+      x,
+      y,
+      color: '#E74C3C',
+      opacity: 0.8,  // 初始透明度略微透明
+      offsetY: 0,
+      life: 1200 // 1.2秒动画
     })
   }
 
@@ -204,8 +228,8 @@ export default class Game {
     // 如果已经在运行，先停止并清理
     if (this.isRunning) {
       clearInterval(this.timeTimer)
-      clearInterval(this.spawnTimer)
-      clearInterval(this.initialSpawnTimer)
+      clearTimeout(this.spawnTimer)
+      clearTimeout(this.initialSpawnTimer)
     }
     
     this.isRunning = true
@@ -228,29 +252,43 @@ export default class Game {
     this.spawnedPatientsCount = 0
     this.levelComplete = false
     
-    // 初始渐入：根据关卡配置间隔，进来病人
+    // 清除之前的定时器
+    if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
+    if (this.spawnTimer) clearTimeout(this.spawnTimer)
+    
+    // 前N个病人，使用固定间隔
     let initialSpawnCount = 0
-    const spawnInterval = this.levelConfig[this.currentLevel].spawnInterval
-    const maxInitialPatients = Math.min(4, this.levelConfig[this.currentLevel].maxPatients)
-    this.initialSpawnTimer = setInterval(() => {
-      const maxPatients = this.levelConfig[this.currentLevel].maxPatients
-      if (initialSpawnCount < maxInitialPatients && this.spawnedPatientsCount < maxPatients) {
+    const spawnFirstCount = GameConfig.patient.spawnFirstCount
+    const spawnFirstInterval = GameConfig.patient.spawnFirstInterval
+    
+    const spawnFirstPatients = () => {
+      const maxPatients = getLevelConfig(this.currentLevel).maxPatients
+      if (initialSpawnCount < spawnFirstCount && this.spawnedPatientsCount < maxPatients && this.isRunning) {
         this.spawnPatientFromLeft()
         initialSpawnCount++
         this.spawnedPatientsCount++
+        this.initialSpawnTimer = setTimeout(spawnFirstPatients, spawnFirstInterval)
       } else {
-        clearInterval(this.initialSpawnTimer)
+        // 前N个生成完毕，开始后续随机生成
+        this.spawnRemainingPatients()
       }
-    }, spawnInterval)
+    }
     
-    // 定时补充病人（根据关卡配置）
-    const levelSpawnInterval = this.levelConfig[this.currentLevel].spawnInterval
-    this.spawnTimer = setInterval(() => {
-      const maxPatients = this.levelConfig[this.currentLevel].maxPatients
+    // 开始生成前N个病人
+    this.initialSpawnTimer = setTimeout(spawnFirstPatients, 1000)
+  }
+  
+  // 生成剩余的病人（随机间隔）
+  spawnRemainingPatients() {
+    const maxPatients = getLevelConfig(this.currentLevel).maxPatients
+    const randomMin = GameConfig.patient.spawnRandomMin
+    const randomMax = GameConfig.patient.spawnRandomMax
+    
+    const spawnNext = () => {
+      if (!this.isRunning) return
+      
       // 检查是否还有病人名额，且当前等候区人数未满
-      if (this.spawnedPatientsCount < maxPatients && 
-          this.waitingArea.patients.length < 8 && 
-          Math.random() > 0.3) {
+      if (this.spawnedPatientsCount < maxPatients && this.waitingArea.patients.length < 8) {
         this.spawnPatientFromLeft()
         this.spawnedPatientsCount++
         
@@ -258,9 +296,20 @@ export default class Game {
         if (this.spawnedPatientsCount >= maxPatients && !this.levelComplete) {
           this.levelComplete = true
           this.checkLevelComplete()
+          return
         }
+        
+        // 随机间隔生成下一个
+        const randomDelay = randomMin + Math.random() * (randomMax - randomMin)
+        this.spawnTimer = setTimeout(spawnNext, randomDelay)
+      } else if (this.spawnedPatientsCount < maxPatients) {
+        // 等候区满了，检查一下是否可以继续
+        this.spawnTimer = setTimeout(spawnNext, 1000)
       }
-    }, levelSpawnInterval)
+    }
+    
+    // 开始生成剩余病人
+    spawnNext()
   }
 
   loop(timestamp) {
@@ -301,7 +350,7 @@ export default class Game {
             this.addFloatingText('+❤️', bed.x + bed.width / 2, bed.y - 30, '#E74C3C')
             
             // 检查是否完成关卡（当所有病人都已生成且都被处理）
-            const totalPatients = this.levelConfig[this.currentLevel].maxPatients
+            const totalPatients = getLevelConfig(this.currentLevel).maxPatients
             if (this.spawnedPatientsCount >= totalPatients) {
               this.levelComplete = true
               this.checkLevelComplete()
@@ -336,6 +385,13 @@ export default class Game {
           this.gameOver()
         }
       }
+      
+      // 检测爱心-1动效触发（开始走向左上角时）
+      if (patient.showHeartEffect) {
+        patient.showHeartEffect = false  // 重置标记
+        // 在病人当前位置显示爱心-1动效
+        this.addFloatingHeartWithText('-1', patient.x, patient.y - 30)
+      }
     })
     
     // 清理已经离开的愤怒病人
@@ -343,7 +399,7 @@ export default class Game {
     angryPatients.forEach(patient => {
       this.waitingArea.removePatient(patient)
       // 检查是否完成关卡（当所有病人都已生成且都被处理）
-      const totalPatients = this.levelConfig[this.currentLevel].maxPatients
+      const totalPatients = getLevelConfig(this.currentLevel).maxPatients
       if (this.spawnedPatientsCount >= totalPatients) {
         this.levelComplete = true
         this.checkLevelComplete()
@@ -359,7 +415,7 @@ export default class Game {
   spawnPatientFromLeft() {
     if (this.waitingArea.patients.length >= 8) return
     
-    const patient = new Patient(this.patientIdCounter++)
+    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience)
     
     // 初始位置在等候区左侧外面
     patient.x = this.waitingArea.x - 50
@@ -389,7 +445,7 @@ export default class Game {
   spawnPatientWithHairStyle(hairStyle) {
     if (this.waitingArea.patients.length >= 8) return
     
-    const patient = new Patient(this.patientIdCounter++)
+    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience)
     // 强制设置发型
     patient.hairStyle = hairStyle
     // 从左侧入口进入
@@ -418,9 +474,15 @@ export default class Game {
     // 在治疗区底部绘制托盘和按钮
     this.renderTrayAtBedArea()
     
-    // 渲染医生
+    // 渲染医生身体
     this.doctors.forEach(doctor => doctor.render(this.ctx))
+    
+    // 渲染病人
     this.renderPatients()
+    
+    // 渲染医生气泡（在最上层，不被病人遮挡）
+    this.doctors.forEach(doctor => doctor.renderBubble(this.ctx))
+    
     this.renderUI()
     this.renderFloatingTexts()
     this.renderGameOverModal()
@@ -437,7 +499,7 @@ export default class Game {
     // 托盘位置：治疗区底部居中，宽度为治疗区的一半
     const trayWidth = bedArea.width * 0.5
     const trayHeight = 32
-    const trayX = bedArea.x + (bedArea.width - trayWidth) / 2
+    const trayX = bedArea.x + (bedArea.width - trayWidth) / 2 - 20  // 往左移动20像素
     const trayY = bedArea.y + bedArea.height - trayHeight - 8
     
     // 调用 EquipmentRoom 的 renderTray 方法在治疗区位置渲染
@@ -478,6 +540,27 @@ export default class Game {
         ctx.shadowBlur = 0
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 0
+      } else if (ft.type === 'heartText') {
+        // 绘制爱心图片和文字（爱心-1动效）- 小号版本带透明度
+        const heartSize = 16
+        const textOffset = 10
+        
+        ctx.save()
+        ctx.globalAlpha = ft.opacity
+        
+        // 绘制爱心图片
+        if (this.heartImage) {
+          ctx.drawImage(this.heartImage, ft.x - heartSize - textOffset/2, ft.y + ft.offsetY - heartSize/2, heartSize, heartSize)
+        }
+        
+        // 绘制文字（-1）
+        ctx.fillStyle = ft.color
+        ctx.font = 'bold 16px cursive, sans-serif'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(ft.text, ft.x + textOffset/2, ft.y + ft.offsetY)
+        
+        ctx.restore()
       } else {
         // 绘制文字
         ctx.fillStyle = ft.color
@@ -572,7 +655,7 @@ export default class Game {
     // 关卡数显示
     ctx.fillStyle = '#FFF'
     ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
-    ctx.fillText(`第${this.currentLevel + 1}关`, this.mapX + 180, titleY)
+    ctx.fillText(`  第${this.currentLevel + 1}关`, this.mapX + 180, titleY)
     
     // 统计
     const fontSize = Math.max(12, this.screenWidth * 0.018)
@@ -595,6 +678,32 @@ export default class Game {
       ctx.fillText(`❤️ ${this.treatedCount}`, heartX, titleY)
     }
     
+    // 音量开关按钮（最右侧）
+    const volumeX = this.mapX + this.mapWidth - 50
+    const volumeY = this.mapY + (headerHeight - 24) / 2
+    const volumeSize = 24
+    
+    // 绘制音量图标背景（圆形）
+    ctx.fillStyle = this.isMuted ? '#E74C3C' : '#27AE60'
+    ctx.beginPath()
+    ctx.arc(volumeX + volumeSize / 2, volumeY + volumeSize / 2, volumeSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 绘制音量图标
+    ctx.fillStyle = '#FFF'
+    ctx.font = 'bold 14px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(this.isMuted ? '🔇' : '🔊', volumeX + volumeSize / 2, volumeY + volumeSize / 2 + 1)
+    
+    // 记录音量按钮区域用于点击检测
+    this.volumeBtnBounds = {
+      x: volumeX,
+      y: volumeY,
+      width: volumeSize,
+      height: volumeSize
+    }
+    
     // 区域标题
     const areaTitleY = this.mapY + headerHeight + 32
     const titleFontSize = Math.max(12, this.screenWidth * 0.018)
@@ -602,7 +711,7 @@ export default class Game {
     ctx.textBaseline = 'middle'
     
     // 等候区标题 - 显示已出现病人数/本关卡总病人数
-    const levelMax = this.levelConfig[this.currentLevel].maxPatients
+    const levelMax = getLevelConfig(this.currentLevel).maxPatients
     const waitingText = `等候区 (${this.spawnedPatientsCount}/${levelMax})`
     const waitingX = this.waitingArea.x + this.waitingArea.width / 2
     ctx.textAlign = 'center'
@@ -645,7 +754,16 @@ export default class Game {
   }
 
   initTouch() {
+    // 首次点击时播放背景音乐（微信要求用户交互后才能播放音频）
+    let bgmStarted = false
+    
     wx.onTouchStart((e) => {
+      // 第一次点击触发背景音乐
+      if (!bgmStarted) {
+        bgmStarted = true
+        audioManager.playBGM('audio/bgm.mp3')
+      }
+      
       const touch = e.touches[0]
       const x = touch.clientX
       const y = touch.clientY
@@ -668,6 +786,16 @@ export default class Game {
         return
       }
       
+      // 检查是否点击音量开关按钮
+      if (this.volumeBtnBounds &&
+          x >= this.volumeBtnBounds.x && x <= this.volumeBtnBounds.x + this.volumeBtnBounds.width &&
+          y >= this.volumeBtnBounds.y && y <= this.volumeBtnBounds.y + this.volumeBtnBounds.height) {
+        this.isMuted = !this.isMuted
+        audioManager.toggleMute()
+        console.log(this.isMuted ? '已静音' : '已取消静音')
+        return
+      }
+      
       // 检查是否在重置按钮区域（右上角）
       if (x > this.screenWidth - 100 && y < 60) {
         this.reset()
@@ -676,6 +804,11 @@ export default class Game {
       
       // 检查是否点击重置按钮（优先检测，避免和器械柜重叠）
       if (this.equipmentRoom.isClickOnResetButton(x, y)) {
+        // 设置按下状态并显示动效
+        this.equipmentRoom.resetButtonPressed = true
+        setTimeout(() => {
+          this.equipmentRoom.resetButtonPressed = false
+        }, 150)
         const trayItems = this.equipmentRoom.getTrayItems()
         if (trayItems.length > 0) {
           this.equipmentRoom.clearTray()
@@ -685,6 +818,11 @@ export default class Game {
       
       // 检查是否点击发送按钮（优先检测，避免和器械柜重叠）
       if (this.equipmentRoom.isClickOnSendButton(x, y)) {
+        // 设置按下状态并显示动效
+        this.equipmentRoom.sendButtonPressed = true
+        setTimeout(() => {
+          this.equipmentRoom.sendButtonPressed = false
+        }, 150)
         this.handleSendButtonClick()
         return
       }
@@ -692,6 +830,8 @@ export default class Game {
       // 检查是否点击器材室的物品 - 点击放入托盘
       const itemId = this.equipmentRoom.getItemAt(x, y)
       if (itemId) {
+        // 点击器材时震动（仅真机）
+        this.vibrate()
         const item = getItemById(itemId)
         if (item) {
           // 将物品放入托盘
@@ -702,7 +842,7 @@ export default class Game {
             console.log(item.name, '已在托盘中')
           } else if (result.reason === 'full') {
             wx.showToast({
-              title: '托盘已满(最多2个)',
+              title: '托盘已满(最多4个)',
               icon: 'none',
               duration: 1200
             })
@@ -714,6 +854,8 @@ export default class Game {
       // 点击病人 - 自动分配到空闲病床
       const patient = this.waitingArea.getPatientAt(x, y)
       if (patient && !patient.inBed && patient.patience > 0 && !patient.isLeaving) {
+        // 点击病人时震动（仅真机）
+        this.vibrate()
         // 查找空闲病床
         const emptyBed = this.bedArea.findEmptyBed()
         if (emptyBed) {
@@ -770,9 +912,9 @@ export default class Game {
         if (res.confirm) {
           // 清理所有定时器
           clearInterval(this.timeTimer)
-          clearInterval(this.spawnTimer)
+          clearTimeout(this.spawnTimer)
           if (this.initialSpawnTimer) {
-            clearInterval(this.initialSpawnTimer)
+            clearTimeout(this.initialSpawnTimer)
           }
           
           this.score = 0
@@ -794,9 +936,9 @@ export default class Game {
   gameOver() {
     this.isRunning = false
     clearInterval(this.timeTimer)
-    clearInterval(this.spawnTimer)
+    clearTimeout(this.spawnTimer)
     if (this.initialSpawnTimer) {
-      clearInterval(this.initialSpawnTimer)
+      clearTimeout(this.initialSpawnTimer)
     }
     
     // 设置游戏结束弹窗状态
@@ -828,7 +970,7 @@ export default class Game {
         return
       }
       
-      const totalPatients = this.levelConfig[this.currentLevel].maxPatients
+      const totalPatients = getLevelConfig(this.currentLevel).maxPatients
       const occupiedBeds = this.bedArea.getOccupiedBeds().length
       const waitingPatients = this.waitingArea.patients.length
       
@@ -847,7 +989,7 @@ export default class Game {
           this.isRunning) {
         
         console.log('关卡完成，准备进入下一关')
-        if (this.currentLevel < this.levelConfig.length - 1) {
+        if (this.currentLevel < GameConfig.levels.length - 1) {
           // 进入下一关
           this.showLevelCompleteModal()
         } else {
@@ -1088,7 +1230,7 @@ export default class Game {
     // 停止游戏但不重置状态
     this.isRunning = false
     clearInterval(this.timeTimer)
-    clearInterval(this.spawnTimer)
+    clearTimeout(this.spawnTimer)
     
     this.gameWinModal = {
       visible: true,
@@ -1105,9 +1247,9 @@ export default class Game {
   restart() {
     // 清理所有定时器
     clearInterval(this.timeTimer)
-    clearInterval(this.spawnTimer)
+    clearTimeout(this.spawnTimer)
     if (this.initialSpawnTimer) {
-      clearInterval(this.initialSpawnTimer)
+      clearTimeout(this.initialSpawnTimer)
     }
     
     this.currentLevel = 0
@@ -1170,7 +1312,7 @@ export default class Game {
     // 内容文字
     ctx.fillStyle = '#333'
     ctx.font = '14px cursive, sans-serif'
-    ctx.fillText('口碑破产，急诊室关闭', modalX + modalWidth / 2, modalY + 55)
+    ctx.fillText('恶评漫天飞，你的急诊室被迫关闭', modalX + modalWidth / 2, modalY + 55)
     
     // 按钮
     const btnY = modalY + 100
@@ -1287,9 +1429,11 @@ export default class Game {
     const btnX = modalX + (modalWidth - btnWidth) / 2
     const btnY = modalY + 125
     
-    // 更新按钮位置（用于点击检测）
+    // 更新按钮位置和尺寸（用于点击检测）
     this.gameWinModal.buttonX = btnX
     this.gameWinModal.buttonY = btnY
+    this.gameWinModal.buttonWidth = btnWidth
+    this.gameWinModal.buttonHeight = btnHeight
     
     // 按钮背景 - 金色
     ctx.fillStyle = '#FFD700'

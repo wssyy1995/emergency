@@ -8,14 +8,30 @@ export default class EquipmentRoom {
     this.width = width
     this.height = height
     
+    // 检测平台（用于判断是否震动）
+    const sysInfo = wx.getSystemInfoSync()
+    this.platform = sysInfo.platform
+    
     // 可点击区域 - 现在每个抽屉是一个独立区域
     this.medicineDrawers = [] // 药品柜抽屉数组
     this.toolDrawers = [] // 器械柜抽屉数组
     
     // 托盘状态
-    this.trayItems = [] // 当前托盘中的物品数组（最多2个）
+    this.trayItems = [] // 当前托盘中的物品数组（最多4个）
     this.trayBounds = null // 托盘点击区域
     this.sendButtonBounds = null // 发送按钮点击区域
+    this.resetButtonBounds = null // 重置按钮点击区域
+    
+    // 按钮按下状态
+    this.resetButtonPressed = false
+    this.sendButtonPressed = false
+  }
+  
+  // 触发震动（仅在真机上生效，开发者工具中不震动）
+  vibrate() {
+    if (this.platform !== 'devtools') {
+      wx.vibrateShort({ type: 'light' })
+    }
   }
 
   update(deltaTime) {
@@ -309,18 +325,26 @@ export default class EquipmentRoom {
     }
     
     // 计算按钮区域
-    const btnSize = trayHeight * 0.7
+    const btnSize = trayHeight * 0.85  // 调整此系数改变按钮大小
     const btnY = trayY + (trayHeight - btnSize) / 2
-    const gap = 6
+    const gap = 12  // 调整此值改变按钮间距
     
     // 绘制重置/清空按钮（在托盘右侧，圆形）
     const resetBtnX = trayX + trayWidth + 8
     const hasItems = this.trayItems.length > 0
     
-    // 重置按钮背景 - 根据是否有物品改变颜色
-    ctx.fillStyle = hasItems ? '#E74C3C' : '#CCCCCC'
+    // 重置按钮按下动效（缩小并颜色变深）
+    const resetScale = this.resetButtonPressed ? 0.92 : 1
+    const resetOffset = (btnSize * (1 - resetScale)) / 2
+    
+    // 重置按钮背景 - 根据是否有物品改变颜色（按下时颜色变深）
+    if (this.resetButtonPressed) {
+      ctx.fillStyle = hasItems ? '#A93226' : '#888888'
+    } else {
+      ctx.fillStyle = hasItems ? '#E74C3C' : '#CCCCCC'
+    }
     ctx.beginPath()
-    ctx.arc(resetBtnX + btnSize / 2, btnY + btnSize / 2, btnSize / 2, 0, Math.PI * 2)
+    ctx.arc(resetBtnX + resetOffset + btnSize * resetScale / 2, btnY + resetOffset + btnSize * resetScale / 2, btnSize * resetScale / 2, 0, Math.PI * 2)
     ctx.fill()
     
     // 重置按钮边框
@@ -335,7 +359,7 @@ export default class EquipmentRoom {
     ctx.textBaseline = 'middle'
     ctx.fillText('✕', resetBtnX + btnSize / 2, btnY + btnSize / 2)
     
-    // 记录重置按钮区域
+    // 记录重置按钮区域（使用原始大小，不受按下动效影响）
     this.resetButtonBounds = {
       x: resetBtnX,
       y: btnY,
@@ -346,10 +370,18 @@ export default class EquipmentRoom {
     // 绘制发送按钮（在重置按钮右侧，圆形）
     const sendBtnX = resetBtnX + btnSize + gap
     
-    // 发送按钮背景
-    ctx.fillStyle = hasItems ? '#27AE60' : '#CCCCCC'
+    // 发送按钮按下动效（缩小并颜色变深）
+    const sendScale = this.sendButtonPressed ? 0.92 : 1
+    const sendOffset = (btnSize * (1 - sendScale)) / 2
+    
+    // 发送按钮背景（按下时颜色变深）
+    if (this.sendButtonPressed) {
+      ctx.fillStyle = hasItems ? '#1E7E3E' : '#888888'
+    } else {
+      ctx.fillStyle = hasItems ? '#27AE60' : '#CCCCCC'
+    }
     ctx.beginPath()
-    ctx.arc(sendBtnX + btnSize / 2, btnY + btnSize / 2, btnSize / 2, 0, Math.PI * 2)
+    ctx.arc(sendBtnX + sendOffset + btnSize * sendScale / 2, btnY + sendOffset + btnSize * sendScale / 2, btnSize * sendScale / 2, 0, Math.PI * 2)
     ctx.fill()
     
     // 发送按钮边框
@@ -364,7 +396,7 @@ export default class EquipmentRoom {
     ctx.textBaseline = 'middle'
     ctx.fillText('➤', sendBtnX + btnSize / 2, btnY + btnSize / 2)
     
-    // 记录发送按钮区域
+    // 记录发送按钮区域（使用原始大小）
     this.sendButtonBounds = {
       x: sendBtnX,
       y: btnY,
@@ -380,8 +412,8 @@ export default class EquipmentRoom {
     if (exists) {
       return { success: false, reason: 'duplicate' }
     }
-    // 检查托盘是否已满（最多2个）
-    if (this.trayItems.length >= 2) {
+    // 检查托盘是否已满（最多4个）
+    if (this.trayItems.length >= 4) {
       return { success: false, reason: 'full' }
     }
     this.trayItems.push(item)
@@ -416,13 +448,18 @@ export default class EquipmentRoom {
   // 检查点击是否在发送按钮上
   isClickOnSendButton(x, y) {
     if (!this.sendButtonBounds) return false
-    // 圆形按钮检测
+    // 圆形按钮检测（增加 8px 额外点击区域）
     const centerX = this.sendButtonBounds.x + this.sendButtonBounds.width / 2
     const centerY = this.sendButtonBounds.y + this.sendButtonBounds.height / 2
-    const radius = this.sendButtonBounds.width / 2
+    const radius = this.sendButtonBounds.width / 2 + 4
     const dx = x - centerX
     const dy = y - centerY
-    return dx * dx + dy * dy <= radius * radius
+    const isHit = dx * dx + dy * dy <= radius * radius
+    if (isHit) {
+      // 触发短震动（仅真机）
+      this.vibrate()
+    }
+    return isHit
   }
 
   // 检查点击是否在重置按钮上
@@ -434,7 +471,12 @@ export default class EquipmentRoom {
     const radius = this.resetButtonBounds.width / 2
     const dx = x - centerX
     const dy = y - centerY
-    return dx * dx + dy * dy <= radius * radius
+    const isHit = dx * dx + dy * dy <= radius * radius
+    if (isHit) {
+      // 触发短震动（仅真机）
+      this.vibrate()
+    }
+    return isHit
   }
 
   // 检查点击是否在托盘上
