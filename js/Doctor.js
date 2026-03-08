@@ -36,6 +36,10 @@ export default class Doctor {
     this.receivedItems = [] // 已收到的物品ID数组
     this.currentLevel = 0 // 当前关卡，用于决定申请物品数量
     
+    // 被暴走病人锁定状态
+    this.isLocked = false       // 是否被病人锁定停止移动
+    this.lockedByPatient = null // 锁定该医生的病人
+    
     // 加载两种状态的图片
     this.idleImage = null
     this.treatImage = null
@@ -141,6 +145,14 @@ export default class Doctor {
 
   update(deltaTime, bedArea) {
     this.animationTime += deltaTime
+    
+    // 锁定状态更新
+    if (this.isLocked) {
+      // 被锁定时停留在原地，显示无助动画
+      this.bounceOffset = Math.sin(this.animationTime / 300) * -1.5
+      return // 被锁定时不执行正常逻辑
+    }
+    
     this.blinkTimer += deltaTime
     
     if (this.blinkTimer > 2500 + Math.random() * 1500) {
@@ -315,6 +327,28 @@ export default class Doctor {
     return item ? item.id : null
   }
 
+  // 被暴走病人锁定
+  lockByPatient(patient) {
+    this.isLocked = true
+    this.lockedByPatient = patient
+    // 停止移动
+    this.state = 'idle'
+    this.targetBed = null
+    // 清空物品请求（无法继续治疗）
+    this.requiredItems = []
+    this.receivedItems = []
+  }
+
+  // 被病人解锁
+  unlockByPatient() {
+    this.isLocked = false
+    this.lockedByPatient = null
+    // 重新开始巡逻
+    this.state = 'idle'
+    this.idleTime = 0
+    this.pickRandomTarget()
+  }
+
   // 获取所有需要的物品ID
   getRequiredItemIds() {
     if (this.state === 'treating' && this.requiredItems.length > 0) {
@@ -349,17 +383,66 @@ export default class Doctor {
     
     // 根据状态选择图片
     const currentImage = this.state === 'treating' ? this.treatImage : this.idleImage
+    let drawWidth = 75
+    let drawHeight = 75
     
     if (currentImage && currentImage.width > 0) {
       // 使用图片绘制医生
       const targetDisplayWidth = 75 // 医生显示宽度（像素），调整此值改变医生大小
       const imageScale = targetDisplayWidth / currentImage.width
-      const drawWidth = currentImage.width * imageScale
-      const drawHeight = currentImage.height * imageScale
+      drawWidth = currentImage.width * imageScale
+      drawHeight = currentImage.height * imageScale
       ctx.drawImage(currentImage, -drawWidth / 2, -drawHeight / 2 + 5, drawWidth, drawHeight)
     }
     
+    // 锁定状态特效（SOS 救援标识）
+    if (this.isLocked) {
+      ctx.save()
+      ctx.translate(0, -drawHeight / 2 - 20)
+      
+      // SOS 跳动动效
+      const bounceOffset = Math.sin(this.animationTime / 150) * 3
+      
+      // 绘制背景圆（红色警告）
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.3)'
+      ctx.beginPath()
+      ctx.arc(0, bounceOffset, 22 * scale, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // 绘制 SOS 文字
+      ctx.fillStyle = '#E74C3C'
+      ctx.font = `bold ${14 * scale}px Arial`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('SOS', 0, bounceOffset)
+      
+      // 添加警告圈（脉动效果）
+      const pulseAlpha = 0.5 + Math.sin(this.animationTime / 200) * 0.3
+      ctx.strokeStyle = `rgba(231, 76, 60, ${pulseAlpha})`
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(0, bounceOffset, 25 * scale, 0, Math.PI * 2)
+      ctx.stroke()
+      
+      ctx.restore()
+    }
+    
     ctx.restore()
+  }
+
+  // 绘制星星工具方法
+  drawStar(ctx, x, y, radius, color) {
+    ctx.fillStyle = color
+    ctx.beginPath()
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * 4 * Math.PI / 5) - Math.PI / 2
+      const px = x + Math.cos(angle) * radius
+      const py = y + Math.sin(angle) * radius
+      if (i === 0) ctx.moveTo(px, py)
+      else ctx.lineTo(px, py)
+    }
+    ctx.closePath()
+    ctx.fill()
   }
   
   // 单独渲染气泡（在所有病人渲染完成后调用，确保气泡在最上层）

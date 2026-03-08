@@ -1,4 +1,5 @@
 import { drawStar } from './utils.js'
+import { GameConfig } from './GameConfig.js'
 
 const CONDITIONS = [
   { name: '感冒', icon: '🤒', color: '#FF9AA2', treatmentTime: 5 },
@@ -12,10 +13,14 @@ const CONDITIONS = [
 ]
 
 export default class Patient {
-  constructor(id, initialPatience = 30) {
+  constructor(id, initialPatience = 30, patientDetail = null) {
     this.id = id
-    // 使用代号作为名字（1-8号）
-    this.name = `${id}号`
+    // 病人详细配置
+    this.patientDetail = patientDetail
+    // 使用代号作为名字（1-8号），如果有配置则使用配置中的名字
+    this.name = patientDetail ? patientDetail.name : `${id}号`
+    this.info = patientDetail ? patientDetail.info : ''
+    this.rageLevel = patientDetail ? patientDetail.rageLevel : 1  // 暴怒值 1-5
     this.age = Math.floor(Math.random() * 50) + 15
     this.condition = CONDITIONS[Math.floor(Math.random() * CONDITIONS.length)]
     
@@ -49,12 +54,19 @@ export default class Patient {
     this.leaveTargetY = 0
     this.showHeartEffect = false  // 开始走向左上角时触发爱心-1效果
     
+    // 暴走相关状态
+    this.isRaging = false           // 是否处于暴走状态
+    this.rageTargetDoctor = null    // 暴走目标医生
+    this.rageTimeRemaining = 0      // 暴走剩余时间（毫秒）
+    this.rageStartTime = 0          // 暴走开始时间
+    
     // 病人图片编号（1-14 号按顺序循环使用）
     this.patientType = ((id - 1) % 14) + 1
     
     // 加载图片
     this.normalImage = null
     this.angryImage = null
+    this.boomImage = null
     this.loadImages()
   }
 
@@ -78,20 +90,58 @@ export default class Patient {
       console.warn(`Failed to load patient angry image: images/patient_${this.patientType}_angry.png`)
     }
     angryImg.src = `images/patient_${this.patientType}_angry.png`
+    
+    // 加载爆炸图标
+    const boomImg = wx.createImage()
+    boomImg.onload = () => {
+      this.boomImage = boomImg
+    }
+    boomImg.onerror = () => {
+      console.warn('Failed to load boom image: images/boom.png')
+    }
+    boomImg.src = 'images/boom.png'
   }
 
   update(deltaTime) {
     this.animationTime += deltaTime
     
+    // 暴走状态更新
+    if (this.isRaging && this.rageTargetDoctor) {
+      if (!this.hasLockedDoctor) {
+        // 还没锁定医生，检查是否到达治疗区
+        if (!this.isMoving && this.checkArrivedAtBedArea()) {
+          // 到达治疗区，锁定医生并开始跟随
+          this.lockDoctorAndFollow()
+          // 显示爆炸图标
+          this.tomatoThrown = true
+        }
+      } else {
+        // 已锁定医生，持续跟随
+        if (!this.isMoving) {
+          const dx = this.rageTargetDoctor.x - this.x
+          const dy = this.rageTargetDoctor.y - this.y
+          const dist = Math.hypot(dx, dy)
+          // 如果医生移动超过10像素，继续跟随
+          if (dist > 10) {
+            this.updateFollowPosition()
+          }
+        }
+      }
+    }
+    
     if (this.isMoving) {
-      this.bounceOffset = Math.abs(Math.sin(this.animationTime / 150)) * -2
+      // 暴走时动画更快
+      const bounceSpeed = this.isRaging ? 100 : 150
+      this.bounceOffset = Math.abs(Math.sin(this.animationTime / bounceSpeed)) * -2
       
       const dx = this.targetX - this.x
       const dy = this.targetY - this.y
       const dist = Math.hypot(dx, dy)
       
       if (dist > 2) {
-        const speed = 0.12 * deltaTime
+        // 暴走时使用配置的移动速度，普通状态使用默认速度
+        const baseSpeed = this.isRaging ? GameConfig.rage.walkSpeed : 0.12
+        const speed = baseSpeed * deltaTime
         this.x += (dx / dist) * speed
         this.y += (dy / dist) * speed
         this.facing = dx > 0 ? 1 : -1
@@ -143,6 +193,78 @@ export default class Patient {
     this.leaveTargetY = frontDeskY
     // 走到前台
     this.moveTo(frontDeskX, frontDeskY)
+  }
+
+  // 开始暴走 - 先走到治疗区，再锁定医生
+  startRage(doctor, bedArea) {
+    this.isRaging = true
+    this.isAngry = true
+    this.rageTargetDoctor = doctor
+    this.bedArea = bedArea // 保存治疗区引用
+    // 设置跟随偏移（在医生后方）
+    this.followOffsetX = -35 // 在医生后方35像素
+    this.followOffsetY = 5
+    // 还未锁定医生，先走到治疗区
+    this.hasLockedDoctor = false
+    // 计算治疗区内的目标位置（医生附近）
+    this.moveToBedAreaNearDoctor()
+  }
+
+  // 移动到治疗区内（医生附近但不锁定）
+  moveToBedAreaNearDoctor() {
+    if (!this.rageTargetDoctor || !this.bedArea) return
+    // 目标位置：治疗区内，医生方向的边缘
+    const doctorX = this.rageTargetDoctor.x
+    const doctorY = this.rageTargetDoctor.y
+    // 在医生旁边一个较远的位置（治疗区入口处）
+    const targetX = this.bedArea.x + this.bedArea.width * 0.2 // 治疗区左侧入口
+    const targetY = doctorY + (Math.random() - 0.5) * 50 // 医生高度附近，略有偏移
+    this.moveTo(targetX, targetY)
+  }
+
+  // 检查是否到达治疗区内位置
+  checkArrivedAtBedArea() {
+    if (!this.bedArea) return false
+    const dx = this.x - this.targetX
+    const dy = this.y - this.targetY
+    const dist = Math.hypot(dx, dy)
+    return dist < 10 // 距离目标位置小于10像素认为到达
+  }
+
+  // 锁定医生并开始跟随
+  lockDoctorAndFollow() {
+    if (!this.rageTargetDoctor || this.hasLockedDoctor) return
+    this.hasLockedDoctor = true
+    // 锁定医生，医生会停止移动
+    this.rageTargetDoctor.lockByPatient(this)
+    // 开始跟随医生
+    this.updateFollowPosition()
+  }
+
+  // 更新跟随位置（跟随医生）
+  updateFollowPosition() {
+    if (!this.isRaging || !this.rageTargetDoctor || !this.hasLockedDoctor) return
+    // 计算跟随位置（医生后方）
+    const targetX = this.rageTargetDoctor.x + this.followOffsetX
+    const targetY = this.rageTargetDoctor.y + this.followOffsetY
+    this.moveTo(targetX, targetY)
+  }
+
+  // 结束暴走 - 转为普通离开
+  endRage() {
+    // 解锁医生
+    if (this.rageTargetDoctor) {
+      this.rageTargetDoctor.unlockByPatient()
+    }
+    this.isRaging = false
+    this.rageTargetDoctor = null
+    // 开始正常离开流程
+    this.startLeaving(this.leaveTargetX || this.x, this.leaveTargetY || this.y)
+  }
+
+  // 被用户拖回等候区 - 结束暴走
+  draggedBackToWaiting() {
+    this.endRage()
   }
 
   render(ctx, isDragging = false) {
@@ -220,47 +342,63 @@ export default class Patient {
       ctx.restore()
     }
     
-    // 小火焰（到达前台后显示在头顶）
+    // 小火焰或爆炸图标（到达前台后显示在头顶）
     if (this.tomatoThrown) {
       ctx.save()
-      ctx.translate(centerX, centerY - 80 * scale + this.bounceOffset)
+      // 暴走状态的爆炸图标位置更高（-110 vs -80）
+      const iconOffsetY = this.isRaging ? -90 * scale : -80 * scale
+      ctx.translate(centerX, centerY + iconOffsetY + this.bounceOffset)
       
-      const flameTime = this.animationTime / 50
-      const flicker = Math.sin(flameTime) * 0.3 + 1
-      const lean = Math.sin(flameTime * 0.7) * 2 * scale
-      
-      // 底层火焰（红色）
-      ctx.fillStyle = '#FF4444'
-      ctx.beginPath()
-      ctx.moveTo(-5 * scale + lean * 0.3, 0)
-      ctx.quadraticCurveTo(-4 * scale + lean * 0.5, -8 * scale * flicker, lean * 0.2, -13 * scale * flicker)
-      ctx.quadraticCurveTo(4 * scale + lean * 0.5, -8 * scale * flicker, 5 * scale + lean * 0.3, 0)
-      ctx.fill()
-      
-      // 中层火焰（橙色）
-      ctx.fillStyle = '#FF7700'
-      ctx.beginPath()
-      ctx.moveTo(-4 * scale + lean * 0.3, 0)
-      ctx.quadraticCurveTo(-3 * scale + lean * 0.5, -6 * scale * flicker, lean * 0.2, -10 * scale * flicker)
-      ctx.quadraticCurveTo(3 * scale + lean * 0.5, -6 * scale * flicker, 4 * scale + lean * 0.3, 0)
-      ctx.fill()
-      
-      // 焰心（黄色）
-      ctx.fillStyle = '#FFDD33'
-      ctx.beginPath()
-      ctx.moveTo(-2.5 * scale, 0)
-      ctx.quadraticCurveTo(-1.5 * scale, -4 * scale * flicker, 0, -6 * scale * flicker)
-      ctx.quadraticCurveTo(1.5 * scale, -4 * scale * flicker, 2.5 * scale, 0)
-      ctx.fill()
+      // 如果是暴走状态，显示爆炸图标（带闪烁动效）
+      if (this.isRaging && this.boomImage) {
+        // 闪烁动效：使用正弦函数控制透明度和缩放
+        const flashSpeed = 3 // 闪烁速度（降低频率）
+        const flashAlpha = 0.7 + Math.sin(this.animationTime / 200 * flashSpeed) * 0.3 // 0.4 - 1.0 之间变化
+        const flashScale = 1 + Math.sin(this.animationTime / 200 * flashSpeed * 2) * 0.1 // 0.9 - 1.1 之间变化
+        
+        const boomSize = 40 * scale * flashScale
+        ctx.globalAlpha = flashAlpha
+        ctx.drawImage(this.boomImage, -boomSize / 2, -boomSize / 2, boomSize, boomSize)
+        ctx.globalAlpha = 1 // 恢复默认透明度
+      } else {
+        // 普通愤怒状态显示火焰
+        const flameTime = this.animationTime / 50
+        const flicker = Math.sin(flameTime) * 0.3 + 1
+        const lean = Math.sin(flameTime * 0.7) * 2 * scale
+        
+        // 底层火焰（红色）
+        ctx.fillStyle = '#FF4444'
+        ctx.beginPath()
+        ctx.moveTo(-5 * scale + lean * 0.3, 0)
+        ctx.quadraticCurveTo(-4 * scale + lean * 0.5, -8 * scale * flicker, lean * 0.2, -13 * scale * flicker)
+        ctx.quadraticCurveTo(4 * scale + lean * 0.5, -8 * scale * flicker, 5 * scale + lean * 0.3, 0)
+        ctx.fill()
+        
+        // 中层火焰（橙色）
+        ctx.fillStyle = '#FF7700'
+        ctx.beginPath()
+        ctx.moveTo(-4 * scale + lean * 0.3, 0)
+        ctx.quadraticCurveTo(-3 * scale + lean * 0.5, -6 * scale * flicker, lean * 0.2, -10 * scale * flicker)
+        ctx.quadraticCurveTo(3 * scale + lean * 0.5, -6 * scale * flicker, 4 * scale + lean * 0.3, 0)
+        ctx.fill()
+        
+        // 焰心（黄色）
+        ctx.fillStyle = '#FFDD33'
+        ctx.beginPath()
+        ctx.moveTo(-2.5 * scale, 0)
+        ctx.quadraticCurveTo(-1.5 * scale, -4 * scale * flicker, 0, -6 * scale * flicker)
+        ctx.quadraticCurveTo(1.5 * scale, -4 * scale * flicker, 2.5 * scale, 0)
+        ctx.fill()
+      }
       
       ctx.restore()
     }
   }
 
   contains(x, y) {
-    // 扩大点击范围
-    const paddingX = 15
-    const paddingY = 20
+    // 暴走病人有更大的点击范围，方便用户拖动
+    const paddingX = this.isRaging ? 40 : 15
+    const paddingY = this.isRaging ? 50 : 20
     return x >= this.x - paddingX && x <= this.x + this.width + paddingX &&
            y >= this.y - paddingY && y <= this.y + this.height + paddingY * 1.5
   }

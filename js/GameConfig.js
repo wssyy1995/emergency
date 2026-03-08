@@ -51,6 +51,36 @@ export const GameConfig = {
     waitingWidth: 0.35,         // 等候区宽度占比
     bedWidth: 0.35,             // 治疗区宽度占比
     equipmentWidth: 0.30        // 器材室宽度占比
+  },
+
+  // ==================== 病人详细配置 ====================
+  // 每个病人的独立配置，暴怒值 1-5，概率 = rageLevel * 10%
+  patientDetails: [
+    { id: 1, name: '1号', info: '普通感冒患者', rageLevel: 1 },
+    { id: 2, name: '2号', info: '轻微腹痛', rageLevel: 1 },
+    { id: 3, name: '3号', info: '头痛患者', rageLevel: 1 },
+    { id: 4, name: '4号', info: '腿部骨折', rageLevel: 1 },
+    { id: 5, name: '5号', info: '胸闷患者', rageLevel: 1 },
+    { id: 6, name: '6号', info: '过敏反应', rageLevel: 1 },
+    { id: 7, name: '7号', info: '高烧不退', rageLevel: 1 },
+    { id: 8, name: '8号', info: '严重扭伤', rageLevel: 4 },
+    { id: 9, name: '9号', info: '急性胃炎', rageLevel: 1 },
+    { id: 10, name: '10号', info: '心脏不适', rageLevel: 1 },
+    { id: 11, name: '11号', info: '反复发烧', rageLevel: 4 },
+    { id: 12, name: '12号', info: '周期性头痛', rageLevel: 3 },
+    { id: 13, name: '13号', info: '慢性咳嗽', rageLevel: 2 },
+    { id: 14, name: '14号', info: '累计剥离性骨折', rageLevel: 4 },
+    { id: 15, name: '15号', info: '急性阐尾炎', rageLevel: 1 },
+    { id: 16, name: '16号', info: '血压异常', rageLevel: 3 },
+    { id: 17, name: '17号', info: '关节痛风', rageLevel: 2 },
+    { id: 18, name: '18号', info: '严重腿部出血', rageLevel: 1 }
+  ],
+
+  // ==================== 暴走配置 ====================
+  rage: {
+    baseProbability: 0.9,       // 暴怒值1的基础概率 10%
+    probabilityPerLevel: 0.1,   // 每提升1级暴怒值，概率增加10%
+    walkSpeed: 0.14             // 暴走病人移动速度（每毫秒）
   }
 }
 
@@ -75,4 +105,31 @@ export function getDoctorItemCount(levelIndex) {
   }
   
   return 1 // 默认1个
+}
+
+// 获取病人详细配置
+export function getPatientDetail(patientId) {
+  const patient = GameConfig.patientDetails.find(p => p.id === patientId)
+  return patient || GameConfig.patientDetails[0] // 默认返回第一个
+}
+
+// 获取随机病人配置
+export function getRandomPatientDetail() {
+  const index = Math.floor(Math.random() * GameConfig.patientDetails.length)
+  return GameConfig.patientDetails[index]
+}
+
+// 计算病人暴走概率（根据暴怒值）
+// rageLevel: 1-5，返回概率如 0.1, 0.2, ..., 0.5
+export function getRageProbability(rageLevel) {
+  const rageConfig = GameConfig.rage
+  // 概率 = 基础概率 + (暴怒值 - 1) * 每级概率
+  // rageLevel=1: 10%, rageLevel=5: 50%
+  return rageConfig.baseProbability + (rageLevel - 1) * rageConfig.probabilityPerLevel
+}
+
+// 检查病人是否会暴走
+export function checkPatientRage(patientDetail) {
+  const probability = getRageProbability(patientDetail.rageLevel)
+  return Math.random() < probability
 }

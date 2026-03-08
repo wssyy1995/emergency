@@ -6,7 +6,7 @@ import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
-import { GameConfig, getLevelConfig } from './GameConfig.js'
+import { GameConfig, getLevelConfig, getRandomPatientDetail, checkPatientRage, getRageProbability } from './GameConfig.js'
 
 export default class Game {
   constructor() {
@@ -40,6 +40,7 @@ export default class Game {
     this.isRunning = false
     this.patientIdCounter = 1
     this.doctorIdCounter = 1
+    this.hasRagingPatient = false  // 是否有病人正在暴走（同时只能有1个）
     
     // 关卡系统 - 使用 GameConfig.js 中的配置
     this.currentLevel = 0  // 内部从0开始，显示为第1关
@@ -66,6 +67,11 @@ export default class Game {
     
     // 浮动文字动画
     this.floatingTexts = []
+    
+    // 拖动暴走病人状态
+    this.draggingRagePatient = null  // 正在被拖动的暴走病人
+    this.dragStartX = 0
+    this.dragStartY = 0
     
     // 弹窗状态
     this.gameOverModal = null
@@ -370,21 +376,40 @@ export default class Game {
     
     this.waitingArea.patients.forEach(patient => {
       patient.patience -= deltaTime / 1000
-      // 耐心归零且未开始离开流程
-      if (patient.patience <= 0 && !patient.isLeaving && !patient.tomatoThrown) {
+      // 耐心归零且未开始离开/暴走流程
+      if (patient.patience <= 0 && !patient.isLeaving && !patient.tomatoThrown && !patient.isRaging) {
         patient.isAngry = true
-        // 计算前台位置（护士台前方）
-        const frontDeskX = this.waitingArea.x + this.waitingArea.width / 2
-        const frontDeskY = this.waitingArea.y + this.waitingArea.height * 0.45
-        patient.startLeaving(frontDeskX, frontDeskY)
-        // 爱心减1（生命值减少）
-        this.treatedCount--
         
-        // 检查游戏结束
-        if (this.treatedCount < 0) {
-          this.gameOver()
+        // 检查是否会暴走（根据暴怒值概率判断，且当前没有其他病人暴走）
+        const rageProbability = patient.patientDetail ? getRageProbability(patient.patientDetail.rageLevel) : 0
+        const randomValue = Math.random()
+        const willRage = patient.patientDetail && randomValue < rageProbability && !this.hasRagingPatient
+        
+        // 调试日志（可以在开发者工具中查看）
+        console.log(`病人${patient.name} 暴走概率:${(rageProbability*100).toFixed(1)}% 随机值:${(randomValue*100).toFixed(1)}% 是否暴走:${willRage} hasRagingPatient:${this.hasRagingPatient}`)
+        
+        if (willRage && this.doctors.length > 0) {
+          // 暴走：找到一位还没有走到病床边的医生（不在 treating 状态）
+          const targetDoctor = this.findAvailableDoctorForRage()
+          console.log(`暴走病人找到医生:`, targetDoctor ? targetDoctor.name : '无')
+          if (targetDoctor) {
+            // 设置标记：有病人正在暴走
+            this.hasRagingPatient = true
+            // 设置病人暴走目标（先走到治疗区，再锁定医生）
+            patient.startRage(targetDoctor, this.bedArea)
+          } else {
+            // 没有可用医生，正常离开
+            console.log('没有可用医生，病人正常离开')
+            this.startPatientLeaving(patient)
+          }
+        } else {
+          // 不暴走，正常离开流程
+          this.startPatientLeaving(patient)
         }
       }
+      
+      // 更新暴走病人的跟随位置（只有锁定医生后才会跟随）
+      // 这个逻辑已经在 Patient.update 中处理
       
       // 检测爱心-1动效触发（开始走向左上角时）
       if (patient.showHeartEffect) {
@@ -397,6 +422,10 @@ export default class Game {
     // 清理已经离开的愤怒病人
     const angryPatients = this.waitingArea.patients.filter(p => p.shouldRemove)
     angryPatients.forEach(patient => {
+      // 如果是暴走病人离开，重置暴走标记
+      if (patient.isRaging || patient.rageTargetDoctor) {
+        this.hasRagingPatient = false
+      }
       this.waitingArea.removePatient(patient)
       // 检查是否完成关卡（当所有病人都已生成且都被处理）
       const totalPatients = getLevelConfig(this.currentLevel).maxPatients
@@ -407,6 +436,66 @@ export default class Game {
     })
   }
 
+  // 开始病人正常离开流程
+  startPatientLeaving(patient) {
+    const frontDeskX = this.waitingArea.x + this.waitingArea.width / 2
+    const frontDeskY = this.waitingArea.y + this.waitingArea.height * 0.45
+    patient.startLeaving(frontDeskX, frontDeskY)
+    // 爱心减1（生命值减少）
+    this.treatedCount--
+    // 检查游戏结束
+    if (this.treatedCount < 0) {
+      this.gameOver()
+    }
+  }
+
+  // 找到距离病人最近的医生
+  findNearestDoctor(patient) {
+    let nearestDoctor = null
+    let nearestDist = Infinity
+    
+    this.doctors.forEach(doctor => {
+      // 跳过已被锁定的医生
+      if (doctor.isLocked) return
+      
+      const dx = doctor.x - patient.x
+      const dy = doctor.y - patient.y
+      const dist = Math.hypot(dx, dy)
+      
+      if (dist < nearestDist) {
+        nearestDist = dist
+        nearestDoctor = doctor
+      }
+    })
+    
+    return nearestDoctor
+  }
+
+  // 找到一位可用于暴走的医生（不在 treating 状态且未被锁定）
+  findAvailableDoctorForRage() {
+    // 过滤出可用的医生（不在治疗状态且未被锁定）
+    const availableDoctors = this.doctors.filter(doctor => 
+      doctor.state !== 'treating' && !doctor.isLocked
+    )
+    
+    if (availableDoctors.length === 0) return null
+    
+    // 随机选择一位可用医生
+    const randomIndex = Math.floor(Math.random() * availableDoctors.length)
+    return availableDoctors[randomIndex]
+  }
+
+  // 查找点击位置的暴走病人
+  findRagingPatientAt(x, y) {
+    // 遍历所有病人，找到暴走状态的病人
+    for (const patient of this.waitingArea.patients) {
+      if (patient.isRaging && patient.contains(x, y)) {
+        return patient
+      }
+    }
+    return null
+  }
+
   spawnPatient() {
     this.spawnPatientFromLeft()
   }
@@ -415,7 +504,9 @@ export default class Game {
   spawnPatientFromLeft() {
     if (this.waitingArea.patients.length >= 8) return
     
-    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience)
+    // 获取随机病人配置
+    const patientDetail = getRandomPatientDetail()
+    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience, patientDetail)
     
     // 初始位置在等候区左侧外面
     patient.x = this.waitingArea.x - 50
@@ -445,7 +536,9 @@ export default class Game {
   spawnPatientWithHairStyle(hairStyle) {
     if (this.waitingArea.patients.length >= 8) return
     
-    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience)
+    // 获取随机病人配置
+    const patientDetail = getRandomPatientDetail()
+    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience, patientDetail)
     // 强制设置发型
     patient.hairStyle = hairStyle
     // 从左侧入口进入
@@ -851,6 +944,16 @@ export default class Game {
         return
       }
       
+      // 检查是否点击暴走病人（可以拖动回等候区）
+      const ragePatient = this.findRagingPatientAt(x, y)
+      if (ragePatient) {
+        // 开始拖动暴走病人
+        this.draggingRagePatient = ragePatient
+        this.dragStartX = x
+        this.dragStartY = y
+        return
+      }
+      
       // 点击病人 - 自动分配到空闲病床
       const patient = this.waitingArea.getPatientAt(x, y)
       if (patient && !patient.inBed && patient.patience > 0 && !patient.isLeaving) {
@@ -874,6 +977,59 @@ export default class Game {
           })
         }
       }
+    })
+    
+    // 触摸移动 - 拖动暴走病人
+    wx.onTouchMove((e) => {
+      if (!this.draggingRagePatient) return
+      
+      const touch = e.touches[0]
+      const x = touch.clientX
+      const y = touch.clientY
+      
+      // 更新暴走病人位置（跟随手指）
+      this.draggingRagePatient.x = x - this.draggingRagePatient.width / 2
+      this.draggingRagePatient.y = y - this.draggingRagePatient.height / 2
+      this.draggingRagePatient.isMoving = false
+    })
+    
+    // 触摸结束 - 释放暴走病人
+    wx.onTouchEnd((e) => {
+      if (!this.draggingRagePatient) return
+      
+      const patient = this.draggingRagePatient
+      const x = patient.x + patient.width / 2
+      const y = patient.y + patient.height / 2
+      
+      // 检查是否在等候区内
+      if (this.waitingArea.contains(x, y)) {
+        // 拖回等候区，解锁医生并开始正常离开流程
+        // 解锁医生
+        if (patient.rageTargetDoctor) {
+          patient.rageTargetDoctor.unlockByPatient()
+        }
+        // 重置暴走状态
+        patient.isRaging = false
+        patient.rageTargetDoctor = null
+        patient.hasLockedDoctor = false
+        // 重置暴走标记
+        this.hasRagingPatient = false
+        // 开始正常离开流程（会扣除爱心）
+        this.startPatientLeaving(patient)
+        wx.showToast({
+          title: '成功制止暴走病人！',
+          icon: 'none',
+          duration: 1500
+        })
+      } else {
+        // 没有拖回等候区
+        // 如果已经锁定医生，继续跟随；否则继续走向治疗区
+        if (patient.hasLockedDoctor) {
+          patient.updateFollowPosition()
+        }
+      }
+      
+      this.draggingRagePatient = null
     })
   }
 
@@ -921,11 +1077,14 @@ export default class Game {
           this.treatedCount = 0
           this.gameTime = 0
           this.patientIdCounter = 1
+          this.hasRagingPatient = false  // 重置暴走标记
           this.waitingArea.clear()
           this.bedArea.clear()
           this.doctors.forEach(doctor => {
             doctor.targetBed = null
             doctor.state = 'idle'
+            doctor.isLocked = false  // 重置医生锁定状态
+            doctor.lockedByPatient = null
           })
         }
       }
