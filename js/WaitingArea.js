@@ -53,10 +53,14 @@ export default class WaitingArea {
     const seatsPerRow = 4
     
     // 根据区域大小计算座位尺寸
-    const seatWidth = this.width * 0.25
+    const seatWidth = this.width * 0.22                   // 椅子宽度
     const seatHeight = this.height * 0.16
-    const gapX = this.width * 0.0001  // 固定间隔，更紧凑
-    const gapY = this.height * 0.1  // 行间距也减小
+    const gapX = -3                                        // 椅子左右间距
+    const gapY = Math.max(8, this.height * 0.08)          // 行间距
+    
+    // 计算椅子区域总宽度，使其在等候区居中
+    const seatsTotalWidth = seatsPerRow * seatWidth + (seatsPerRow - 1) * gapX
+    const startX = this.x + (this.width - seatsTotalWidth) / 2
     
     // 起始位置（前台下方）
     const startY = this.y + this.height * 0.55
@@ -64,9 +68,9 @@ export default class WaitingArea {
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < seatsPerRow; col++) {
         // 第一排往上移动，第二排保持不变
-        const rowOffset = row === 0 ? -10 : 0  // 调整此值改变第一排位置（负数往上，单位：像素）
+        const rowOffset = row === 0 ? -10 : 0
         this.seats.push({
-          x: this.x + gapX + col * (seatWidth + gapX),
+          x: startX + col * (seatWidth + gapX),
           y: startY + row * (seatHeight + gapY) + rowOffset,
           width: seatWidth,
           height: seatHeight,

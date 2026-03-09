@@ -2,7 +2,7 @@ import WaitingArea from './WaitingArea.js'
 import BedArea from './BedArea.js'
 import EquipmentRoom from './EquipmentRoom.js'
 import Patient from './Patient.js'
-import Doctor from './Doctor.js'
+import Doctor from './Doctor_simple.js'
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
@@ -14,25 +14,142 @@ export default class Game {
     this.canvas = wx.createCanvas()
     this.ctx = this.canvas.getContext('2d')
     
-    // 获取屏幕尺寸和设备信息（横屏模式）
+    // 初始化屏幕和 Canvas
+    this.initCanvas()
+    
+    // 初始化游戏状态（只执行一次）
+    this.initGameState()
+    
+    // 监听屏幕尺寸变化
+    wx.onWindowResize(() => {
+      // 屏幕旋转时重新初始化
+      this.initCanvas()
+      this.initAreas()
+    })
+  }
+  
+  // 初始化 Canvas 尺寸和缩放（支持重新调用）
+  initCanvas() {
+    // 获取屏幕尺寸和设备信息
     const sysInfo = wx.getSystemInfoSync()
+    this.pixelRatio = sysInfo.pixelRatio || 1
+    this.platform = sysInfo.platform
+    
+    // 使用 window 尺寸（当前实际显示尺寸）
     this.screenWidth = sysInfo.windowWidth
     this.screenHeight = sysInfo.windowHeight
-    this.pixelRatio = sysInfo.pixelRatio || 1
-    this.platform = sysInfo.platform  // 'ios', 'android', 或 'devtools'
     
-    // 设置画布实际尺寸为屏幕尺寸的 pixelRatio 倍（高清显示）
-    this.canvas.width = this.screenWidth * this.pixelRatio
-    this.canvas.height = this.screenHeight * this.pixelRatio
-    // 缩放绘图上下文，使坐标系统保持与屏幕尺寸一致
-    this.ctx.scale(this.pixelRatio, this.pixelRatio)
+    // 只在 Canvas 不存在时创建
+    if (!this.canvas) {
+      this.canvas = wx.createCanvas()
+      this.ctx = this.canvas.getContext('2d')
+    }
+    
+    // 重置 Canvas 尺寸（高清显示）
+    const effectivePixelRatio = Math.max(1, this.pixelRatio)
+    this.canvas.width = Math.floor(this.screenWidth * effectivePixelRatio)
+    this.canvas.height = Math.floor(this.screenHeight * effectivePixelRatio)
+    
+    // 重置缩放
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    this.ctx.scale(effectivePixelRatio, effectivePixelRatio)
     
     // 计算地图尺寸（留边距）
     this.mapX = 10
     this.mapY = 10
     this.mapWidth = this.screenWidth - 20
     this.mapHeight = this.screenHeight - 20
+  }
+  
+  resize() {
+    // 尝试检测 Canvas 是否还有效
+    let canvasValid = false
+    try {
+      // 尝试一个简单的操作来检测 Canvas 是否有效
+      this.ctx.fillStyle = '#000'
+      canvasValid = true
+    } catch (e) {
+      canvasValid = false
+    }
     
+    // 如果 Canvas 无效，重新获取
+    if (!canvasValid) {
+      this.canvas = wx.createCanvas()
+      this.ctx = this.canvas.getContext('2d')
+    }
+    
+    // 获取屏幕信息
+    const sysInfo = wx.getSystemInfoSync()
+    this.pixelRatio = sysInfo.pixelRatio || 1
+    
+    // 使用 window 尺寸（当前实际显示尺寸）
+    this.screenWidth = sysInfo.windowWidth
+    this.screenHeight = sysInfo.windowHeight
+    
+    // 设置 Canvas 尺寸和缩放
+    const effectivePixelRatio = Math.max(1, this.pixelRatio)
+    this.canvas.width = Math.floor(this.screenWidth * effectivePixelRatio)
+    this.canvas.height = Math.floor(this.screenHeight * effectivePixelRatio)
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    this.ctx.scale(effectivePixelRatio, effectivePixelRatio)
+    
+    // 重新计算地图尺寸
+    this.mapX = 10
+    this.mapY = 10
+    this.mapWidth = this.screenWidth - 20
+    this.mapHeight = this.screenHeight - 20
+    
+    // 重新计算区域位置（不重新创建实例，保留病人引用）
+    const headerHeight = 45
+    const bottomMargin = 10
+    const topPadding = 12
+    const availableY = this.mapY + headerHeight + topPadding
+    const availableHeight = this.mapHeight - headerHeight - bottomMargin - topPadding
+    const gap = 10
+    const totalGap = gap * 4
+    const availableWidth = this.mapWidth - totalGap
+    
+    const waitingWidth = availableWidth * 0.35
+    const bedWidth = availableWidth * 0.35
+    const equipmentWidth = availableWidth * 0.30
+    
+    // 更新等候区位置
+    if (this.waitingArea) {
+      this.waitingArea.x = this.mapX + gap
+      this.waitingArea.y = availableY
+      this.waitingArea.width = waitingWidth
+      this.waitingArea.height = availableHeight
+    }
+    
+    // 更新治疗区位置
+    if (this.bedArea) {
+      this.bedArea.x = this.mapX + gap + waitingWidth + gap
+      this.bedArea.y = availableY
+      this.bedArea.width = bedWidth
+      this.bedArea.height = availableHeight
+    }
+    
+    // 更新器材室位置
+    if (this.equipmentRoom) {
+      this.equipmentRoom.x = this.mapX + gap + waitingWidth + gap + bedWidth + gap
+      this.equipmentRoom.y = availableY
+      this.equipmentRoom.width = equipmentWidth
+      this.equipmentRoom.height = availableHeight
+    }
+    
+    // 更新医生位置到新的治疗区
+    this.doctors.forEach((doctor, i) => {
+      if (this.bedArea) {
+        doctor.x = this.bedArea.x + this.bedArea.width * (i === 0 ? 0.25 : 0.75)
+        doctor.y = this.bedArea.y + this.bedArea.height * 0.5
+        doctor.targetX = doctor.x
+        doctor.targetY = doctor.y
+      }
+    })
+  }
+  
+  // 初始化游戏状态（仅在 constructor 中调用一次）
+  initGameState() {
     // 游戏状态
     this.score = 0
     this.treatedCount = 0
@@ -40,23 +157,19 @@ export default class Game {
     this.isRunning = false
     this.patientIdCounter = 1
     this.doctorIdCounter = 1
-    this.hasRagingPatient = false  // 是否有病人正在暴走（同时只能有1个）
+    this.hasRagingPatient = false
     
-    // 关卡系统 - 使用 GameConfig.js 中的配置
-    this.currentLevel = 0  // 内部从0开始，显示为第1关
-    this.spawnedPatientsCount = 0  // 本关卡已出现的病人数
-    this.levelComplete = false     // 当前关卡是否完成
+    // 关卡系统
+    this.currentLevel = 0
+    this.spawnedPatientsCount = 0
+    this.levelComplete = false
     
-    // 动态计算三个区域的宽度（无间隙填满）
+    // 动态计算三个区域
     this.initAreas()
     
-    // 延迟创建医生，确保 bedArea 已准备好
+    // 立即创建医生（不在 setTimeout 中，避免时序问题）
     this.doctors = []
-    setTimeout(() => {
-      this.createDoctors(2)
-      console.log('医生创建完成，数量:', this.doctors.length)
-      this.doctors.forEach((d, i) => console.log(`医生${i}:`, d.x, d.y))
-    }, 100)
+    this.createDoctors(2)
     
     this.lastTime = 0
     
@@ -69,7 +182,7 @@ export default class Game {
     this.floatingTexts = []
     
     // 拖动暴走病人状态
-    this.draggingRagePatient = null  // 正在被拖动的暴走病人
+    this.draggingRagePatient = null
     this.dragStartX = 0
     this.dragStartY = 0
     
@@ -131,9 +244,22 @@ export default class Game {
       x,
       y,
       color: '#E74C3C',
-      opacity: 0.8,  // 初始透明度略微透明
+      opacity: 0.8,
       offsetY: 0,
-      life: 1200 // 1.2秒动画
+      life: 1200
+    })
+  }
+  
+  // 添加浮动爱心（用于治疗完成奖励）
+  addFloatingHeart(x, y) {
+    this.floatingTexts.push({
+      type: 'heartReward',
+      x,
+      y,
+      color: '#E74C3C',
+      opacity: 1,
+      offsetY: 0,
+      life: 1000
     })
   }
 
@@ -203,33 +329,28 @@ export default class Game {
   }
 
   createDoctors(count) {
-    // 获取走道区域
-    const walkableAreas = this.bedArea.getWalkableAreas()
-    
-    // 备用位置（如果 walkableAreas 为空）
-    const fallbackPositions = [
-      { x: this.bedArea.x + this.bedArea.width * 0.25, y: this.bedArea.y + this.bedArea.height * 0.5 },
-      { x: this.bedArea.x + this.bedArea.width * 0.75, y: this.bedArea.y + this.bedArea.height * 0.5 }
-    ]
-    
     for (let i = 0; i < count; i++) {
       const doctor = new Doctor(this.doctorIdCounter++, this.bedArea)
-      
-      // 将医生放在走道区域
-      if (walkableAreas.length > 0) {
-        const area = walkableAreas[i % walkableAreas.length]
-        doctor.x = area.x + area.width / 2
-        doctor.y = area.y + area.height / 2
-      } else {
-        // 使用备用位置
-        const pos = fallbackPositions[i % fallbackPositions.length]
-        doctor.x = pos.x
-        doctor.y = pos.y
-      }
       this.doctors.push(doctor)
     }
   }
 
+  // 恢复游戏（用于小程序重新进入时，不重置游戏状态）
+  resume() {
+    if (this.isRunning) return
+    
+    this.isRunning = true
+    
+    // 恢复渲染循环
+    this.lastTime = 0
+    this.loop(0)
+    
+    // 恢复计时器
+    this.timeTimer = setInterval(() => {
+      this.gameTime++
+    }, 1000)
+  }
+  
   start() {
     // 如果已经在运行，先停止并清理
     if (this.isRunning) {
@@ -241,12 +362,8 @@ export default class Game {
     this.isRunning = true
     
     // 预加载物品图片和区域图标
-    preloadItemImages(() => {
-      console.log('所有物品图片加载完成')
-    })
-    preloadAreaIcons(() => {
-      console.log('所有区域图标加载完成')
-    })
+    preloadItemImages()
+    preloadAreaIcons()
     
     this.loop(0)
     
@@ -254,7 +371,7 @@ export default class Game {
       this.gameTime++
     }, 1000)
     
-    // 重置关卡状态
+    // 重置关卡状态（start 是新游戏，resume 是继续）
     this.spawnedPatientsCount = 0
     this.levelComplete = false
     
@@ -353,7 +470,8 @@ export default class Game {
             
             // 添加浮动文字动画
             this.addFloatingText(`+${addedScore}`, bed.x + bed.width / 2, bed.y, '#FFD700')
-            this.addFloatingText('+❤️', bed.x + bed.width / 2, bed.y - 30, '#E74C3C')
+            // 使用爱心图片替代 emoji
+            this.addFloatingHeart(bed.x + bed.width / 2, bed.y - 30)
             
             // 检查是否完成关卡（当所有病人都已生成且都被处理）
             const totalPatients = getLevelConfig(this.currentLevel).maxPatients
@@ -654,6 +772,33 @@ export default class Game {
         ctx.fillText(ft.text, ft.x + textOffset/2, ft.y + ft.offsetY)
         
         ctx.restore()
+      } else if (ft.type === 'heartReward') {
+        // 绘制爱心奖励图标（+爱心）
+        const heartSize = 20
+        const plusOffset = 12
+        
+        ctx.save()
+        ctx.globalAlpha = ft.opacity
+        
+        // 绘制 "+" 号在爱心左边
+        ctx.fillStyle = '#E74C3C'
+        ctx.font = 'bold 20px cursive, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('+', ft.x - plusOffset, ft.y + ft.offsetY)
+        
+        // 绘制爱心图片，如果没有则用红色圆形代替
+        if (this.heartImage) {
+          ctx.drawImage(this.heartImage, ft.x - heartSize/2 + 5, ft.y + ft.offsetY - heartSize/2, heartSize, heartSize)
+        } else {
+          // 后备：红色圆形
+          ctx.fillStyle = '#E74C3C'
+          ctx.beginPath()
+          ctx.arc(ft.x + 5, ft.y + ft.offsetY, heartSize/2, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        
+        ctx.restore()
       } else {
         // 绘制文字
         ctx.fillStyle = ft.color
@@ -743,7 +888,7 @@ export default class Game {
     ctx.font = `${Math.max(16, this.screenWidth * 0.025)}px cursive, sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('🏥 急症室模拟器', this.mapX + 15, titleY)
+    ctx.fillText('🏥 急诊室模拟器', this.mapX + 15, titleY)
     
     // 关卡数显示
     ctx.fillStyle = '#FFF'
@@ -825,6 +970,8 @@ export default class Game {
     ctx.fillStyle = '#333333'
     ctx.fillText(equipmentText, equipmentX + 6, areaTitleY)
     this.renderAreaIcon(ctx, 'equipment', equipmentX - ctx.measureText(equipmentText).width / 2 - 4, areaTitleY, 18)
+    
+
   }
 
   // 渲染区域图标
@@ -1012,9 +1159,12 @@ export default class Game {
         patient.isRaging = false
         patient.rageTargetDoctor = null
         patient.hasLockedDoctor = false
+        patient.tomatoThrown = false  // 重置爆炸图标状态
+        patient.isMoving = false      // 确保可以开始新的移动
         // 重置暴走标记
         this.hasRagingPatient = false
         // 开始正常离开流程（会扣除爱心）
+        console.log('拖回等候区，开始离开流程', patient.name)
         this.startPatientLeaving(patient)
         wx.showToast({
           title: '成功制止暴走病人！',

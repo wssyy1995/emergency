@@ -1,31 +1,24 @@
 import Game from './Game.js'
 import { audioManager } from './AudioManager.js'
 
-// 微信小游戏入口
-wx.onShow(() => {
-  console.log('急症室小游戏启动')
-})
-
-// 音频管理器导出到全局，方便其他模块使用
+// 音频管理器导出到全局
 wx.audioManager = audioManager
-
-// 适配不同屏幕尺寸
-const sysInfo = wx.getSystemInfoSync()
-console.log('屏幕尺寸:', sysInfo.windowWidth, 'x', sysInfo.windowHeight)
 
 // 创建游戏实例
 const game = new Game()
 
-// 启动游戏
+// 标记是否是首次启动
+let isFirstLaunch = true
+
+// 启动游戏（首次和重新进入都会触发）
 wx.onShow(() => {
-  if (!game.isRunning) {
+  if (isFirstLaunch) {
+    // 首次启动：开始新游戏
+    isFirstLaunch = false
     game.start()
+  } else {
+    // 重新进入：恢复 Canvas，然后继续游戏
+    game.resize()
+    game.resume()
   }
 })
-
-// 首次启动（延迟确保环境准备好）
-setTimeout(() => {
-  if (!game.isRunning) {
-    game.start()
-  }
-}, 100)

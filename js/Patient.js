@@ -138,6 +138,11 @@ export default class Patient {
       const dy = this.targetY - this.y
       const dist = Math.hypot(dx, dy)
       
+      // 调试日志：如果是离开状态，打印移动信息
+      if (this.isLeaving && Math.random() < 0.01) {
+        console.log('病人移动:', this.name, 'dist:', dist.toFixed(2), 'isMoving:', this.isMoving, 'tomatoThrown:', this.tomatoThrown)
+      }
+      
       if (dist > 2) {
         // 暴走时使用配置的移动速度，普通状态使用默认速度
         const baseSpeed = this.isRaging ? GameConfig.rage.walkSpeed : 0.12
@@ -299,8 +304,8 @@ export default class Patient {
     
     ctx.restore()
     
-    // 耐心条（只在非离开状态显示）
-    if (!this.inBed && !this.isCured && !this.isLeaving) {
+    // 耐心条（只在非离开状态、非暴走状态显示）
+    if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging) {
       const patiencePercent = Math.max(0, this.patience / this.maxPatience)
       ctx.save()
       ctx.fillStyle = 'rgba(0,0,0,0.3)'
