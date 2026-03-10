@@ -8,20 +8,54 @@
 
 ### 1. 护士台
 
+#### 1.1 使用图片时（images/nurse_desk.png）
+
 | 参数 | 文件名 | 行号 | 代码 | 说明 |
 |------|--------|------|------|------|
-| 水平位置 | `js/WaitingArea.js` | 225 | `const centerX = this.x + this.width / 2` | 居中显示 |
-| 垂直位置 | `js/WaitingArea.js` | 226 | `const deskY = this.y + this.height * 0.26` | 调整 `0.26` 改变高低（越大越靠下）|
-| 宽度 | `js/WaitingArea.js` | 227 | `const deskWidth = this.width * 0.60` | 调整 `0.60` 改变宽度 |
-| 高度 | `js/WaitingArea.js` | 228 | `const deskHeight = this.height * 0.09` | 调整 `0.09` 改变高度 |
+| 水平位置 | `js/WaitingArea.js` | 241 | `const centerX = this.x + this.width / 2` | 居中显示 |
+| 垂直位置 | `js/WaitingArea.js` | 242 | `const deskY = this.y + this.height * 0.26` | 调整 `0.26` 改变高低（越大越靠下）|
+| 基础宽度 | `js/WaitingArea.js` | 243 | `const deskWidth = this.width * 0.60` | 调整 `0.60` 改变宽度 |
+| 图片宽度系数 | `js/WaitingArea.js` | 249 | `deskWidth * 1.1` | 图片实际宽度 = 基础宽度 * 1.1 |
+| 图片垂直偏移 | `js/WaitingArea.js` | 257 | `deskY - drawHeight * 0.1` | 向上偏移系数 0.1（正数向下，负数向上）|
+| 图片文件 | `images/nurse_desk.png` | - | - | 护士台图片资源 |
 
-**代码位置：** `js/WaitingArea.js` 第 224-228 行
+**代码位置：** `js/WaitingArea.js` 第 240-260 行
 ```javascript
 renderReception(ctx) {
-  const centerX = this.x + this.width / 2          // 第225行：水平居中
-  const deskY = this.y + this.height * 0.26        // 第226行：调整 0.26 改变垂直位置
-  const deskWidth = this.width * 0.60              // 第227行：调整 0.60 改变宽度
-  const deskHeight = this.height * 0.09            // 第228行：调整 0.09 改变高度
+  const centerX = this.x + this.width / 2          // 第241行：水平居中
+  const deskY = this.y + this.height * 0.26        // 第242行：调整 0.26 改变垂直位置
+  const deskWidth = this.width * 0.60              // 第243行：调整 0.60 改变宽度
+  
+  // 使用图片时
+  const targetWidth = deskWidth * 1.1              // 第249行：图片宽度系数（1.1 = 110%）
+  // ...
+  ctx.drawImage(
+    this.nurseDeskImage,
+    centerX - drawWidth / 2,
+    deskY - drawHeight * 0.1,                      // 第257行：垂直偏移系数 0.1
+    drawWidth,
+    drawHeight
+  )
+```
+
+#### 1.2 图片加载失败时（Fallback 绘制）
+
+| 参数 | 文件名 | 行号 | 代码 | 说明 |
+|------|--------|------|------|------|
+| 水平位置 | `js/WaitingArea.js` | 241 | `const centerX = this.x + this.width / 2` | 居中显示 |
+| 垂直位置 | `js/WaitingArea.js` | 242 | `const deskY = this.y + this.height * 0.26` | 调整 `0.26` 改变高低 |
+| 宽度 | `js/WaitingArea.js` | 243 | `const deskWidth = this.width * 0.60` | 调整 `0.60` 改变宽度 |
+| 高度 | `js/WaitingArea.js` | 244 | `const deskHeight = this.height * 0.09` | 调整 `0.09` 改变高度 |
+| 圆弧高度 | `js/WaitingArea.js` | 251 | `deskHeight * 1.15` | 下圆弧高度系数 |
+| 装饰条纹位置 | `js/WaitingArea.js` | 267 | `deskHeight * 0.4` | 粉色条纹垂直位置 |
+
+**代码位置：** `js/WaitingArea.js` 第 240-273 行
+```javascript
+renderReception(ctx) {
+  const centerX = this.x + this.width / 2          // 第241行：水平居中
+  const deskY = this.y + this.height * 0.26        // 第242行：调整 0.26 改变垂直位置
+  const deskWidth = this.width * 0.60              // 第243行：调整 0.60 改变宽度
+  const deskHeight = this.height * 0.09            // 第244行：调整 0.09 改变高度
 ```
 
 ---
@@ -392,8 +426,10 @@ initAreas() {
 
 | 调整目标 | 文件 | 行号 | 修改内容 |
 |----------|------|------|----------|
-| 护士台太高/太矮 | `js/WaitingArea.js` | 226 | 修改 `this.height * 0.26` |
-| 护士台太宽/太窄 | `js/WaitingArea.js` | 227 | 修改 `this.width * 0.60` |
+| **护士台图片位置** | `js/WaitingArea.js` | 242 | 修改 `this.height * 0.26` 调整高低 |
+| **护士台图片宽度** | `js/WaitingArea.js` | 243 | 修改 `this.width * 0.60` 调整基础宽度 |
+| **护士台图片放大** | `js/WaitingArea.js` | 249 | 修改 `deskWidth * 1.1` 调整图片大小系数 |
+| **护士台图片偏移** | `js/WaitingArea.js` | 257 | 修改 `drawHeight * 0.1` 调整垂直偏移 |
 | 座位太挤/太松 | `js/WaitingArea.js` | 58-59 | 修改 `gapX`, `gapY` |
 | 第一排座位位置 | `js/WaitingArea.js` | 67 | 修改 `rowOffset` 的 `-10` |
 | 病人坐姿位置 | `js/WaitingArea.js` | 109, 165 | 修改 `seat.height * 0.62` |

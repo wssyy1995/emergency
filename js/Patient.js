@@ -244,6 +244,8 @@ export default class Patient {
     this.rageTargetDoctor.lockByPatient(this)
     // 开始跟随医生
     this.updateFollowPosition()
+    // 设置标记，通知 Game 显示提示
+    this.justLockedDoctor = true
   }
 
   // 更新跟随位置（跟随医生）

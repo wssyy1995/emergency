@@ -14,138 +14,69 @@ export default class Game {
     this.canvas = wx.createCanvas()
     this.ctx = this.canvas.getContext('2d')
     
-    // 初始化屏幕和 Canvas
+    // 调试日志系统
+    this.debugLogs = []
+    this.maxDebugLogs = 15
+    
+    // 初始化屏幕和 Canvas（一锤子买卖，终生只赋值一次）
     this.initCanvas()
     
     // 初始化游戏状态（只执行一次）
     this.initGameState()
     
-    // 监听屏幕尺寸变化
-    wx.onWindowResize(() => {
-      // 屏幕旋转时重新初始化
-      this.initCanvas()
-      this.initAreas()
-    })
+    // 【极致简单】忽略系统的瞎指挥：不管灵动岛，onWindowResize 直接无视！
+    // wx.onWindowResize(() => { ... }) // 直接删掉！
   }
   
-  // 初始化 Canvas 尺寸和缩放（支持重新调用）
-  initCanvas() {
-    // 获取屏幕尺寸和设备信息
-    const sysInfo = wx.getSystemInfoSync()
-    this.pixelRatio = sysInfo.pixelRatio || 1
-    this.platform = sysInfo.platform
-    
-    // 使用 window 尺寸（当前实际显示尺寸）
-    this.screenWidth = sysInfo.windowWidth
-    this.screenHeight = sysInfo.windowHeight
-    
-    // 只在 Canvas 不存在时创建
-    if (!this.canvas) {
-      this.canvas = wx.createCanvas()
-      this.ctx = this.canvas.getContext('2d')
+  // 添加调试日志
+  addDebugLog(msg) {
+    const time = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    this.debugLogs.unshift(`[${time}] ${msg}`)
+    if (this.debugLogs.length > this.maxDebugLogs) {
+      this.debugLogs.pop()
     }
+    console.log(msg)
+  }
+  
+  // 初始化 Canvas（一锤子买卖，终生只赋值一次）
+  initCanvas() {
+    this.addDebugLog('=== initCanvas 开始 ===')
     
-    // 重置 Canvas 尺寸（高清显示）
-    const effectivePixelRatio = Math.max(1, this.pixelRatio)
-    this.canvas.width = Math.floor(this.screenWidth * effectivePixelRatio)
-    this.canvas.height = Math.floor(this.screenHeight * effectivePixelRatio)
+    const sysInfo = wx.getSystemInfoSync()
     
-    // 重置缩放
+    // 【绝招】强制锁死横屏逻辑尺寸（防止刚点开游戏时拿到的是竖屏数据）
+    this.screenWidth = Math.max(sysInfo.windowWidth, sysInfo.windowHeight)
+    this.screenHeight = Math.min(sysInfo.windowWidth, sysInfo.windowHeight)
+    this.pixelRatio = sysInfo.pixelRatio || 1
+    
+    this.addDebugLog(`强制横屏尺寸: ${this.screenWidth}x${this.screenHeight}`)
+    
+    // 1. 物理画布：终生只赋值这一次！
+    this.canvas.width = Math.floor(this.screenWidth * this.pixelRatio)
+    this.canvas.height = Math.floor(this.screenHeight * this.pixelRatio)
+    
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
-    this.ctx.scale(effectivePixelRatio, effectivePixelRatio)
+    this.ctx.scale(this.pixelRatio, this.pixelRatio)
     
-    // 计算地图尺寸（留边距）
+    this.addDebugLog(`Canvas 已锁定: ${this.canvas.width}x${this.canvas.height}`)
+    
+    // 2. 逻辑地图：不管 Safe Area，直接按全屏算！
     this.mapX = 10
     this.mapY = 10
-    this.mapWidth = this.screenWidth - 20
+    this.mapWidth = this.screenWidth - 20   // 不减去 safeArea
     this.mapHeight = this.screenHeight - 20
+    
+    this.addDebugLog(`地图: ${this.mapWidth}x${this.mapHeight}`)
+    
+    // 初始化三个区域位置
+    this.initAreas()
   }
   
   resize() {
-    // 尝试检测 Canvas 是否还有效
-    let canvasValid = false
-    try {
-      // 尝试一个简单的操作来检测 Canvas 是否有效
-      this.ctx.fillStyle = '#000'
-      canvasValid = true
-    } catch (e) {
-      canvasValid = false
-    }
-    
-    // 如果 Canvas 无效，重新获取
-    if (!canvasValid) {
-      this.canvas = wx.createCanvas()
-      this.ctx = this.canvas.getContext('2d')
-    }
-    
-    // 获取屏幕信息
-    const sysInfo = wx.getSystemInfoSync()
-    this.pixelRatio = sysInfo.pixelRatio || 1
-    
-    // 使用 window 尺寸（当前实际显示尺寸）
-    this.screenWidth = sysInfo.windowWidth
-    this.screenHeight = sysInfo.windowHeight
-    
-    // 设置 Canvas 尺寸和缩放
-    const effectivePixelRatio = Math.max(1, this.pixelRatio)
-    this.canvas.width = Math.floor(this.screenWidth * effectivePixelRatio)
-    this.canvas.height = Math.floor(this.screenHeight * effectivePixelRatio)
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
-    this.ctx.scale(effectivePixelRatio, effectivePixelRatio)
-    
-    // 重新计算地图尺寸
-    this.mapX = 10
-    this.mapY = 10
-    this.mapWidth = this.screenWidth - 20
-    this.mapHeight = this.screenHeight - 20
-    
-    // 重新计算区域位置（不重新创建实例，保留病人引用）
-    const headerHeight = 45
-    const bottomMargin = 10
-    const topPadding = 12
-    const availableY = this.mapY + headerHeight + topPadding
-    const availableHeight = this.mapHeight - headerHeight - bottomMargin - topPadding
-    const gap = 10
-    const totalGap = gap * 4
-    const availableWidth = this.mapWidth - totalGap
-    
-    const waitingWidth = availableWidth * 0.35
-    const bedWidth = availableWidth * 0.35
-    const equipmentWidth = availableWidth * 0.30
-    
-    // 更新等候区位置
-    if (this.waitingArea) {
-      this.waitingArea.x = this.mapX + gap
-      this.waitingArea.y = availableY
-      this.waitingArea.width = waitingWidth
-      this.waitingArea.height = availableHeight
-    }
-    
-    // 更新治疗区位置
-    if (this.bedArea) {
-      this.bedArea.x = this.mapX + gap + waitingWidth + gap
-      this.bedArea.y = availableY
-      this.bedArea.width = bedWidth
-      this.bedArea.height = availableHeight
-    }
-    
-    // 更新器材室位置
-    if (this.equipmentRoom) {
-      this.equipmentRoom.x = this.mapX + gap + waitingWidth + gap + bedWidth + gap
-      this.equipmentRoom.y = availableY
-      this.equipmentRoom.width = equipmentWidth
-      this.equipmentRoom.height = availableHeight
-    }
-    
-    // 更新医生位置到新的治疗区
-    this.doctors.forEach((doctor, i) => {
-      if (this.bedArea) {
-        doctor.x = this.bedArea.x + this.bedArea.width * (i === 0 ? 0.25 : 0.75)
-        doctor.y = this.bedArea.y + this.bedArea.height * 0.5
-        doctor.targetX = doctor.x
-        doctor.targetY = doctor.y
-      }
-    })
+    // 【极致简单】不再响应任何尺寸变化！
+    // Canvas 物理尺寸在 initCanvas 中一锤子买卖，终生不变
+    // 逻辑地图尺寸也固定，不随 Safe Area 变化
+    this.addDebugLog('resize 被调用（但已禁用）')
   }
   
   // 初始化游戏状态（仅在 constructor 中调用一次）
@@ -191,6 +122,9 @@ export default class Game {
     this.levelCompleteModal = null
     this.gameWinModal = null
     this.levelToast = null
+    
+    // 暴走提示状态（只显示一次）
+    this.hasShownRageToast = false
     
     // 音量按钮状态
     this.isMuted = false
@@ -337,18 +271,31 @@ export default class Game {
 
   // 恢复游戏（用于小程序重新进入时，不重置游戏状态）
   resume() {
-    if (this.isRunning) return
+    this.addDebugLog('=== resume 开始 ===')
+    
+    if (this.isRunning) {
+      this.addDebugLog('已经在运行中，跳过')
+      return
+    }
+    
+    // 安全检查：确保 Canvas 有效
+    if (!this.canvas || !this.ctx) {
+      this.addDebugLog('❌ Canvas 无效，无法恢复')
+      return
+    }
     
     this.isRunning = true
-    
-    // 恢复渲染循环
     this.lastTime = 0
-    this.loop(0)
     
     // 恢复计时器
     this.timeTimer = setInterval(() => {
       this.gameTime++
     }, 1000)
+    
+    this.addDebugLog('渲染循环已恢复')
+    
+    // 开始渲染循环
+    this.loop(0)
   }
   
   start() {
@@ -515,6 +462,7 @@ export default class Game {
             this.hasRagingPatient = true
             // 设置病人暴走目标（先走到治疗区，再锁定医生）
             patient.startRage(targetDoctor, this.bedArea)
+            // 提示会在病人锁定医生后显示（在 update 中检测）
           } else {
             // 没有可用医生，正常离开
             console.log('没有可用医生，病人正常离开')
@@ -528,6 +476,12 @@ export default class Game {
       
       // 更新暴走病人的跟随位置（只有锁定医生后才会跟随）
       // 这个逻辑已经在 Patient.update 中处理
+      
+      // 检查病人是否刚刚锁定医生，显示提示
+      if (patient.justLockedDoctor) {
+        patient.justLockedDoctor = false
+        this.showRageToastOnce()
+      }
       
       // 检测爱心-1动效触发（开始走向左上角时）
       if (patient.showHeartEffect) {
@@ -613,6 +567,27 @@ export default class Game {
     }
     return null
   }
+  
+  // 显示暴走提示（只显示一次）
+  showRageToastOnce() {
+    // 检查本地存储，是否已显示过
+    const hasShown = wx.getStorageSync('rage_toast_shown')
+    if (hasShown || this.hasShownRageToast) {
+      return
+    }
+    
+    // 显示提示（在屏幕上方，停留2秒）
+    wx.showToast({
+      title: '将暴走病人拖回等待区，解救医生！',
+      icon: 'none',
+      duration: 2000,
+      position: 'top'
+    })
+    
+    // 标记已显示
+    this.hasShownRageToast = true
+    wx.setStorageSync('rage_toast_shown', true)
+  }
 
   spawnPatient() {
     this.spawnPatientFromLeft()
@@ -668,6 +643,11 @@ export default class Game {
   }
 
   render() {
+    // 【每帧强校准】彻底治愈 iOS 切后台画面缩小问题
+    // 不管之前发生了什么，每帧都强制重置缩放比例
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    this.ctx.scale(this.pixelRatio, this.pixelRatio)
+    
     this.ctx.save()
     
     // 清空画布
@@ -701,7 +681,59 @@ export default class Game {
     this.renderLevelToast()
     this.renderGameWinModal()
     
+    // 调试日志已禁用
+    // this.renderDebugLogs()
+    
     this.ctx.restore()
+  }
+  
+  // 绘制调试日志（在屏幕左上角）
+  renderDebugLogs() {
+    if (!this.debugLogs || this.debugLogs.length === 0) return
+    
+    const ctx = this.ctx
+    const lineHeight = 14
+    const padding = 8
+    const maxWidth = 380
+    const maxLines = Math.min(this.debugLogs.length, 15)
+    
+    // 计算背景高度
+    const bgHeight = maxLines * lineHeight + padding * 2
+    
+    // 绘制半透明背景
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
+    ctx.fillRect(5, 5, maxWidth, bgHeight)
+    
+    // 绘制日志文字
+    ctx.font = '11px monospace'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    
+    for (let i = 0; i < maxLines; i++) {
+      const log = this.debugLogs[i]
+      const y = 5 + padding + i * lineHeight
+      
+      // 根据内容类型设置颜色
+      if (log.includes('❌')) {
+        ctx.fillStyle = '#ff6b6b'
+      } else if (log.includes('✅')) {
+        ctx.fillStyle = '#51cf66'
+      } else if (log.includes('⏭️')) {
+        ctx.fillStyle = '#ffd43b'
+      } else if (log.includes('===')) {
+        ctx.fillStyle = '#74c0fc'
+      } else {
+        ctx.fillStyle = '#fff'
+      }
+      
+      // 截断过长的日志
+      let displayLog = log
+      if (log.length > 55) {
+        displayLog = log.substring(0, 55) + '...'
+      }
+      
+      ctx.fillText(displayLog, 10, y)
+    }
   }
 
   // 在治疗区底部渲染托盘

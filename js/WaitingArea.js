@@ -22,6 +22,8 @@ export default class WaitingArea {
     // 加载椅子图片
     this.seatFreeImage = null
     this.seatOccupiedImage = null
+    // 加载护士台图片
+    this.nurseDeskImage = null
     this.loadImages()
   }
 
@@ -45,6 +47,16 @@ export default class WaitingArea {
       console.warn('Failed to load seat occupied image: images/seat_occupied.png')
     }
     occupiedImg.src = 'images/seat_occupied.png'
+    
+    // 加载护士台图片
+    const nurseDeskImg = wx.createImage()
+    nurseDeskImg.onload = () => {
+      this.nurseDeskImage = nurseDeskImg
+    }
+    nurseDeskImg.onerror = () => {
+      console.warn('Failed to load nurse desk image: images/nurse_desk.png')
+    }
+    nurseDeskImg.src = 'images/nurse_desk.png'
   }
 
   initSeats() {
@@ -227,38 +239,56 @@ export default class WaitingArea {
 
   renderReception(ctx) {
     const centerX = this.x + this.width / 2
-    const deskY = this.y + this.height * 0.26
-    const deskWidth = this.width * 0.60
-    const deskHeight = this.height * 0.09
+    const deskY = this.y + this.height * 0.05
+    const deskWidth = this.width * 0.45
+    const deskHeight = this.height * 0.1
     
-    // 护士台主体 - 上直边，下弧形
-    ctx.fillStyle = '#FFF'
-    ctx.beginPath()
-    // 左上
-    ctx.moveTo(centerX - deskWidth / 2, deskY)
-    // 右上
-    ctx.lineTo(centerX + deskWidth / 2, deskY)
-    // 右下圆弧
-    ctx.quadraticCurveTo(centerX + deskWidth / 2, deskY + deskHeight * 1.1, centerX, deskY + deskHeight * 1.15)
-    // 左下圆弧
-    ctx.quadraticCurveTo(centerX - deskWidth / 2, deskY + deskHeight * 1.1, centerX - deskWidth / 2, deskY)
-    ctx.closePath()
-    ctx.fill()
-    
-    // 边框
-    ctx.strokeStyle = '#FFB7B2'
-    ctx.lineWidth = 2
-    ctx.stroke()
-    
-    // 台面装饰（粉色弧形条纹）
-    ctx.fillStyle = '#FFB7B2'
-    ctx.beginPath()
-    ctx.moveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
-    ctx.lineTo(centerX + deskWidth / 2 - deskWidth * 0.05, deskY + deskHeight * 0.4)
-    ctx.quadraticCurveTo(centerX + deskWidth / 2 - deskWidth * 0.05, deskY + deskHeight * 0.55, centerX, deskY + deskHeight * 0.6)
-    ctx.quadraticCurveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.55, centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
-    ctx.closePath()
-    ctx.fill()
+    // 优先使用护士台图片
+    if (this.nurseDeskImage && this.nurseDeskImage.width > 0) {
+      // 使用图片绘制护士台，保持比例
+      const targetWidth = deskWidth * 1.1
+      const imageScale = targetWidth / this.nurseDeskImage.width
+      const drawWidth = targetWidth
+      const drawHeight = this.nurseDeskImage.height * imageScale
+      
+      ctx.drawImage(
+        this.nurseDeskImage,
+        centerX - drawWidth / 2,
+        deskY - drawHeight * 0.1, // 稍微向上偏移，让护士台位置更合适
+        drawWidth,
+        drawHeight
+      )
+    } else {
+      // 图片未加载时，使用原来的代码绘制（fallback）
+      // 护士台主体 - 上直边，下弧形
+      ctx.fillStyle = '#FFF'
+      ctx.beginPath()
+      // 左上
+      ctx.moveTo(centerX - deskWidth / 2, deskY)
+      // 右上
+      ctx.lineTo(centerX + deskWidth / 2, deskY)
+      // 右下圆弧
+      ctx.quadraticCurveTo(centerX + deskWidth / 2, deskY + deskHeight * 1.1, centerX, deskY + deskHeight * 1.15)
+      // 左下圆弧
+      ctx.quadraticCurveTo(centerX - deskWidth / 2, deskY + deskHeight * 1.1, centerX - deskWidth / 2, deskY)
+      ctx.closePath()
+      ctx.fill()
+      
+      // 边框
+      ctx.strokeStyle = '#FFB7B2'
+      ctx.lineWidth = 2
+      ctx.stroke()
+      
+      // 台面装饰（粉色弧形条纹）
+      ctx.fillStyle = '#FFB7B2'
+      ctx.beginPath()
+      ctx.moveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
+      ctx.lineTo(centerX + deskWidth / 2 - deskWidth * 0.05, deskY + deskHeight * 0.4)
+      ctx.quadraticCurveTo(centerX + deskWidth / 2 - deskWidth * 0.05, deskY + deskHeight * 0.55, centerX, deskY + deskHeight * 0.6)
+      ctx.quadraticCurveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.55, centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
+      ctx.closePath()
+      ctx.fill()
+    }
   }
 
   renderSeats(ctx) {

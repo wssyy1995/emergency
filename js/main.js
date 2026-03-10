@@ -17,8 +17,7 @@ wx.onShow(() => {
     isFirstLaunch = false
     game.start()
   } else {
-    // 重新进入：恢复 Canvas，然后继续游戏
-    game.resize()
+    // 仅仅调用 resume，尺寸纠正完全交给 wx.onWindowResize 和 Game 内部的逻辑去处理
     game.resume()
   }
 })
