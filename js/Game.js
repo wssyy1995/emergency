@@ -2,7 +2,7 @@ import WaitingArea from './WaitingArea.js'
 import BedArea from './BedArea.js'
 import EquipmentRoom from './EquipmentRoom.js'
 import Patient from './Patient.js'
-import Doctor from './Doctor_simple.js'
+import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
@@ -516,9 +516,7 @@ export default class Game {
 
   // 开始病人正常离开流程
   startPatientLeaving(patient) {
-    const frontDeskX = this.waitingArea.x + this.waitingArea.width / 2
-    const frontDeskY = this.waitingArea.y + this.waitingArea.height * 0.45
-    patient.startLeaving(frontDeskX, frontDeskY)
+    patient.startLeaving(this.screenHeight)
     // 爱心减1（生命值减少）
     this.treatedCount--
     // 检查游戏结束
