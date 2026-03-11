@@ -699,23 +699,6 @@ export default class Game {
     }
   }
 
-  spawnPatientWithHairStyle(hairStyle) {
-    if (this.waitingArea.patients.length >= 8) return
-    
-    // 获取随机病人配置和病情
-    const patientDetail = getRandomPatientDetail()
-    const disease = getRandomDisease()
-    const patient = new Patient(this.patientIdCounter++, patientDetail, disease)
-    // 强制设置发型
-    patient.hairStyle = hairStyle
-    // 从左侧入口进入
-    patient.x = this.waitingArea.x + 20
-    patient.y = this.waitingArea.y + 80
-    patient.targetX = patient.x
-    patient.targetY = patient.y
-    this.waitingArea.addPatient(patient)
-  }
-
   render() {
     // 【每帧强校准】彻底治愈 iOS 切后台画面缩小问题
     // 不管之前发生了什么，每帧都强制重置缩放比例
@@ -1458,6 +1441,9 @@ export default class Game {
       if (x >= btn.renderX && x <= btn.renderX + btn.renderWidth &&
           y >= btn.renderY && y <= btn.renderY + btn.renderHeight) {
         
+        // 点击按钮时震动
+        this.vibrate()
+        
         if (!btn.enabled) {
           // 该类型椅子已满
           wx.showToast({
@@ -1487,7 +1473,7 @@ export default class Game {
     return false
   }
 
-  // 绘制病情分诊弹窗（显示在等候区的小弹窗）
+  // 绘制病情分诊弹窗（轻量版：病情名 + 3个并排按钮）
   renderSeatSelectionModal() {
     if (!this.seatSelectionModal || !this.seatSelectionModal.visible) return
     
@@ -1495,19 +1481,15 @@ export default class Game {
     const modal = this.seatSelectionModal
     const patient = modal.patient
     
-    // 弹窗尺寸和位置（显示在等候区内，跟随病人位置）
-    const modalWidth = 190
-    const modalHeight = 155
+    // 弹窗尺寸（轻量小弹窗）
+    const modalWidth = 145
+    const modalHeight = 75
     
-    // 弹窗位置：在病人上方显示，往右偏移一些
-    const offsetX = 1000  
-    let modalX = patient.x + patient.width / 2 - modalWidth / 2 + offsetX
-    let modalY = patient.y -20
+    // 弹窗位置：在病人上方显示，往上偏移避免遮住头部
+    let modalX = patient.x + patient.width / 2 - modalWidth / 2
+    let modalY = patient.y - modalHeight - 40
     
-    // 确保弹窗不超出等候区边界
-    const waitingArea = this.waitingArea
-    modalX = Math.max(waitingArea.x + 5, Math.min(modalX, waitingArea.x + waitingArea.width - modalWidth - 5))
-    modalY = Math.max(waitingArea.y + 5, modalY)
+    
     
     // 保存弹窗位置用于点击检测
     modal.x = modalX
@@ -1516,91 +1498,54 @@ export default class Game {
     modal.height = modalHeight
     
     // 弹窗背景（带阴影）
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
-    ctx.shadowBlur = 10
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)'
+    ctx.shadowBlur = 8
     ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 4
+    ctx.shadowOffsetY = 3
     ctx.fillStyle = '#FFF'
-    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 10)
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 8)
     ctx.shadowColor = 'transparent'
     ctx.shadowBlur = 0
     ctx.shadowOffsetX = 0
     ctx.shadowOffsetY = 0
     
-    // 顶部标题背景
+    // 顶部标题栏（更窄）
     ctx.fillStyle = '#5B9BD5'
     ctx.beginPath()
-    ctx.moveTo(modalX + 10, modalY)
-    ctx.lineTo(modalX + modalWidth - 10, modalY)
-    ctx.quadraticCurveTo(modalX + modalWidth, modalY, modalX + modalWidth, modalY + 10)
-    ctx.lineTo(modalX + modalWidth, modalY + 28)
-    ctx.lineTo(modalX, modalY + 28)
-    ctx.lineTo(modalX, modalY + 10)
-    ctx.quadraticCurveTo(modalX, modalY, modalX + 10, modalY)
+    ctx.moveTo(modalX + 8, modalY)
+    ctx.lineTo(modalX + modalWidth - 8, modalY)
+    ctx.quadraticCurveTo(modalX + modalWidth, modalY, modalX + modalWidth, modalY + 8)
+    ctx.lineTo(modalX + modalWidth, modalY + 22)
+    ctx.lineTo(modalX, modalY + 22)
+    ctx.lineTo(modalX, modalY + 8)
+    ctx.quadraticCurveTo(modalX, modalY, modalX + 8, modalY)
     ctx.closePath()
     ctx.fill()
     
     // 标题文字
     ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.font = 'bold 12px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('病情分诊', modalX + modalWidth / 2, modalY + 14)
+    ctx.fillText('病情分诊', modalX + modalWidth / 2, modalY + 11)
     
-    // 左边：病人图片（更大，裁剪上半身）
-    const imgWidth = 70
-    const imgHeight = 85
-    const imgX = modalX + 12
-    const imgY = modalY + 38
-    
-    // 绘制病人图片（只显示上半身，头部区域）
-    ctx.save()
-    // 圆形裁剪区域
-    ctx.beginPath()
-    ctx.arc(imgX + imgWidth / 2, imgY + imgWidth / 2, imgWidth / 2, 0, Math.PI * 2)
-    ctx.closePath()
-    ctx.clip()
-    
-    const currentImage = patient.isAngry ? patient.angryImage : patient.normalImage
-    if (currentImage && currentImage.width > 0) {
-      // 裁剪上半身：只显示图片上半部分
-      const sourceHeight = currentImage.height * 0.7 // 取上半部分70%
-      ctx.drawImage(
-        currentImage, 
-        0, 0, currentImage.width, sourceHeight,  // 源：上半部分
-        imgX, imgY, imgWidth, imgHeight          // 目标：整个圆形区域
-      )
-    } else {
-      // 图片未加载时显示背景色
-      ctx.fillStyle = '#EEE'
-      ctx.fillRect(imgX, imgY, imgWidth, imgHeight)
-    }
-    ctx.restore()
-    
-    // 图片边框（蓝色，跟病情分诊标题栏一致）
-    ctx.strokeStyle = '#5B9BD5'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.arc(imgX + imgWidth / 2, imgY + imgWidth / 2, imgWidth / 2, 0, Math.PI * 2)
-    ctx.stroke()
-    
-    // 病人图片下方：病情名字
+    // 病情名字（标题下方）
     ctx.fillStyle = '#333'
-    ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.font = 'bold 11px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(patient.condition.name, imgX + imgWidth / 2, imgY + imgHeight + 5)
+    ctx.fillText(patient.condition.name, modalX + modalWidth / 2, modalY + 26)
     
-    // 右边：3个可爱的大圆角按钮
-    const btnWidth = 75
-    const btnHeight = 28
-    const btnSpacing = 7
-    const btnStartX = imgX + imgWidth + 12
-    const btnStartY = imgY + 5
+    // 3个按钮并排（横向排列）
+    const btnWidth = 40
+    const btnHeight = 20
+    const btnSpacing = 4
+    const totalBtnsWidth = btnWidth * 3 + btnSpacing * 2
+    const btnStartX = modalX + (modalWidth - totalBtnsWidth) / 2
+    const btnY = modalY + 46
     
     modal.buttons.forEach((btn, i) => {
-      const btnX = btnStartX
-      const btnY = btnStartY + i * (btnHeight + btnSpacing)
+      const btnX = btnStartX + i * (btnWidth + btnSpacing)
       
       // 保存按钮位置用于点击检测
       btn.renderX = btnX
@@ -1608,18 +1553,18 @@ export default class Game {
       btn.renderWidth = btnWidth
       btn.renderHeight = btnHeight
       
-      // 可爱的圆角按钮（更大的圆角）
-      const radius = 12
+      // 按钮圆角
+      const radius = 8
       
-      // 按钮阴影（可爱效果）
+      // 按钮阴影
       if (btn.enabled) {
-        ctx.shadowColor = btn.color + '80'
-        ctx.shadowBlur = 4
+        ctx.shadowColor = btn.color + '60'
+        ctx.shadowBlur = 3
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 2
       }
       
-      // 按钮背景（圆角矩形，更大圆角）
+      // 按钮背景
       ctx.fillStyle = btn.enabled ? btn.color : '#CCC'
       fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, radius)
       
@@ -1629,28 +1574,13 @@ export default class Game {
       ctx.shadowOffsetX = 0
       ctx.shadowOffsetY = 0
       
-      // 按钮高光（可爱效果）
-      if (btn.enabled) {
-        ctx.fillStyle = 'rgba(255,255,255,0.25)'
-        ctx.beginPath()
-        ctx.moveTo(btnX + radius, btnY)
-        ctx.lineTo(btnX + btnWidth - radius, btnY)
-        ctx.quadraticCurveTo(btnX + btnWidth, btnY, btnX + btnWidth, btnY + radius)
-        ctx.lineTo(btnX + btnWidth, btnY + 10)
-        ctx.quadraticCurveTo(btnX + btnWidth / 2, btnY + 15, btnX, btnY + 10)
-        ctx.lineTo(btnX, btnY + radius)
-        ctx.quadraticCurveTo(btnX, btnY, btnX + radius, btnY)
-        ctx.closePath()
-        ctx.fill()
-      }
-      
-      // 按钮文字（更粗更可爱）
+      // 按钮文字
       ctx.fillStyle = '#FFF'
-      ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
+      ctx.font = 'bold 10px "PingFang SC", "Microsoft YaHei", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      const labelText = btn.enabled ? btn.label : `${btn.label}(满)`
-      ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2 + 1)
+      const labelText = btn.enabled ? btn.label : '满'
+      ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2)
     })
   }
 

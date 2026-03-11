@@ -5,17 +5,17 @@ export const GameConfig = {
   levels: [
     { 
       id: 1,                    // 第1关
-      maxPatients: 15,           // 总病人数
+      maxPatients: 6,           // 总病人数
       doctorItemCount: 1        // 医生请求物品数量
     },
     { 
       id: 2,                    // 第2关
-      maxPatients: 4,           // 总病人数
+      maxPatients: 8,           // 总病人数
       doctorItemCount: 2        // 医生请求物品数量
     },
     { 
       id: 3,                    // 第3关
-      maxPatients: 4,          // 总病人数
+      maxPatients: 10,          // 总病人数
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -27,14 +27,14 @@ export const GameConfig = {
   // ==================== 病情配置 ====================
   // 每种病情对应的耐心值（秒）
   diseases: [
-    { disease_id: 1, disease_name: '发烧', patience: 5 },
+    { disease_id: 1, disease_name: '发烧', patience: 10 },
     { disease_id: 2, disease_name: '头痛', patience: 20 },
-    { disease_id: 3, disease_name: '骨折', patience: 30 },
+    { disease_id: 3, disease_name: '骨折', patience: 8 },
     { disease_id: 4, disease_name: '腹痛', patience: 15 },
     { disease_id: 5, disease_name: '胸闷', patience: 12 },
     { disease_id: 6, disease_name: '过敏', patience: 18 },
-    { disease_id: 7, disease_name: '扭伤', patience: 25 },
-    { disease_id: 8, disease_name: '感冒', patience: 22 }
+    { disease_id: 7, disease_name: '扭伤', patience: 20 },
+    { disease_id: 8, disease_name: '感冒', patience: 30 }
   ],
 
   // ==================== 病人配置 ====================
@@ -42,8 +42,7 @@ export const GameConfig = {
     spawnFirstCount: 4,         // 前N个病人进场固定间隔
     spawnFirstInterval: 4000,   // 前N个病人进场的间隔（毫秒）
     spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
-    spawnRandomMax: 6000,       // 随机间隔最大值（毫秒）
-    spawnInterval: 4000         // 基础间隔（毫秒）- 所有关卡通用
+    spawnRandomMax: 6000       // 随机间隔最大值（毫秒）
   },
 
   // ==================== 托盘配置 ====================
@@ -54,8 +53,7 @@ export const GameConfig = {
 
   // ==================== 医生配置 ====================
   doctor: {
-    baseSpeed: 0.12,            // 医生移动速度
-    treatmentTime: 2000         // 治疗时间（毫秒）- 收到物品后多久完成治疗
+    // 医生配置保留用于将来扩展
   },
 
   // ==================== 游戏区域配置 ====================
