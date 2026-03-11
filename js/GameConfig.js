@@ -5,7 +5,7 @@ export const GameConfig = {
   levels: [
     { 
       id: 1,                    // 第1关
-      maxPatients: 4,           // 总病人数
+      maxPatients: 15,           // 总病人数
       doctorItemCount: 1        // 医生请求物品数量
     },
     { 
@@ -26,8 +26,8 @@ export const GameConfig = {
 
   // ==================== 病人配置 ====================
   patient: {
-    initialPatience: 10,        // 初始耐心值（秒）
-    spawnFirstCount: 4,         // 前N个病人进场固定间隔
+    initialPatience: 30,        // 初始耐心值（秒）
+    spawnFirstCount: 8,         // 前N个病人进场固定间隔
     spawnFirstInterval: 3000,   // 前N个病人进场的间隔（毫秒）
     spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
     spawnRandomMax: 4000,       // 随机间隔最大值（毫秒）
@@ -78,8 +78,8 @@ export const GameConfig = {
 
   // ==================== 暴走配置 ====================
   rage: {
-    baseProbability: 0.1,       // 暴怒值1的基础概率 10%
-    probabilityPerLevel: 0.1,   // 每提升1级暴怒值，概率增加10%
+    baseProbability: 0,       // 暴怒值1的基础概率 10%
+    probabilityPerLevel: 0,   // 每提升1级暴怒值，概率增加10%
     walkSpeed: 0.14             // 暴走病人移动速度（每毫秒）
   }
 }

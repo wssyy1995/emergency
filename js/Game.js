@@ -81,6 +81,11 @@ export default class Game {
   
   // 初始化游戏状态（仅在 constructor 中调用一次）
   initGameState() {
+    // 获取平台信息（用于判断是否在真机上运行）
+    const sysInfo = wx.getSystemInfoSync()
+    this.platform = sysInfo.platform // 'ios', 'android', 'devtools', 'windows', 'mac'
+    console.log('当前平台:', this.platform)
+    
     // 游戏状态
     this.score = 0
     this.treatedCount = 0
@@ -123,6 +128,9 @@ export default class Game {
     this.gameWinModal = null
     this.levelToast = null
     
+    // 椅子选择弹窗状态
+    this.seatSelectionModal = null
+    
     // 暴走提示状态（只显示一次）
     this.hasShownRageToast = false
     
@@ -133,12 +141,16 @@ export default class Game {
     // 当前关卡病人池（用于不重复生成病人）
     this.currentLevelPatientPool = []
     
+    // 1秒轮询定时器（用于自动分配病人到病床）
+    this.bedAssignmentTimer = null
+    
     this.initTouch()
   }
 
-  // 触发震动（仅在真机上生效，开发者工具中不震动）
+  // 触发震动（仅在 iOS 或 Android 真机上生效，开发者工具和其他平台不震动）
   vibrate() {
-    if (this.platform !== 'devtools') {
+    // 只在 iOS 或 Android 平台触发震动
+    if (this.platform === 'ios' || this.platform === 'android') {
       wx.vibrateShort({ type: 'light' })
     }
   }
@@ -331,6 +343,14 @@ export default class Game {
     // 清除之前的定时器
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
     if (this.spawnTimer) clearTimeout(this.spawnTimer)
+    if (this.bedAssignmentTimer) clearInterval(this.bedAssignmentTimer)
+    
+    // 启动1秒轮询：检测空闲病床并按优先级分配病人
+    this.bedAssignmentTimer = setInterval(() => {
+      if (this.isRunning) {
+        this.autoAssignPatientsToBeds()
+      }
+    }, 1000)
     
     // 前N个病人，使用固定间隔
     let initialSpawnCount = 0
@@ -446,6 +466,11 @@ export default class Game {
     })
     
     this.waitingArea.patients.forEach(patient => {
+      // 正在走向病床或排队的病人耐心不减少
+      if (patient.state === 'movingToBed' || patient.state === 'queuing') {
+        return
+      }
+      
       patient.patience -= deltaTime / 1000
       // 耐心归零且未开始离开/暴走流程
       if (patient.patience <= 0 && !patient.isLeaving && !patient.tomatoThrown && !patient.isRaging) {
@@ -633,7 +658,12 @@ export default class Game {
 
   // 从左侧走进来的病人生成
   spawnPatientFromLeft() {
-    if (this.waitingArea.patients.length >= 8) return
+    // 如果排队人数超过3人，暂停进场
+    if (this.waitingArea.getReceptionQueuePatients().length >= 3) {
+      return
+    }
+    
+    if (this.waitingArea.patients.length >= 12) return
     
     // 从当前关卡病人池中获取病人（不重复）
     const patientDetail = this.getNextPatientFromPool()
@@ -650,23 +680,21 @@ export default class Game {
     patient.targetX = patient.x
     patient.targetY = patient.y
     
-    // 先添加到等候区
-    this.waitingArea.addPatient(patient)
+    // 添加到前台排队
+    const added = this.waitingArea.addPatientToReception(patient)
     
-    // 然后让病人走到等候区内的目标位置
-    setTimeout(() => {
-      const emptySeat = this.waitingArea.seats.find(seat => seat.patient === patient)
-      const emptyQueue = this.waitingArea.queuePositions.find(q => q.patient === patient)
-      
-      if (emptySeat) {
-        // 使用与 WaitingArea.js 中一致的位置计算
-        const targetX = emptySeat.x + (emptySeat.width - patient.width) / 2
-        const targetY = emptySeat.y + emptySeat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
-        patient.moveTo(targetX, targetY)
-      } else if (emptyQueue) {
-        patient.moveTo(emptyQueue.x - patient.width / 2, emptyQueue.y - patient.height)
-      }
-    }, 100)
+    if (added) {
+      // 让病人走到前台排队位置
+      setTimeout(() => {
+        if (patient.receptionPos) {
+          const offsetX = (Math.random() - 0.5) * 10
+          patient.moveTo(
+            patient.receptionPos.x + offsetX - patient.width / 2,
+            patient.receptionPos.y - patient.height / 2
+          )
+        }
+      }, 100)
+    }
   }
 
   spawnPatientWithHairStyle(hairStyle) {
@@ -723,6 +751,7 @@ export default class Game {
     this.renderLevelCompleteModal()
     this.renderLevelToast()
     this.renderGameWinModal()
+    this.renderSeatSelectionModal()
     
     // 调试日志已禁用
     // this.renderDebugLogs()
@@ -1084,18 +1113,29 @@ export default class Game {
       const y = touch.clientY
       
       // 优先处理弹窗点击（按优先级顺序）
+      
+      // 1. 椅子选择弹窗
+      if (this.seatSelectionModal && this.seatSelectionModal.visible) {
+        if (this.handleSeatSelectionTouch(x, y)) {
+          return
+        }
+      }
+      
+      // 2. 游戏胜利弹窗
       if (this.gameWinModal && this.gameWinModal.visible) {
         if (this.handleGameWinTouch(x, y)) {
           return
         }
       }
       
+      // 3. 关卡完成弹窗
       if (this.levelCompleteModal && this.levelCompleteModal.visible) {
         if (this.handleLevelCompleteTouch(x, y)) {
           return
         }
       }
       
+      // 4. 游戏结束弹窗
       if (this.gameOverModal && this.gameOverModal.visible) {
         // 游戏结束弹窗的点击处理...
         return
@@ -1176,28 +1216,14 @@ export default class Game {
         return
       }
       
-      // 点击病人 - 自动分配到空闲病床
+      // 检查是否点击前台排队的病人（显示椅子选择弹窗）
       const patient = this.waitingArea.getPatientAt(x, y)
-      if (patient && !patient.inBed && patient.patience > 0 && !patient.isLeaving) {
-        // 点击病人时震动（仅真机）
+      if (patient && patient.state === 'queuing' && patient.patience > 0 && !patient.isLeaving) {
+        // 点击时震动（仅真机）
         this.vibrate()
-        // 查找空闲病床
-        const emptyBed = this.bedArea.findEmptyBed()
-        if (emptyBed) {
-          // 自动分配病人到病床
-          this.waitingArea.removePatient(patient)
-          emptyBed.assignPatient(patient)
-          patient.inBed = true
-          this.notifyDoctors(emptyBed)
-          console.log('病人自动分配到病床:', emptyBed.id)
-        } else {
-          // 没有空闲病床
-          wx.showToast({
-            title: '暂无空闲病床',
-            icon: 'none',
-            duration: 1500
-          })
-        }
+        // 显示椅子选择弹窗
+        this.showSeatSelectionModal(patient)
+        return
       }
     })
     
@@ -1285,6 +1311,240 @@ export default class Game {
     }
   }
 
+  // 自动分配病人到空闲病床（按椅子优先级：急症椅>危重椅>普通椅）
+  autoAssignPatientsToBeds() {
+    // 查找空闲病床
+    const emptyBed = this.bedArea.findEmptyBed()
+    if (!emptyBed) {
+      return // 没有空闲病床
+    }
+    
+    // 获取所有真正坐在椅子上（已到达椅子位置、停止移动、且满足延迟时间）的病人
+    const waitingPatients = this.waitingArea.patients.filter(patient => {
+      // 排除正在走向病床的病人
+      if (patient.state === 'movingToBed' || patient.targetBed) {
+        return false
+      }
+      
+      // 必须坐在椅子上且已停止移动
+      if (patient.state !== 'seated' || !patient.seat || patient.isMoving) {
+        return false
+      }
+      
+      // 检查是否在椅子上坐够了延迟时间
+      const seatedTime = Date.now() - (patient.seatedAt || 0)
+      if (seatedTime < 2000) { // 2秒延迟
+        return false
+      }
+      
+      // 其他基本条件
+      return !patient.inBed && // 不在床上
+             patient.patience > 0 && // 有耐心
+             !patient.isLeaving && // 不在离开状态
+             !patient.isRaging && // 不在暴走状态
+             !patient.tomatoThrown // 没有开始离开流程
+    })
+    
+    if (waitingPatients.length === 0) {
+      return // 没有可分配的病人
+    }
+    
+    // 按椅子优先级排序（急症椅 priority=1 > 危重椅 priority=2 > 普通椅 priority=3）
+    waitingPatients.sort((a, b) => {
+      const priorityA = a.seat.priority || 3
+      const priorityB = b.seat.priority || 3
+      return priorityA - priorityB // 数字越小优先级越高
+    })
+    
+    // 分配优先级最高的病人到病床
+    const patientToAssign = waitingPatients[0]
+    
+    // 设置病人目标病床并开始移动（比正常速度快1.5倍）
+    patientToAssign.targetBed = emptyBed
+    patientToAssign.state = 'movingToBed'
+    patientToAssign.moveSpeed = 0.18 // 正常速度是0.12，快1.5倍
+    
+    // 保存当前座位类型用于日志
+    const seatType = patientToAssign.seat?.type || 'normal'
+    const typeName = seatType === 'emergency' ? '急症椅' : (seatType === 'critical' ? '危重椅' : '普通椅')
+    
+    // 计算病床目标位置
+    const targetX = emptyBed.x + emptyBed.width / 2 - patientToAssign.width / 2
+    const targetY = emptyBed.y + emptyBed.height / 2 - patientToAssign.height / 2 + emptyBed.height * 0.02
+    
+    // 让病人走向病床
+    patientToAssign.moveTo(targetX, targetY)
+    
+    // 从等候区的椅子上移除（但保留在patients列表中直到到达病床）
+    if (patientToAssign.seat) {
+      patientToAssign.seat.occupied = false
+      patientToAssign.seat.patient = null
+      patientToAssign.seat = null
+    }
+    
+    // 设置到达病床后的回调
+    const game = this
+    patientToAssign.onArriveAtBed = function(bed) {
+      // 从等候区正式移除
+      game.waitingArea.removePatient(this)
+      // 通知医生
+      game.notifyDoctors(bed)
+    }
+    
+    console.log(`病人开始走向病床: ${emptyBed.id + 1}号床，来自${typeName}`)
+  }
+
+  // 显示椅子选择弹窗
+  showSeatSelectionModal(patient) {
+    const emptyCounts = this.waitingArea.getEmptySeatCounts()
+    
+    this.seatSelectionModal = {
+      visible: true,
+      patient: patient,
+      buttons: [
+        { 
+          type: 'emergency', 
+          label: '急症椅', 
+          color: '#E74C3C', 
+          textColor: '#FFF',
+          count: emptyCounts.emergency,
+          enabled: emptyCounts.emergency > 0
+        },
+        { 
+          type: 'critical', 
+          label: '危重椅', 
+          color: '#F39C12', 
+          textColor: '#FFF',
+          count: emptyCounts.critical,
+          enabled: emptyCounts.critical > 0
+        },
+        { 
+          type: 'normal', 
+          label: '普通椅', 
+          color: '#2E86AB', 
+          textColor: '#FFF',
+          count: emptyCounts.normal,
+          enabled: emptyCounts.normal > 0
+        }
+      ]
+    }
+  }
+
+  // 处理椅子选择弹窗的点击
+  handleSeatSelectionTouch(x, y) {
+    if (!this.seatSelectionModal || !this.seatSelectionModal.visible) return false
+    
+    const modal = this.seatSelectionModal
+    const modalWidth = 280
+    const modalHeight = 200
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // 检查是否点击了某个按钮
+    const btnWidth = 220
+    const btnHeight = 44
+    const btnSpacing = 12
+    const startY = modalY + 70
+    
+    for (let i = 0; i < modal.buttons.length; i++) {
+      const btn = modal.buttons[i]
+      const btnX = modalX + (modalWidth - btnWidth) / 2
+      const btnY = startY + i * (btnHeight + btnSpacing)
+      
+      if (x >= btnX && x <= btnX + btnWidth &&
+          y >= btnY && y <= btnY + btnHeight) {
+        
+        if (!btn.enabled) {
+          // 该类型椅子已满
+          wx.showToast({
+            title: `${btn.label}已满`,
+            icon: 'none',
+            duration: 1000
+          })
+          return true
+        }
+        
+        // 分配病人到选择的椅子类型
+        const success = this.waitingArea.assignPatientToSeatType(modal.patient, btn.type)
+        if (success) {
+          wx.showToast({
+            title: `已分配到${btn.label}`,
+            icon: 'none',
+            duration: 1000
+          })
+        }
+        
+        // 关闭弹窗
+        this.seatSelectionModal = null
+        return true
+      }
+    }
+    
+    // 点击弹窗外部关闭弹窗
+    if (x < modalX || x > modalX + modalWidth ||
+        y < modalY || y > modalY + modalHeight) {
+      this.seatSelectionModal = null
+      return true
+    }
+    
+    return false
+  }
+
+  // 绘制椅子选择弹窗
+  renderSeatSelectionModal() {
+    if (!this.seatSelectionModal || !this.seatSelectionModal.visible) return
+    
+    const ctx = this.ctx
+    const modal = this.seatSelectionModal
+    const modalWidth = 280
+    const modalHeight = 200
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // 半透明背景遮罩
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    // 弹窗背景
+    ctx.fillStyle = '#FFF'
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 12)
+    
+    // 标题
+    ctx.fillStyle = '#333'
+    ctx.font = 'bold 18px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText('选择座位类型', modalX + modalWidth / 2, modalY + 20)
+    
+    // 病人信息
+    ctx.fillStyle = '#666'
+    ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.fillText(`${modal.patient.name} - ${modal.patient.condition.name}`, modalX + modalWidth / 2, modalY + 48)
+    
+    // 绘制按钮
+    const btnWidth = 220
+    const btnHeight = 44
+    const btnSpacing = 12
+    const startY = modalY + 75
+    
+    modal.buttons.forEach((btn, i) => {
+      const btnX = modalX + (modalWidth - btnWidth) / 2
+      const btnY = startY + i * (btnHeight + btnSpacing)
+      
+      // 按钮背景
+      ctx.fillStyle = btn.enabled ? btn.color : '#CCC'
+      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 8)
+      
+      // 按钮文字
+      ctx.fillStyle = btn.enabled ? btn.textColor : '#999'
+      ctx.font = `bold 16px "PingFang SC", "Microsoft YaHei", sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const labelText = btn.enabled ? `${btn.label} (剩余${btn.count})` : `${btn.label} (已满)`
+      ctx.fillText(labelText, modalX + modalWidth / 2, btnY + btnHeight / 2)
+    })
+  }
+
   reset() {
     wx.showModal({
       title: '重新开始',
@@ -1296,6 +1556,9 @@ export default class Game {
           clearTimeout(this.spawnTimer)
           if (this.initialSpawnTimer) {
             clearTimeout(this.initialSpawnTimer)
+          }
+          if (this.bedAssignmentTimer) {
+            clearInterval(this.bedAssignmentTimer)
           }
           
           this.score = 0
@@ -1324,6 +1587,15 @@ export default class Game {
     if (this.initialSpawnTimer) {
       clearTimeout(this.initialSpawnTimer)
     }
+    if (this.bedAssignmentTimer) {
+      clearInterval(this.bedAssignmentTimer)
+    }
+    
+    // 关闭所有其他弹窗，确保游戏结束弹窗优先级最高
+    this.seatSelectionModal = null
+    this.levelCompleteModal = null
+    this.gameWinModal = null
+    this.levelToast = null
     
     // 设置游戏结束弹窗状态
     this.gameOverModal = {
@@ -1601,6 +1873,11 @@ export default class Game {
       doctor.state = 'idle'
     })
     
+    // 清理轮询定时器
+    if (this.bedAssignmentTimer) {
+      clearInterval(this.bedAssignmentTimer)
+    }
+    
     // 延迟一点再启动，确保清理完成
     setTimeout(() => {
       this.start()
@@ -1634,6 +1911,9 @@ export default class Game {
     clearTimeout(this.spawnTimer)
     if (this.initialSpawnTimer) {
       clearTimeout(this.initialSpawnTimer)
+    }
+    if (this.bedAssignmentTimer) {
+      clearInterval(this.bedAssignmentTimer)
     }
     
     this.currentLevel = 0

@@ -54,6 +54,9 @@ export default class Patient {
     this.leaveTargetY = 0
     this.showHeartEffect = false  // 开始走向左上角时触发爱心-1效果
     
+    // 病人状态：'queuing'(前台排队), 'seated'(坐在椅子上), 'inbed'(在床上)
+    this.state = 'queuing'
+    
     // 暴走相关状态
     this.isRaging = false           // 是否处于暴走状态
     this.rageTargetDoctor = null    // 暴走目标医生
@@ -144,8 +147,15 @@ export default class Patient {
       }
       
       if (dist > 2) {
-        // 暴走时使用配置的移动速度，普通状态使用默认速度
-        const baseSpeed = this.isRaging ? GameConfig.rage.walkSpeed : 0.12
+        // 暴走时使用配置的移动速度，走向病床时使用自定义速度，普通状态使用默认速度
+        let baseSpeed
+        if (this.isRaging) {
+          baseSpeed = GameConfig.rage.walkSpeed
+        } else if (this.state === 'movingToBed' && this.moveSpeed) {
+          baseSpeed = this.moveSpeed // 走向病床时的较快速度
+        } else {
+          baseSpeed = 0.12 // 默认速度
+        }
         const speed = baseSpeed * deltaTime
         this.x += (dx / dist) * speed
         this.y += (dy / dist) * speed
@@ -153,6 +163,11 @@ export default class Patient {
       } else {
         this.isMoving = false
         this.bounceOffset = 0
+        
+        // 如果正在走向病床且已到达
+        if (this.state === 'movingToBed' && this.targetBed) {
+          this.arriveAtBed()
+        }
         
         // 如果正在离开且到达屏幕底部，标记为可移除
         if (this.isLeaving && !this.shouldRemove) {
@@ -176,6 +191,33 @@ export default class Patient {
     this.targetX = x
     this.targetY = y
     this.isMoving = true
+  }
+
+  // 到达病床后的处理
+  arriveAtBed() {
+    if (!this.targetBed) return
+    
+    // 设置病人尺寸与医生一致
+    this.width = 21
+    this.height = 33.75
+    
+    // 正式分配到病床
+    this.targetBed.patient = this
+    this.targetBed.treatmentProgress = 0
+    this.inBed = true
+    this.state = 'inbed'
+    
+    // 保存病床引用并清空临时目标
+    const bed = this.targetBed
+    this.targetBed = null
+    this.moveSpeed = null // 重置移动速度
+    
+    // 触发游戏通知医生的回调（通过事件或回调函数）
+    if (this.onArriveAtBed) {
+      this.onArriveAtBed(bed)
+    }
+    
+    console.log(`病人 ${this.name} 已到达病床 ${bed.id + 1}号`)
   }
 
   // 开始离开流程（从屏幕底部离开）
@@ -295,8 +337,8 @@ export default class Patient {
     
     ctx.restore()
     
-    // 耐心条（只在非离开状态、非暴走状态显示）
-    if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging) {
+    // 耐心条（只在非离开状态、非暴走状态、非排队状态显示）
+    if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging && this.state !== 'queuing') {
       const patiencePercent = Math.max(0, this.patience / this.maxPatience)
       ctx.save()
       ctx.fillStyle = 'rgba(0,0,0,0.3)'

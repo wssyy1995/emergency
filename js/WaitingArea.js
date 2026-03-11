@@ -9,15 +9,16 @@ export default class WaitingArea {
     this.height = height
     this.patients = []
     
-    // 创建护士（放在护士台后面，只显示上半身）
-    this.nurse = new Nurse(this.x + this.width / 2, this.y + this.height * 0.23)
+    // 创建护士（放在护士台后面，只显示上半身）- 位置在最右边
+    this.nurse = new Nurse(this.x + this.width * 0.78, this.y + this.height * 0.23)
     this.nurse.setScale(this.width)
     
     this.seats = []
     this.initSeats()
     
-    this.queuePositions = []
-    this.initQueuePositions()
+    // 前台排队位置（一个队列）
+    this.receptionQueue = []
+    this.initReceptionQueue()
     
     // 加载椅子图片
     this.seatFreeImage = null
@@ -81,62 +82,132 @@ export default class WaitingArea {
       for (let col = 0; col < seatsPerRow; col++) {
         // 第一排往上移动，第二排保持不变
         const rowOffset = row === 0 ? -10 : 0
+        const seatIndex = row * seatsPerRow + col // 0-7
+        
+        // 设置椅子优先级：0,1(1-2号)急症椅，2,3(3-4号)危重椅，4-7(5-8号)普通椅
+        let priority = 3 // 默认普通椅
+        let type = 'normal'
+        if (seatIndex <= 1) {
+          priority = 1 // 急症椅 - 最高优先级
+          type = 'emergency'
+        } else if (seatIndex <= 3) {
+          priority = 2 // 危重椅 - 中等优先级
+          type = 'critical'
+        }
+        
         this.seats.push({
           x: startX + col * (seatWidth + gapX),
           y: startY + row * (seatHeight + gapY) + rowOffset,
           width: seatWidth,
           height: seatHeight,
           occupied: false,
-          patient: null
+          patient: null,
+          priority: priority,  // 1=急症椅, 2=危重椅, 3=普通椅
+          type: type,
+          index: seatIndex + 1 // 座位号 1-8
         })
       }
     }
   }
 
-  initQueuePositions() {
-    // 站位区域
-    for (let i = 0; i < 2; i++) {
-      this.queuePositions.push({
-        x: this.x + this.width * 0.2 + i * this.width * 0.3,
-        y: this.y + this.height * 2,
-        occupied: false,
-        patient: null
-      })
-    }
+  initReceptionQueue() {
+    // 前台排队位置逻辑（从右往左排队，动态计算位置）
+    // 最多排4个人
+    this.maxQueueLength = 4
   }
 
-  addPatient(patient) {
-    if (this.patients.length >= 8) return
-    this.patients.push(patient)
-    this.assignPosition(patient)
-  }
-
-  assignPosition(patient) {
-    const emptySeat = this.seats.find(seat => !seat.occupied)
-    if (emptySeat) {
-      emptySeat.occupied = true
-      emptySeat.patient = patient
-      patient.seat = emptySeat
-      // 设置病人尺寸（等候区专用，较小）
-      patient.width = 16
-      patient.height = 26
-      // 病人坐在椅子中央，靠下一点
-      const targetX = emptySeat.x + (emptySeat.width - patient.width) / 2
-      const targetY = emptySeat.y + emptySeat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
-      patient.moveTo(targetX, targetY)
-      return
+  // 添加病人到前台排队（从右往左排队，5像素间距）
+  addPatientToReception(patient) {
+    if (this.patients.length >= 12) return false
+    
+    // 检查当前排队人数
+    const queueCount = this.getReceptionQueuePatients().length
+    if (queueCount >= this.maxQueueLength) {
+      return false // 排队已满
     }
     
-    const emptyQueue = this.queuePositions.find(pos => !pos.occupied)
-    if (emptyQueue) {
-      emptyQueue.occupied = true
-      emptyQueue.patient = patient
-      patient.queuePos = emptyQueue
-      // 设置病人尺寸（等候区专用，较小）
-      patient.width = 16
-      patient.height = 26
-      patient.moveTo(emptyQueue.x, emptyQueue.y)
+    this.patients.push(patient)
+    patient.state = 'queuing' // 排队状态
+    
+    // 设置病人尺寸
+    patient.width = 16
+    patient.height = 26
+    
+    // 计算排队位置：从右往左，5像素间距
+    // 基准点（最右边第一个人的位置）：护士台左侧一点
+    const baseX = this.x + this.width * 0.4 
+    const spacing = 25 // 排队人左右间距
+    const targetX = baseX - queueCount * (patient.width + spacing)
+    const targetY = this.y + this.height * 0.34
+    
+    patient.moveTo(targetX, targetY)
+    
+    return true
+  }
+  
+  // 更新排队位置（当有人离开后，其他人往前补位）
+  updateQueuePositions() {
+    const queuePatients = this.getReceptionQueuePatients()
+    const baseX = this.x + this.width * 0.70
+    const spacing = 5
+    
+    queuePatients.forEach((patient, index) => {
+      const targetX = baseX - index * (patient.width + spacing)
+      const targetY = this.y + this.height * 0.35
+      
+      // 如果位置变化较大，更新目标位置
+      if (Math.abs(patient.x - targetX) > 2 || Math.abs(patient.y - targetY) > 2) {
+        patient.moveTo(targetX, targetY)
+      }
+    })
+  }
+
+  // 将病人分配到指定类型的椅子
+  assignPatientToSeatType(patient, seatType) {
+    // 病人必须在排队状态
+    if (patient.state !== 'queuing') return false
+    
+    // 找到对应类型的空椅子
+    const targetSeat = this.seats.find(seat => 
+      !seat.occupied && seat.type === seatType
+    )
+    
+    if (!targetSeat) {
+      return false // 该类型椅子已满
     }
+    
+    // 分配椅子
+    targetSeat.occupied = true
+    targetSeat.patient = patient
+    patient.seat = targetSeat
+    patient.state = 'seated'
+    patient.seatedAt = Date.now() // 记录坐下时间（用于延迟检测）
+    
+    // 移动到椅子位置
+    const targetX = targetSeat.x + (targetSeat.width - patient.width) / 2
+    const targetY = targetSeat.y + targetSeat.height * 0.62
+    patient.moveTo(targetX, targetY)
+    
+    // 更新其他排队人员的位置（往前补位）
+    this.updateQueuePositions()
+    
+    return true
+  }
+
+  // 获取前台排队的病人（按排队顺序）
+  getReceptionQueuePatients() {
+    // 从所有病人中筛选出正在排队的（state === 'queuing'）
+    return this.patients.filter(p => p.state === 'queuing')
+  }
+
+  // 获取坐在椅子上的病人（按椅子优先级排序）
+  getSeatedPatientsByPriority() {
+    const seatedPatients = this.patients.filter(p => p.seat && p.state === 'seated')
+    return seatedPatients.sort((a, b) => {
+      const priorityA = a.seat?.priority || 3
+      const priorityB = b.seat?.priority || 3
+      return priorityA - priorityB
+    })
   }
 
   removePatient(patient) {
@@ -147,56 +218,24 @@ export default class WaitingArea {
         patient.seat.patient = null
         patient.seat = null
       }
-      if (patient.queuePos) {
-        patient.queuePos.occupied = false
-        patient.queuePos.patient = null
-        patient.queuePos = null
-      }
       this.patients.splice(index, 1)
-      this.reorganizeQueue()
     }
   }
 
-  reorganizeQueue() {
-    let seatIndex = 0
-    let queueIndex = 0
-    
-    for (let patient of this.patients) {
-      if (patient.inBed) continue
-      
-      if (!patient.seat && !patient.queuePos) {
-        while (seatIndex < this.seats.length && this.seats[seatIndex].occupied) {
-          seatIndex++
-        }
-        if (seatIndex < this.seats.length) {
-          const seat = this.seats[seatIndex]
-          seat.occupied = true
-          seat.patient = patient
-          patient.seat = seat
-          // 设置病人尺寸（等候区专用，较小）
-          patient.width = 16
-          patient.height = 26
-          // 病人坐在椅子中央，靠下一点
-          const targetX = seat.x + (seat.width - patient.width) / 2
-          const targetY = seat.y + seat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
-          patient.moveTo(targetX, targetY)
-        } else {
-          while (queueIndex < this.queuePositions.length && this.queuePositions[queueIndex].occupied) {
-            queueIndex++
-          }
-          if (queueIndex < this.queuePositions.length) {
-            const pos = this.queuePositions[queueIndex]
-            pos.occupied = true
-            pos.patient = patient
-            patient.queuePos = pos
-            // 设置病人尺寸（等候区专用，较小）
-            patient.width = 16
-            patient.height = 26
-            patient.moveTo(pos.x, pos.y)
-          }
-        }
+  // 检查是否有空的指定类型椅子
+  hasEmptySeatOfType(seatType) {
+    return this.seats.some(seat => !seat.occupied && seat.type === seatType)
+  }
+
+  // 获取各类型椅子的空位数量
+  getEmptySeatCounts() {
+    const counts = { emergency: 0, critical: 0, normal: 0 }
+    this.seats.forEach(seat => {
+      if (!seat.occupied) {
+        counts[seat.type]++
       }
-    }
+    })
+    return counts
   }
 
   clear() {
@@ -204,10 +243,6 @@ export default class WaitingArea {
     this.seats.forEach(seat => {
       seat.occupied = false
       seat.patient = null
-    })
-    this.queuePositions.forEach(pos => {
-      pos.occupied = false
-      pos.patient = null
     })
   }
 
@@ -238,10 +273,11 @@ export default class WaitingArea {
   }
 
   renderReception(ctx) {
-    const centerX = this.x + this.width / 2
-    const deskY = this.y + this.height * 0.03
+    // 护士台位置在最右边
     const deskWidth = this.width * 0.45
     const deskHeight = this.height * 0.1
+    const centerX = this.x + this.width - deskWidth / 2 - this.width * 0.05 // 最右边留一点边距
+    const deskY = this.y + this.height * 0.03
     
     // 优先使用护士台图片
     if (this.nurseDeskImage && this.nurseDeskImage.width > 0) {
@@ -308,8 +344,16 @@ export default class WaitingArea {
       
       // 座位号（只有座位空闲时显示）
       if (!seat.occupied) {
-        ctx.fillStyle = '#2E86AB'
-        ctx.font = `bold ${Math.max(8, seat.width * 0.18)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+        // 根据椅子类型设置不同颜色
+        let seatColor = '#2E86AB' // 普通椅 - 蓝色
+        if (seat.type === 'emergency') {
+          seatColor = '#E74C3C' // 急症椅 - 红色
+        } else if (seat.type === 'critical') {
+          seatColor = '#F39C12' // 危重椅 - 橙色
+        }
+        ctx.fillStyle = seatColor
+        // 字体加粗加大，使用 900 字重和更大的尺寸
+        ctx.font = `900 ${Math.max(10, seat.width * 0.2)}px "PingFang SC", "Microsoft YaHei", sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(`${i + 1}`, seat.x + seat.width / 2, seat.y + seat.height * 0.25)
