@@ -6,7 +6,7 @@ import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
-import { GameConfig, getLevelConfig, getRandomPatientDetail, checkPatientRage, getRageProbability } from './GameConfig.js'
+import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability } from './GameConfig.js'
 
 export default class Game {
   constructor() {
@@ -672,7 +672,9 @@ export default class Game {
       return
     }
     
-    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience, patientDetail)
+    // 随机获取病情
+    const disease = getRandomDisease()
+    const patient = new Patient(this.patientIdCounter++, patientDetail, disease)
     
     // 初始位置在等候区左侧外面
     patient.x = this.waitingArea.x - 50
@@ -700,9 +702,10 @@ export default class Game {
   spawnPatientWithHairStyle(hairStyle) {
     if (this.waitingArea.patients.length >= 8) return
     
-    // 获取随机病人配置
+    // 获取随机病人配置和病情
     const patientDetail = getRandomPatientDetail()
-    const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience, patientDetail)
+    const disease = getRandomDisease()
+    const patient = new Patient(this.patientIdCounter++, patientDetail, disease)
     // 强制设置发型
     patient.hairStyle = hairStyle
     // 从左侧入口进入
@@ -1102,6 +1105,7 @@ export default class Game {
     let bgmStarted = false
     
     wx.onTouchStart((e) => {
+      console.log('[触摸事件] TouchStart 触发')
       // 第一次点击触发背景音乐
       if (!bgmStarted) {
         bgmStarted = true
@@ -1111,6 +1115,11 @@ export default class Game {
       const touch = e.touches[0]
       const x = touch.clientX
       const y = touch.clientY
+      console.log('[触摸事件] 坐标:', x, y)
+      console.log('[触摸事件] 等候区病人数量:', this.waitingArea.patients.length)
+      this.waitingArea.patients.forEach((p, i) => {
+        console.log(`[触摸事件] 病人${i}:`, p.name, '状态:', p.state, '位置:', p.x, p.y)
+      })
       
       // 优先处理弹窗点击（按优先级顺序）
       
@@ -1217,13 +1226,22 @@ export default class Game {
       }
       
       // 检查是否点击前台排队的病人（显示椅子选择弹窗）
+      console.log('[点击检测] 点击坐标:', x, y)
       const patient = this.waitingArea.getPatientAt(x, y)
+      console.log('[点击检测] 找到病人:', patient ? patient.name : '无')
+      if (patient) {
+        console.log('[点击检测] 病人状态:', patient.state, '耐心:', patient.patience, '是否离开:', patient.isLeaving)
+      }
       if (patient && patient.state === 'queuing' && patient.patience > 0 && !patient.isLeaving) {
+        console.log('[点击检测] 条件满足，显示弹窗')
         // 点击时震动（仅真机）
         this.vibrate()
         // 显示椅子选择弹窗
         this.showSeatSelectionModal(patient)
+        console.log('[点击检测] 弹窗已显示')
         return
+      } else {
+        console.log('[点击检测] 条件不满足，跳过')
       }
     })
     
@@ -1394,7 +1412,7 @@ export default class Game {
     console.log(`病人开始走向病床: ${emptyBed.id + 1}号床，来自${typeName}`)
   }
 
-  // 显示椅子选择弹窗
+  // 显示病情分诊弹窗（自定义小弹窗，显示在等候区）
   showSeatSelectionModal(patient) {
     const emptyCounts = this.waitingArea.getEmptySeatCounts()
     
@@ -1404,25 +1422,22 @@ export default class Game {
       buttons: [
         { 
           type: 'emergency', 
-          label: '急症椅', 
+          label: '急症', 
           color: '#E74C3C', 
-          textColor: '#FFF',
           count: emptyCounts.emergency,
           enabled: emptyCounts.emergency > 0
         },
         { 
           type: 'critical', 
-          label: '危重椅', 
+          label: '危重', 
           color: '#F39C12', 
-          textColor: '#FFF',
           count: emptyCounts.critical,
           enabled: emptyCounts.critical > 0
         },
         { 
           type: 'normal', 
-          label: '普通椅', 
+          label: '普通', 
           color: '#2E86AB', 
-          textColor: '#FFF',
           count: emptyCounts.normal,
           enabled: emptyCounts.normal > 0
         }
@@ -1430,29 +1445,18 @@ export default class Game {
     }
   }
 
-  // 处理椅子选择弹窗的点击
+  // 处理病情分诊弹窗的点击
   handleSeatSelectionTouch(x, y) {
     if (!this.seatSelectionModal || !this.seatSelectionModal.visible) return false
     
     const modal = this.seatSelectionModal
-    const modalWidth = 280
-    const modalHeight = 200
-    const modalX = (this.screenWidth - modalWidth) / 2
-    const modalY = (this.screenHeight - modalHeight) / 2
     
-    // 检查是否点击了某个按钮
-    const btnWidth = 220
-    const btnHeight = 44
-    const btnSpacing = 12
-    const startY = modalY + 70
-    
+    // 检查是否点击了某个按钮（使用渲染时保存的按钮位置）
     for (let i = 0; i < modal.buttons.length; i++) {
       const btn = modal.buttons[i]
-      const btnX = modalX + (modalWidth - btnWidth) / 2
-      const btnY = startY + i * (btnHeight + btnSpacing)
       
-      if (x >= btnX && x <= btnX + btnWidth &&
-          y >= btnY && y <= btnY + btnHeight) {
+      if (x >= btn.renderX && x <= btn.renderX + btn.renderWidth &&
+          y >= btn.renderY && y <= btn.renderY + btn.renderHeight) {
         
         if (!btn.enabled) {
           // 该类型椅子已满
@@ -1465,14 +1469,7 @@ export default class Game {
         }
         
         // 分配病人到选择的椅子类型
-        const success = this.waitingArea.assignPatientToSeatType(modal.patient, btn.type)
-        if (success) {
-          wx.showToast({
-            title: `已分配到${btn.label}`,
-            icon: 'none',
-            duration: 1000
-          })
-        }
+        this.waitingArea.assignPatientToSeatType(modal.patient, btn.type)
         
         // 关闭弹窗
         this.seatSelectionModal = null
@@ -1481,8 +1478,8 @@ export default class Game {
     }
     
     // 点击弹窗外部关闭弹窗
-    if (x < modalX || x > modalX + modalWidth ||
-        y < modalY || y > modalY + modalHeight) {
+    if (x < modal.x || x > modal.x + modal.width ||
+        y < modal.y || y > modal.y + modal.height) {
       this.seatSelectionModal = null
       return true
     }
@@ -1490,58 +1487,170 @@ export default class Game {
     return false
   }
 
-  // 绘制椅子选择弹窗
+  // 绘制病情分诊弹窗（显示在等候区的小弹窗）
   renderSeatSelectionModal() {
     if (!this.seatSelectionModal || !this.seatSelectionModal.visible) return
     
     const ctx = this.ctx
     const modal = this.seatSelectionModal
-    const modalWidth = 280
-    const modalHeight = 200
-    const modalX = (this.screenWidth - modalWidth) / 2
-    const modalY = (this.screenHeight - modalHeight) / 2
+    const patient = modal.patient
     
-    // 半透明背景遮罩
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
-    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    // 弹窗尺寸和位置（显示在等候区内，跟随病人位置）
+    const modalWidth = 190
+    const modalHeight = 155
     
-    // 弹窗背景
+    // 弹窗位置：在病人上方显示，往右偏移一些
+    const offsetX = 1000  
+    let modalX = patient.x + patient.width / 2 - modalWidth / 2 + offsetX
+    let modalY = patient.y -20
+    
+    // 确保弹窗不超出等候区边界
+    const waitingArea = this.waitingArea
+    modalX = Math.max(waitingArea.x + 5, Math.min(modalX, waitingArea.x + waitingArea.width - modalWidth - 5))
+    modalY = Math.max(waitingArea.y + 5, modalY)
+    
+    // 保存弹窗位置用于点击检测
+    modal.x = modalX
+    modal.y = modalY
+    modal.width = modalWidth
+    modal.height = modalHeight
+    
+    // 弹窗背景（带阴影）
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
+    ctx.shadowBlur = 10
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 4
     ctx.fillStyle = '#FFF'
-    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 12)
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 10)
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
     
-    // 标题
+    // 顶部标题背景
+    ctx.fillStyle = '#5B9BD5'
+    ctx.beginPath()
+    ctx.moveTo(modalX + 10, modalY)
+    ctx.lineTo(modalX + modalWidth - 10, modalY)
+    ctx.quadraticCurveTo(modalX + modalWidth, modalY, modalX + modalWidth, modalY + 10)
+    ctx.lineTo(modalX + modalWidth, modalY + 28)
+    ctx.lineTo(modalX, modalY + 28)
+    ctx.lineTo(modalX, modalY + 10)
+    ctx.quadraticCurveTo(modalX, modalY, modalX + 10, modalY)
+    ctx.closePath()
+    ctx.fill()
+    
+    // 标题文字
+    ctx.fillStyle = '#FFF'
+    ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('病情分诊', modalX + modalWidth / 2, modalY + 14)
+    
+    // 左边：病人图片（更大，裁剪上半身）
+    const imgWidth = 70
+    const imgHeight = 85
+    const imgX = modalX + 12
+    const imgY = modalY + 38
+    
+    // 绘制病人图片（只显示上半身，头部区域）
+    ctx.save()
+    // 圆形裁剪区域
+    ctx.beginPath()
+    ctx.arc(imgX + imgWidth / 2, imgY + imgWidth / 2, imgWidth / 2, 0, Math.PI * 2)
+    ctx.closePath()
+    ctx.clip()
+    
+    const currentImage = patient.isAngry ? patient.angryImage : patient.normalImage
+    if (currentImage && currentImage.width > 0) {
+      // 裁剪上半身：只显示图片上半部分
+      const sourceHeight = currentImage.height * 0.7 // 取上半部分70%
+      ctx.drawImage(
+        currentImage, 
+        0, 0, currentImage.width, sourceHeight,  // 源：上半部分
+        imgX, imgY, imgWidth, imgHeight          // 目标：整个圆形区域
+      )
+    } else {
+      // 图片未加载时显示背景色
+      ctx.fillStyle = '#EEE'
+      ctx.fillRect(imgX, imgY, imgWidth, imgHeight)
+    }
+    ctx.restore()
+    
+    // 图片边框（蓝色，跟病情分诊标题栏一致）
+    ctx.strokeStyle = '#5B9BD5'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.arc(imgX + imgWidth / 2, imgY + imgWidth / 2, imgWidth / 2, 0, Math.PI * 2)
+    ctx.stroke()
+    
+    // 病人图片下方：病情名字
     ctx.fillStyle = '#333'
-    ctx.font = 'bold 18px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText('选择座位类型', modalX + modalWidth / 2, modalY + 20)
+    ctx.fillText(patient.condition.name, imgX + imgWidth / 2, imgY + imgHeight + 5)
     
-    // 病人信息
-    ctx.fillStyle = '#666'
-    ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
-    ctx.fillText(`${modal.patient.name} - ${modal.patient.condition.name}`, modalX + modalWidth / 2, modalY + 48)
-    
-    // 绘制按钮
-    const btnWidth = 220
-    const btnHeight = 44
-    const btnSpacing = 12
-    const startY = modalY + 75
+    // 右边：3个可爱的大圆角按钮
+    const btnWidth = 75
+    const btnHeight = 28
+    const btnSpacing = 7
+    const btnStartX = imgX + imgWidth + 12
+    const btnStartY = imgY + 5
     
     modal.buttons.forEach((btn, i) => {
-      const btnX = modalX + (modalWidth - btnWidth) / 2
-      const btnY = startY + i * (btnHeight + btnSpacing)
+      const btnX = btnStartX
+      const btnY = btnStartY + i * (btnHeight + btnSpacing)
       
-      // 按钮背景
+      // 保存按钮位置用于点击检测
+      btn.renderX = btnX
+      btn.renderY = btnY
+      btn.renderWidth = btnWidth
+      btn.renderHeight = btnHeight
+      
+      // 可爱的圆角按钮（更大的圆角）
+      const radius = 12
+      
+      // 按钮阴影（可爱效果）
+      if (btn.enabled) {
+        ctx.shadowColor = btn.color + '80'
+        ctx.shadowBlur = 4
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = 2
+      }
+      
+      // 按钮背景（圆角矩形，更大圆角）
       ctx.fillStyle = btn.enabled ? btn.color : '#CCC'
-      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 8)
+      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, radius)
       
-      // 按钮文字
-      ctx.fillStyle = btn.enabled ? btn.textColor : '#999'
-      ctx.font = `bold 16px "PingFang SC", "Microsoft YaHei", sans-serif`
+      // 重置阴影
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 0
+      
+      // 按钮高光（可爱效果）
+      if (btn.enabled) {
+        ctx.fillStyle = 'rgba(255,255,255,0.25)'
+        ctx.beginPath()
+        ctx.moveTo(btnX + radius, btnY)
+        ctx.lineTo(btnX + btnWidth - radius, btnY)
+        ctx.quadraticCurveTo(btnX + btnWidth, btnY, btnX + btnWidth, btnY + radius)
+        ctx.lineTo(btnX + btnWidth, btnY + 10)
+        ctx.quadraticCurveTo(btnX + btnWidth / 2, btnY + 15, btnX, btnY + 10)
+        ctx.lineTo(btnX, btnY + radius)
+        ctx.quadraticCurveTo(btnX, btnY, btnX + radius, btnY)
+        ctx.closePath()
+        ctx.fill()
+      }
+      
+      // 按钮文字（更粗更可爱）
+      ctx.fillStyle = '#FFF'
+      ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      const labelText = btn.enabled ? `${btn.label} (剩余${btn.count})` : `${btn.label} (已满)`
-      ctx.fillText(labelText, modalX + modalWidth / 2, btnY + btnHeight / 2)
+      const labelText = btn.enabled ? btn.label : `${btn.label}(满)`
+      ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2 + 1)
     })
   }
 

@@ -10,7 +10,7 @@ export default class WaitingArea {
     this.patients = []
     
     // 创建护士（放在护士台后面，只显示上半身）- 位置在最右边
-    this.nurse = new Nurse(this.x + this.width * 0.78, this.y + this.height * 0.23)
+    this.nurse = new Nurse(this.x + this.width * 0.75, this.y + this.height * 0.24)
     this.nurse.setScale(this.width)
     
     this.seats = []
@@ -25,6 +25,8 @@ export default class WaitingArea {
     this.seatOccupiedImage = null
     // 加载护士台图片
     this.nurseDeskImage = null
+    // 加载植物图片
+    this.plantImage = null
     this.loadImages()
   }
 
@@ -58,6 +60,16 @@ export default class WaitingArea {
       console.warn('Failed to load nurse desk image: images/nurse_desk.png')
     }
     nurseDeskImg.src = 'images/nurse_desk.png'
+    
+    // 加载植物图片
+    const plantImg = wx.createImage()
+    plantImg.onload = () => {
+      this.plantImage = plantImg
+    }
+    plantImg.onerror = () => {
+      console.warn('Failed to load plant image: images/plant.png')
+    }
+    plantImg.src = 'images/plant.png'
   }
 
   initSeats() {
@@ -133,10 +145,10 @@ export default class WaitingArea {
     patient.width = 16
     patient.height = 26
     
-    // 计算排队位置：从右往左，5像素间距
-    // 基准点（最右边第一个人的位置）：护士台左侧一点
+    // 计算排队位置：从右往左排队
+    // 基准点（最右边第一个人的位置）
     const baseX = this.x + this.width * 0.4 
-    const spacing = 25 // 排队人左右间距
+    const spacing = 30 // 排队人左右间距
     const targetX = baseX - queueCount * (patient.width + spacing)
     const targetY = this.y + this.height * 0.34
     
@@ -148,17 +160,15 @@ export default class WaitingArea {
   // 更新排队位置（当有人离开后，其他人往前补位）
   updateQueuePositions() {
     const queuePatients = this.getReceptionQueuePatients()
-    const baseX = this.x + this.width * 0.70
-    const spacing = 5
+    const baseX = this.x + this.width * 0.4 
+    const spacing = 25 // 排队人左右间距（与addPatientToReception一致）
     
     queuePatients.forEach((patient, index) => {
       const targetX = baseX - index * (patient.width + spacing)
-      const targetY = this.y + this.height * 0.35
+      const targetY = this.y + this.height * 0.34
       
-      // 如果位置变化较大，更新目标位置
-      if (Math.abs(patient.x - targetX) > 2 || Math.abs(patient.y - targetY) > 2) {
-        patient.moveTo(targetX, targetY)
-      }
+      // 强制更新位置
+      patient.moveTo(targetX, targetY)
     })
   }
 
@@ -252,11 +262,15 @@ export default class WaitingArea {
   }
 
   getPatientAt(x, y) {
+    console.log('[getPatientAt] 查找坐标:', x, y, '病人数量:', this.patients.length)
     for (let patient of this.patients) {
-      if (patient.contains(x, y)) {
+      const hit = patient.contains(x, y)
+      console.log('[getPatientAt] 检测病人:', patient.name, '位置:', patient.x, patient.y, '尺寸:', patient.width, patient.height, '是否命中:', hit)
+      if (hit) {
         return patient
       }
     }
+    console.log('[getPatientAt] 未找到病人')
     return null
   }
 
@@ -274,10 +288,10 @@ export default class WaitingArea {
 
   renderReception(ctx) {
     // 护士台位置在最右边
-    const deskWidth = this.width * 0.45
-    const deskHeight = this.height * 0.1
-    const centerX = this.x + this.width - deskWidth / 2 - this.width * 0.05 // 最右边留一点边距
-    const deskY = this.y + this.height * 0.03
+    const deskWidth = this.width * 0.51
+    const deskHeight = this.height * 0.4
+    const centerX = this.x + this.width - deskWidth / 4 - this.width * 0.12 // 最右边留一点边距
+    const deskY = this.y + this.height * 0.12
     
     // 优先使用护士台图片
     if (this.nurseDeskImage && this.nurseDeskImage.width > 0) {
@@ -324,6 +338,36 @@ export default class WaitingArea {
       ctx.quadraticCurveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.55, centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
       ctx.closePath()
       ctx.fill()
+    }
+    
+    // 绘制指示牌（在护士台右上方，醒目位置）
+    if (this.guidePostImage && this.guidePostImage.width > 0) {
+      // 指示牌位置和大小参数（可以调整）
+      const guideWidth = 40      // 指示牌宽度
+      const guideHeight = 60     // 指示牌高度
+      // 放在护士台右上方，确保可见
+      const guideX = this.x + this.width - guideWidth - 10  // 等候区最右边
+      const guideY = this.y + 5  // 顶部留一点边距
+      
+      ctx.drawImage(this.guidePostImage, guideX, guideY, guideWidth, guideHeight)
+      
+      console.log('绘制指示牌:', guideX, guideY, guideWidth, guideHeight)
+    } else {
+      console.log('指示牌图片未加载:', this.guidePostImage)
+    }
+    
+    // 绘制植物（在护士台之后绘制，层级在上层）
+    if (this.plantImage && this.plantImage.width > 0) {
+      // 植物位置和大小参数（可以调整这些值来改变位置和大小）
+      const plantWidth = 48      // 植物宽度（像素）
+      const plantHeight = 75     // 植物高度（像素）
+      const plantOffsetX = -140   // 相对于护士台左边的水平偏移（正值向左，负值向右）
+      const plantOffsetY = -38   // 垂直偏移（负值向上，正值向下）
+      
+      const plantX = centerX - deskWidth / 2 - plantWidth / 2 - plantOffsetX
+      const plantY = deskY + deskHeight - plantHeight + plantOffsetY
+      
+      ctx.drawImage(this.plantImage, plantX, plantY, plantWidth, plantHeight)
     }
   }
 

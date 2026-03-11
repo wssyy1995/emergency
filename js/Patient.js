@@ -1,28 +1,23 @@
 import { drawStar } from './utils.js'
 import { GameConfig } from './GameConfig.js'
 
-const CONDITIONS = [
-  { name: '感冒', icon: '🤒', color: '#FF9AA2', treatmentTime: 5 },
-  { name: '骨折', icon: '🦴', color: '#FFB7B2', treatmentTime: 10 },
-  { name: '腹痛', icon: '😣', color: '#FFDAC1', treatmentTime: 7 },
-  { name: '头痛', icon: '🤕', color: '#E2F0CB', treatmentTime: 4 },
-  { name: '胸闷', icon: '💔', color: '#B5EAD7', treatmentTime: 8 },
-  { name: '过敏', icon: '🔴', color: '#C7CEEA', treatmentTime: 6 },
-  { name: '发烧', icon: '🌡️', color: '#F8B195', treatmentTime: 6 },
-  { name: '扭伤', icon: '🦵', color: '#F67280', treatmentTime: 5 }
-]
-
 export default class Patient {
-  constructor(id, initialPatience = 30, patientDetail = null) {
+  constructor(id, patientDetail = null, disease = null) {
     this.id = id
     // 病人详细配置
     this.patientDetail = patientDetail
     // 使用代号作为名字（1-8号），如果有配置则使用配置中的名字
     this.name = patientDetail ? patientDetail.name : `${id}号`
-    this.info = patientDetail ? patientDetail.info : ''
     this.rageLevel = patientDetail ? patientDetail.rageLevel : 1  // 暴怒值 1-5
     this.age = Math.floor(Math.random() * 50) + 15
-    this.condition = CONDITIONS[Math.floor(Math.random() * CONDITIONS.length)]
+    
+    // 病情配置
+    this.disease = disease || { disease_id: 1, disease_name: '发烧', patience: 10 }
+    this.condition = {
+      name: this.disease.disease_name,
+      icon: this.getDiseaseIcon(this.disease.disease_name),
+      color: this.getDiseaseColor(this.disease.disease_name)
+    }
     
     // 位置和尺寸（根据屏幕自适应）
     this.x = 0
@@ -40,7 +35,8 @@ export default class Patient {
     this.facing = 1
     this.isMoving = false
     
-    this.patience = initialPatience  // 使用配置的初始耐心值
+    // 耐心值从病情配置获取
+    this.patience = this.disease.patience
     this.maxPatience = this.patience
     this.isAngry = false
     this.inBed = false
@@ -103,6 +99,36 @@ export default class Patient {
       console.warn('Failed to load boom image: images/boom.png')
     }
     boomImg.src = 'images/boom.png'
+  }
+
+  // 根据病情名称获取图标
+  getDiseaseIcon(diseaseName) {
+    const iconMap = {
+      '发烧': '🌡️',
+      '头痛': '🤕',
+      '骨折': '🦴',
+      '腹痛': '😣',
+      '胸闷': '💔',
+      '过敏': '🔴',
+      '扭伤': '🦵',
+      '感冒': '🤒'
+    }
+    return iconMap[diseaseName] || '🏥'
+  }
+
+  // 根据病情名称获取颜色
+  getDiseaseColor(diseaseName) {
+    const colorMap = {
+      '发烧': '#F8B195',
+      '头痛': '#E2F0CB',
+      '骨折': '#FFB7B2',
+      '腹痛': '#FFDAC1',
+      '胸闷': '#B5EAD7',
+      '过敏': '#C7CEEA',
+      '扭伤': '#F67280',
+      '感冒': '#FF9AA2'
+    }
+    return colorMap[diseaseName] || '#CCCCCC'
   }
 
   update(deltaTime) {
@@ -434,10 +460,24 @@ export default class Patient {
   }
 
   contains(x, y) {
-    // 暴走病人有更大的点击范围，方便用户拖动
-    const paddingX = this.isRaging ? 40 : 15
-    const paddingY = this.isRaging ? 50 : 20
-    return x >= this.x - paddingX && x <= this.x + this.width + paddingX &&
-           y >= this.y - paddingY && y <= this.y + this.height + paddingY * 1.5
+    // 暴走病人和排队病人有更大的点击范围
+    let paddingX, paddingYTop, paddingYBottom
+    if (this.isRaging) {
+      paddingX = 40
+      paddingYTop = 70   // 向上扩展更多（头部区域）
+      paddingYBottom = 50
+    } else if (this.state === 'queuing') {
+      // 排队病人点击区域更大，特别是头部上方
+      paddingX = 20
+      paddingYTop = 60   // 向上扩展60px覆盖头部
+      paddingYBottom = 40
+    } else {
+      paddingX = 15
+      paddingYTop = 50   // 普通病人也增加头部点击区域
+      paddingYBottom = 20
+    }
+    const hit = x >= this.x - paddingX && x <= this.x + this.width + paddingX &&
+           y >= this.y - paddingYTop && y <= this.y + this.height + paddingYBottom
+    return hit
   }
 }

@@ -24,14 +24,26 @@ export const GameConfig = {
     }
   ],
 
+  // ==================== 病情配置 ====================
+  // 每种病情对应的耐心值（秒）
+  diseases: [
+    { disease_id: 1, disease_name: '发烧', patience: 5 },
+    { disease_id: 2, disease_name: '头痛', patience: 20 },
+    { disease_id: 3, disease_name: '骨折', patience: 30 },
+    { disease_id: 4, disease_name: '腹痛', patience: 15 },
+    { disease_id: 5, disease_name: '胸闷', patience: 12 },
+    { disease_id: 6, disease_name: '过敏', patience: 18 },
+    { disease_id: 7, disease_name: '扭伤', patience: 25 },
+    { disease_id: 8, disease_name: '感冒', patience: 22 }
+  ],
+
   // ==================== 病人配置 ====================
   patient: {
-    initialPatience: 30,        // 初始耐心值（秒）
-    spawnFirstCount: 8,         // 前N个病人进场固定间隔
-    spawnFirstInterval: 3000,   // 前N个病人进场的间隔（毫秒）
+    spawnFirstCount: 4,         // 前N个病人进场固定间隔
+    spawnFirstInterval: 4000,   // 前N个病人进场的间隔（毫秒）
     spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
-    spawnRandomMax: 4000,       // 随机间隔最大值（毫秒）
-    spawnInterval: 3000         // 基础间隔（毫秒）- 所有关卡通用
+    spawnRandomMax: 6000,       // 随机间隔最大值（毫秒）
+    spawnInterval: 4000         // 基础间隔（毫秒）- 所有关卡通用
   },
 
   // ==================== 托盘配置 ====================
@@ -54,26 +66,26 @@ export const GameConfig = {
   },
 
   // ==================== 病人详细配置 ====================
-  // 每个病人的独立配置，暴怒值 1-5，概率 = rageLevel * 10%
+  // 每个病人的独立配置，用于外观和身份
   patientDetails: [
-    { id: 1, name: '1号', info: '普通感冒患者', rageLevel: 1 },
-    { id: 2, name: '2号', info: '轻微腹痛', rageLevel: 1 },
-    { id: 3, name: '3号', info: '头痛患者', rageLevel: 1 },
-    { id: 4, name: '4号', info: '腿部骨折', rageLevel: 1 },
-    { id: 5, name: '5号', info: '胸闷患者', rageLevel: 1 },
-    { id: 6, name: '6号', info: '过敏反应', rageLevel: 1 },
-    { id: 7, name: '7号', info: '高烧不退', rageLevel: 1 },
-    { id: 8, name: '8号', info: '严重扭伤', rageLevel: 4 },
-    { id: 9, name: '9号', info: '急性胃炎', rageLevel: 1 },
-    { id: 10, name: '10号', info: '心脏不适', rageLevel: 1 },
-    { id: 11, name: '11号', info: '反复发烧', rageLevel: 4 },
-    { id: 12, name: '12号', info: '周期性头痛', rageLevel: 3 },
-    { id: 13, name: '13号', info: '慢性咳嗽', rageLevel: 2 },
-    { id: 14, name: '14号', info: '累计剥离性骨折', rageLevel: 4 },
-    { id: 15, name: '15号', info: '急性阐尾炎', rageLevel: 1 },
-    { id: 16, name: '16号', info: '血压异常', rageLevel: 3 },
-    { id: 17, name: '17号', info: '关节痛风', rageLevel: 2 },
-    { id: 18, name: '18号', info: '严重腿部出血', rageLevel: 1 }
+    { id: 1, name: '1号', rageLevel: 1 },
+    { id: 2, name: '2号', rageLevel: 1 },
+    { id: 3, name: '3号', rageLevel: 1 },
+    { id: 4, name: '4号', rageLevel: 1 },
+    { id: 5, name: '5号', rageLevel: 1 },
+    { id: 6, name: '6号', rageLevel: 1 },
+    { id: 7, name: '7号', rageLevel: 1 },
+    { id: 8, name: '8号', rageLevel: 4 },
+    { id: 9, name: '9号', rageLevel: 1 },
+    { id: 10, name: '10号', rageLevel: 1 },
+    { id: 11, name: '11号', rageLevel: 4 },
+    { id: 12, name: '12号', rageLevel: 3 },
+    { id: 13, name: '13号', rageLevel: 2 },
+    { id: 14, name: '14号', rageLevel: 4 },
+    { id: 15, name: '15号', rageLevel: 1 },
+    { id: 16, name: '16号', rageLevel: 3 },
+    { id: 17, name: '17号', rageLevel: 2 },
+    { id: 18, name: '18号', rageLevel: 1 }
   ],
 
   // ==================== 暴走配置 ====================
@@ -117,6 +129,13 @@ export function getPatientDetail(patientId) {
 export function getRandomPatientDetail() {
   const index = Math.floor(Math.random() * GameConfig.patientDetails.length)
   return GameConfig.patientDetails[index]
+}
+
+// 获取随机病情配置
+export function getRandomDisease() {
+  const diseases = GameConfig.diseases
+  const index = Math.floor(Math.random() * diseases.length)
+  return diseases[index]
 }
 
 // 计算病人暴走概率（根据暴怒值）

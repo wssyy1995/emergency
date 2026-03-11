@@ -5,8 +5,8 @@ export default class Nurse {
     this.name = '小美护士'
     
     // 基础尺寸
-    this.baseWidth = 21
-    this.baseHeight = 33.75
+    this.baseWidth = 8
+    this.baseHeight = 20
     this.width = this.baseWidth
     this.height = this.baseHeight
     
@@ -34,8 +34,8 @@ export default class Nurse {
   }
 
   setScale(areaWidth) {
-    // 根据区域宽度设置缩放比例
-    this.scale = Math.max(0.2, areaWidth / 350)
+    // 护士尺寸：根据区域宽度设置缩放比例
+    this.scale = Math.max(0.2, areaWidth / 400)
     this.width = this.baseWidth * this.scale
     this.height = this.baseHeight * this.scale
   }
