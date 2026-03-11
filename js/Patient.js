@@ -154,22 +154,10 @@ export default class Patient {
         this.isMoving = false
         this.bounceOffset = 0
         
-        // 如果正在离开且到达前台位置，停留2秒后走向左上角
-        if (this.isLeaving && !this.tomatoThrown) {
-          this.tomatoThrown = true
-          // 停留2秒钟后走向左上角
-          setTimeout(() => {
-            // 设置左上角为目标位置
-            this.moveTo(this.leaveTargetX - 100, this.leaveTargetY - 100)
-            // 触发爱心-1动效标记
-            this.showHeartEffect = true
-          }, 2000)
-        } else if (this.isLeaving && this.tomatoThrown && !this.shouldRemove) {
-          // 检查是否到达左上角
-          const dx = this.x - (this.leaveTargetX - 100)
-          const dy = this.y - (this.leaveTargetY - 100)
-          const dist = Math.hypot(dx, dy)
-          if (dist < 5) {
+        // 如果正在离开且到达屏幕底部，标记为可移除
+        if (this.isLeaving && !this.shouldRemove) {
+          // 检查是否到达屏幕底部之外
+          if (this.y > this.targetY - 5) {
             this.shouldRemove = true
           }
         }
@@ -190,14 +178,14 @@ export default class Patient {
     this.isMoving = true
   }
 
-  // 开始离开流程（去前台扔番茄）
-  startLeaving(frontDeskX, frontDeskY) {
+  // 开始离开流程（从屏幕底部离开）
+  startLeaving(screenHeight) {
     this.isLeaving = true
     this.isAngry = true
-    this.leaveTargetX = frontDeskX
-    this.leaveTargetY = frontDeskY
-    // 走到前台
-    this.moveTo(frontDeskX, frontDeskY)
+    this.tomatoThrown = true  // 显示小火焰
+    this.showHeartEffect = true  // 触发爱心-1效果
+    // 直接从当前位置走向屏幕底部
+    this.moveTo(this.x, screenHeight + 100)
   }
 
   // 开始暴走 - 先走到治疗区，再锁定医生
@@ -257,16 +245,17 @@ export default class Patient {
     this.moveTo(targetX, targetY)
   }
 
-  // 结束暴走 - 转为普通离开
-  endRage() {
+  // 结束暴走 - 转为普通离开（从屏幕底部离开）
+  endRage(screenHeight) {
     // 解锁医生
     if (this.rageTargetDoctor) {
       this.rageTargetDoctor.unlockByPatient()
     }
     this.isRaging = false
     this.rageTargetDoctor = null
-    // 开始正常离开流程
-    this.startLeaving(this.leaveTargetX || this.x, this.leaveTargetY || this.y)
+    // 开始正常离开流程，从屏幕底部离开
+    const targetScreenHeight = screenHeight || 1000 // 默认值
+    this.startLeaving(targetScreenHeight)
   }
 
   // 被用户拖回等候区 - 结束暴走
