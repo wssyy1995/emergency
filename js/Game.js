@@ -130,6 +130,9 @@ export default class Game {
     this.isMuted = false
     this.volumeBtnBounds = null
     
+    // 当前关卡病人池（用于不重复生成病人）
+    this.currentLevelPatientPool = []
+    
     this.initTouch()
   }
 
@@ -321,6 +324,9 @@ export default class Game {
     // 重置关卡状态（start 是新游戏，resume 是继续）
     this.spawnedPatientsCount = 0
     this.levelComplete = false
+    
+    // 初始化当前关卡的病人池（不重复的病人）
+    this.initCurrentLevelPatientPool()
     
     // 清除之前的定时器
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
@@ -593,12 +599,51 @@ export default class Game {
     this.spawnPatientFromLeft()
   }
 
+  // 初始化当前关卡的病人池（确保不重复）
+  initCurrentLevelPatientPool() {
+    const maxPatients = getLevelConfig(this.currentLevel).maxPatients
+    const allPatients = [...GameConfig.patientDetails]
+    
+    // 如果病人详情数量不够，复制一份再打乱
+    let pool = []
+    while (pool.length < maxPatients) {
+      // Fisher-Yates 洗牌算法打乱顺序
+      const shuffled = [...allPatients].sort(() => Math.random() - 0.5)
+      pool.push(...shuffled)
+    }
+    
+    // 截取所需数量，并添加唯一实例ID
+    this.currentLevelPatientPool = pool.slice(0, maxPatients).map((detail, index) => ({
+      ...detail,
+      instanceId: index + 1  // 给每个实例分配唯一ID
+    }))
+    
+    console.log(`关卡${this.currentLevel + 1}病人池已初始化，共${this.currentLevelPatientPool.length}个病人`)
+  }
+
+  // 从当前关卡病人池中获取下一个病人
+  getNextPatientFromPool() {
+    if (this.currentLevelPatientPool.length === 0) {
+      console.warn('病人池已空！')
+      return null
+    }
+    // 从池中随机取出一个病人
+    const randomIndex = Math.floor(Math.random() * this.currentLevelPatientPool.length)
+    const patient = this.currentLevelPatientPool.splice(randomIndex, 1)[0]
+    return patient
+  }
+
   // 从左侧走进来的病人生成
   spawnPatientFromLeft() {
     if (this.waitingArea.patients.length >= 8) return
     
-    // 获取随机病人配置
-    const patientDetail = getRandomPatientDetail()
+    // 从当前关卡病人池中获取病人（不重复）
+    const patientDetail = this.getNextPatientFromPool()
+    if (!patientDetail) {
+      console.warn('没有更多病人可以生成')
+      return
+    }
+    
     const patient = new Patient(this.patientIdCounter++, GameConfig.patient.initialPatience, patientDetail)
     
     // 初始位置在等候区左侧外面

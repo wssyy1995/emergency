@@ -26,9 +26,9 @@ export const GameConfig = {
 
   // ==================== 病人配置 ====================
   patient: {
-    initialPatience: 10,        // 初始耐心值（秒）
-    spawnFirstCount: 4,         // 前N个病人使用固定间隔
-    spawnFirstInterval: 3000,   // 前N个病人的间隔（毫秒）
+    initialPatience: 30,        // 初始耐心值（秒）
+    spawnFirstCount: 4,         // 前N个病人进场固定间隔
+    spawnFirstInterval: 3000,   // 前N个病人进场的间隔（毫秒）
     spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
     spawnRandomMax: 4000,       // 随机间隔最大值（毫秒）
     spawnInterval: 3000         // 基础间隔（毫秒）- 所有关卡通用

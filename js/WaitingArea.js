@@ -239,7 +239,7 @@ export default class WaitingArea {
 
   renderReception(ctx) {
     const centerX = this.x + this.width / 2
-    const deskY = this.y + this.height * 0.05
+    const deskY = this.y + this.height * 0.03
     const deskWidth = this.width * 0.45
     const deskHeight = this.height * 0.1
     
