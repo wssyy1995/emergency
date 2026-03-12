@@ -147,8 +147,8 @@ export default class WaitingArea {
     
     // 计算排队位置：从右往左排队
     // 基准点（最右边第一个人的位置）
-    const baseX = this.x + this.width * 0.4 
-    const spacing = 30 // 排队人左右间距
+    const baseX = this.x + this.width * 0.42 
+    const spacing = 32 // 排队人左右间距
     const targetX = baseX - queueCount * (patient.width + spacing)
     const targetY = this.y + this.height * 0.34
     
@@ -279,7 +279,15 @@ export default class WaitingArea {
   }
 
   render(ctx) {
-    // 先画护士（在护士台后面，只露上半身）
+    // 先画浅粉色踢脚线（横向贯穿等候区中间偏上，放在最底层）
+    const baseboardColor = '#FFB6C1'  // 浅粉色 (LightPink)
+    const positionRatio = 0.35  // 中间偏上
+    const baseboardHeight = 10
+    const baseboardY = this.y + this.height * positionRatio
+    ctx.fillStyle = baseboardColor
+    ctx.fillRect(this.x, baseboardY, this.width, baseboardHeight)
+    
+    // 再画护士（在护士台后面，只露上半身）
     this.nurse.render(ctx)
     // 再画护士台（遮挡护士下半身）
     this.renderReception(ctx)
