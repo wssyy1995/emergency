@@ -360,9 +360,12 @@ export default class Game {
     const spawnFirstPatients = () => {
       const maxPatients = getLevelConfig(this.currentLevel).maxPatients
       if (initialSpawnCount < spawnFirstCount && this.spawnedPatientsCount < maxPatients && this.isRunning) {
-        this.spawnPatientFromLeft()
-        initialSpawnCount++
-        this.spawnedPatientsCount++
+        const success = this.spawnPatientFromLeft()
+        if (success) {
+          initialSpawnCount++
+          this.spawnedPatientsCount++
+        }
+        // 无论成功与否，都继续尝试生成（直到达到spawnFirstCount或无法生成）
         this.initialSpawnTimer = setTimeout(spawnFirstPatients, spawnFirstInterval)
       } else {
         // 前N个生成完毕，开始后续随机生成
@@ -383,10 +386,13 @@ export default class Game {
     const spawnNext = () => {
       if (!this.isRunning) return
       
-      // 检查是否还有病人名额，且当前等候区人数未满
-      if (this.spawnedPatientsCount < maxPatients && this.waitingArea.patients.length < 8) {
-        this.spawnPatientFromLeft()
-        this.spawnedPatientsCount++
+      // 检查是否还有病人名额，且排队人数未满
+      const queueCount = this.waitingArea.getReceptionQueuePatients().length
+      if (this.spawnedPatientsCount < maxPatients && queueCount < 3) {
+        const success = this.spawnPatientFromLeft()
+        if (success) {
+          this.spawnedPatientsCount++
+        }
         
         // 检查是否完成本关卡
         if (this.spawnedPatientsCount >= maxPatients && !this.levelComplete) {
@@ -399,7 +405,7 @@ export default class Game {
         const randomDelay = randomMin + Math.random() * (randomMax - randomMin)
         this.spawnTimer = setTimeout(spawnNext, randomDelay)
       } else if (this.spawnedPatientsCount < maxPatients) {
-        // 等候区满了，检查一下是否可以继续
+        // 排队人数已满或等候区满了，稍后再检查
         this.spawnTimer = setTimeout(spawnNext, 1000)
       }
     }
@@ -657,13 +663,19 @@ export default class Game {
   }
 
   // 从左侧走进来的病人生成
+  // 返回值：true=成功生成，false=未生成
   spawnPatientFromLeft() {
-    // 如果排队人数超过3人，暂停进场
+    // 如果排队人数达到3人，暂停进场
     if (this.waitingArea.getReceptionQueuePatients().length >= 3) {
-      return
+      console.log('[生成病人] 排队人数已达3人，暂停生成')
+      return false
     }
     
-    if (this.waitingArea.patients.length >= 12) return
+    // 如果总等候区人数已满（排队+坐椅子），也暂停
+    if (this.waitingArea.patients.length >= 12) {
+      console.log('[生成病人] 等候区已满，暂停生成')
+      return false
+    }
     
     // 从当前关卡病人池中获取病人（不重复）
     const patientDetail = this.getNextPatientFromPool()
@@ -696,6 +708,11 @@ export default class Game {
           )
         }
       }, 100)
+      console.log('[生成病人] 成功生成:', patient.name, '病情:', patient.condition.name)
+      return true
+    } else {
+      console.log('[生成病人] 添加到排队失败')
+      return false
     }
   }
 
