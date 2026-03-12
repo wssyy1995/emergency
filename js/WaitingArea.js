@@ -88,7 +88,7 @@ export default class WaitingArea {
     const standingCols = 2  // 2列
     const standingRows = 2  // 每列2个
     const standingWidth = seatWidth * 0.75
-    const standingHeight = seatHeight * 1
+    const standingHeight = seatHeight * 1.2
     const standingGapX = 20  // 列间距
     const standingGapY = gapY
     
@@ -467,17 +467,13 @@ export default class WaitingArea {
       
       // 座位号（只有座位空闲时显示）
       if (!seat.occupied) {
-        // 根据椅子类型设置不同颜色
-        let seatColor = '#2E86AB' // 普通椅 - 蓝色
+        // 1-2号椅子显示橙黄色标识（3-4号不显示数字）
         if (seat.type === 'critical') {
-          seatColor = '#F39C12' // 重症椅 - 橙色
+          ctx.fillStyle = '#FFA500' // 橙黄色
+          ctx.beginPath()
+          ctx.arc(seat.x + seat.width / 2, seat.y + seat.height * 0.25, seat.width * 0.12, 0, Math.PI * 2)
+          ctx.fill()
         }
-        ctx.fillStyle = seatColor
-        // 字体加大
-        ctx.font = `900 ${Math.max(14, seat.width * 0.28)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(`${i + 1}`, seat.x + seat.width / 2, seat.y + seat.height * 0.25)
       }
     })
   }

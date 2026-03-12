@@ -5,17 +5,23 @@ export const GameConfig = {
   levels: [
     { 
       id: 1,                    // 第1关
-      maxPatients: 10,           // 总病人数
+      maxPatients: 10,          // 总病人数
+      timeLimit: 40,            // 倒计时（秒）
+      cureTarget: 5,            // 治愈人数目标
       doctorItemCount: 1        // 医生请求物品数量
     },
     { 
       id: 2,                    // 第2关
-      maxPatients: 12,           // 总病人数
+      maxPatients: 12,          // 总病人数
+      timeLimit: 90,            // 倒计时（秒）
+      cureTarget: 8,            // 治愈人数目标
       doctorItemCount: 2        // 医生请求物品数量
     },
     { 
       id: 3,                    // 第3关
       maxPatients: 12,          // 总病人数
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 10,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -27,12 +33,12 @@ export const GameConfig = {
   // ==================== 病情配置 ====================
   // 每种病情对应的耐心值（秒）
   diseases: [
-    { disease_id: 1, disease_name: '发烧', patience: 10 },
+    { disease_id: 1, disease_name: '发烧', patience: 15 },
     { disease_id: 2, disease_name: '头痛', patience: 20 },
-    { disease_id: 3, disease_name: '骨折', patience: 8 },
+    { disease_id: 3, disease_name: '骨折', patience: 15 },
     { disease_id: 4, disease_name: '腹痛', patience: 15 },
-    { disease_id: 5, disease_name: '胸闷', patience: 12 },
-    { disease_id: 6, disease_name: '过敏', patience: 18 },
+    { disease_id: 5, disease_name: '胸闷', patience: 15 },
+    { disease_id: 6, disease_name: '过敏', patience: 15 },
     { disease_id: 7, disease_name: '扭伤', patience: 20 },
     { disease_id: 8, disease_name: '感冒', patience: 30 }
   ],
@@ -40,8 +46,8 @@ export const GameConfig = {
   // ==================== 病人配置 ====================
   patient: {
     spawnFirstCount: 6,         // 前N个病人进场固定间隔
-    spawnFirstInterval: 2500,   // 前N个病人进场的间隔（毫秒）
-    spawnRandomMin: 3000,       // 随机间隔最小值（毫秒）
+    spawnFirstInterval: 2000,   // 前N个病人进场的间隔（毫秒）
+    spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
     spawnRandomMax: 5000       // 随机间隔最大值（毫秒）
   },
 

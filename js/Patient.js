@@ -48,7 +48,6 @@ export default class Patient {
     this.tomatoThrown = false
     this.leaveTargetX = 0
     this.leaveTargetY = 0
-    this.showHeartEffect = false  // 开始走向左上角时触发爱心-1效果
     
     // 病人状态：'queuing'(前台排队), 'seated'(坐在椅子上), 'inbed'(在床上)
     this.state = 'queuing'
@@ -251,7 +250,6 @@ export default class Patient {
     this.isLeaving = true
     this.isAngry = true
     this.tomatoThrown = true  // 显示小火焰
-    this.showHeartEffect = true  // 触发爱心-1效果
     // 直接从当前位置走向屏幕底部
     this.moveTo(this.x, screenHeight + 100)
   }
@@ -363,8 +361,8 @@ export default class Patient {
     
     ctx.restore()
     
-    // 耐心条（只在非离开状态、非暴走状态、非排队状态显示）
-    if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging && this.state !== 'queuing') {
+    // 耐心条（在非离开状态、非暴走状态显示，包括排队区和座位区）
+    if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging) {
       const patiencePercent = Math.max(0, this.patience / this.maxPatience)
       ctx.save()
       ctx.fillStyle = 'rgba(0,0,0,0.3)'
@@ -397,11 +395,6 @@ export default class Patient {
         const color = i % 2 === 0 ? '#FFD700' : '#FF69B4'
         drawStar(ctx, starX, starY, 5 * scale, color)
       }
-      
-      ctx.fillStyle = '#FF69B4'
-      ctx.font = `${16 * scale}px "PingFang SC", "Microsoft YaHei", sans-serif`
-      ctx.textAlign = 'center'
-      ctx.fillText('❤️', 0, -45 * scale)
       
       ctx.restore()
     }

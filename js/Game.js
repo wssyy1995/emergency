@@ -88,7 +88,6 @@ export default class Game {
     
     // 游戏状态
     this.score = 0
-    this.treatedCount = 0
     this.gameTime = 0
     this.isRunning = false
     this.patientIdCounter = 1
@@ -99,6 +98,11 @@ export default class Game {
     this.currentLevel = 0
     this.spawnedPatientsCount = 0
     this.levelComplete = false
+    
+    // 倒计时和治愈目标
+    this.timeRemaining = 0       // 剩余时间（秒）
+    this.curedCount = 0          // 已治愈人数
+    this.countdownTimer = null   // 倒计时定时器
     
     // 动态计算三个区域
     this.initAreas()
@@ -111,7 +115,6 @@ export default class Game {
     
     // 图标图片
     this.honorImage = null
-    this.heartImage = null
     this.loadIcons()
     
     // 浮动文字动画
@@ -162,13 +165,6 @@ export default class Game {
       this.honorImage = honorImg
     }
     honorImg.src = 'images/honor.png'
-    
-    // 加载爱心图标
-    const heartImg = wx.createImage()
-    heartImg.onload = () => {
-      this.heartImage = heartImg
-    }
-    heartImg.src = 'images/heart.png'
   }
 
   // 添加浮动文字
@@ -185,33 +181,6 @@ export default class Game {
     })
   }
   
-  // 添加浮动爱心图标和文字（用于爱心-1动效）
-  addFloatingHeartWithText(text, x, y) {
-    this.floatingTexts.push({
-      type: 'heartText',
-      text,
-      x,
-      y,
-      color: '#E74C3C',
-      opacity: 0.8,
-      offsetY: 0,
-      life: 1200
-    })
-  }
-  
-  // 添加浮动爱心（用于治疗完成奖励）
-  addFloatingHeart(x, y) {
-    this.floatingTexts.push({
-      type: 'heartReward',
-      x,
-      y,
-      color: '#E74C3C',
-      opacity: 1,
-      offsetY: 0,
-      life: 1000
-    })
-  }
-
   // 添加浮动物品图片
   addFloatingItem(item, x, y) {
     this.floatingTexts.push({
@@ -336,6 +305,23 @@ export default class Game {
     // 重置关卡状态（start 是新游戏，resume 是继续）
     this.spawnedPatientsCount = 0
     this.levelComplete = false
+    this.curedCount = 0
+    
+    // 初始化倒计时
+    const levelConfig = getLevelConfig(this.currentLevel)
+    this.timeRemaining = levelConfig.timeLimit || 60
+    
+    // 启动倒计时
+    if (this.countdownTimer) clearInterval(this.countdownTimer)
+    this.countdownTimer = setInterval(() => {
+      if (this.isRunning && this.timeRemaining > 0) {
+        this.timeRemaining--
+        // 检查是否时间到
+        if (this.timeRemaining <= 0) {
+          this.checkTimeUp()
+        }
+      }
+    }, 1000)
     
     // 初始化当前关卡的病人池（不重复的病人）
     this.initCurrentLevelPatientPool()
@@ -415,12 +401,22 @@ export default class Game {
   }
 
   loop(timestamp) {
-    if (!this.isRunning) return
+    // 如果游戏不在运行中，但有弹窗显示，仍然需要渲染
+    const hasModal = this.gameOverModal?.visible || 
+                     this.levelCompleteModal?.visible || 
+                     this.gameWinModal?.visible
+    
+    if (!this.isRunning && !hasModal) return
     
     const deltaTime = timestamp - this.lastTime
     this.lastTime = timestamp
     
-    this.update(deltaTime)
+    // 只有游戏运行时才更新逻辑
+    if (this.isRunning) {
+      this.update(deltaTime)
+    }
+    
+    // 始终渲染（用于显示弹窗等）
     this.render()
     
     requestAnimationFrame((t) => this.loop(t))
@@ -440,24 +436,18 @@ export default class Game {
         bed.patient.update(deltaTime)
         // 治疗完成后病人自行离开
         if (bed.patient.isCured) {
-          // 增加分数（只加一次）
+          // 增加分数和治愈人数（只加一次）
           if (!bed.scoreAdded) {
             const addedScore = 10 + Math.floor(Math.random() * 20)
             this.score += addedScore
-            this.treatedCount++
+            this.curedCount++
             bed.scoreAdded = true
             
             // 添加浮动文字动画
             this.addFloatingText(`+${addedScore}`, bed.x + bed.width / 2, bed.y, '#FFD700')
-            // 使用爱心图片替代 emoji
-            this.addFloatingHeart(bed.x + bed.width / 2, bed.y - 30)
             
-            // 检查是否完成关卡（当所有病人都已生成且都被处理）
-            const totalPatients = getLevelConfig(this.currentLevel).maxPatients
-            if (this.spawnedPatientsCount >= totalPatients) {
-              this.levelComplete = true
-              this.checkLevelComplete()
-            }
+            // 检查是否完成关卡目标
+            this.checkLevelTarget()
           }
           // 清理病床，病人离开
           if (!bed.leaveTimer) {
@@ -472,11 +462,12 @@ export default class Game {
     })
     
     this.waitingArea.patients.forEach(patient => {
-      // 正在走向病床或排队的病人耐心不减少
-      if (patient.state === 'movingToBed' || patient.state === 'queuing') {
+      // 只有正在走向病床的病人耐心不减少
+      if (patient.state === 'movingToBed') {
         return
       }
       
+      // 排队区和其他状态的病人耐心都会减少
       patient.patience -= deltaTime / 1000
       // 耐心归零且未开始离开/暴走流程
       if (patient.patience <= 0 && !patient.isLeaving && !patient.tomatoThrown && !patient.isRaging) {
@@ -520,12 +511,6 @@ export default class Game {
         this.showRageToastOnce()
       }
       
-      // 检测爱心-1动效触发（开始走向左上角时）
-      if (patient.showHeartEffect) {
-        patient.showHeartEffect = false  // 重置标记
-        // 在病人当前位置显示爱心-1动效
-        this.addFloatingHeartWithText('-1', patient.x, patient.y - 30)
-      }
     })
     
     // 清理已经离开的愤怒病人
@@ -548,11 +533,57 @@ export default class Game {
   // 开始病人正常离开流程
   startPatientLeaving(patient) {
     patient.startLeaving(this.screenHeight)
-    // 爱心减1（生命值减少）
-    this.treatedCount--
-    // 检查游戏结束
-    if (this.treatedCount < 0) {
-      this.gameOver()
+  }
+
+  // 检查时间是否到达，判断游戏结束
+  checkTimeUp() {
+    const levelConfig = getLevelConfig(this.currentLevel)
+    // 时间到，检查是否达到治愈目标
+    if (this.curedCount < levelConfig.cureTarget) {
+      // 未达到目标，游戏结束
+      this.gameOverWithReason('游戏结束，未达成本关目标')
+    }
+  }
+
+  // 检查关卡目标是否完成
+  checkLevelTarget() {
+    const levelConfig = getLevelConfig(this.currentLevel)
+    // 如果达到治愈目标，关卡完成
+    if (this.curedCount >= levelConfig.cureTarget) {
+      this.levelComplete = true
+      this.checkLevelComplete()
+    }
+  }
+
+  // 游戏结束（带原因）
+  gameOverWithReason(reason) {
+    this.isRunning = false
+    clearInterval(this.timeTimer)
+    clearTimeout(this.spawnTimer)
+    if (this.initialSpawnTimer) {
+      clearTimeout(this.initialSpawnTimer)
+    }
+    if (this.bedAssignmentTimer) {
+      clearInterval(this.bedAssignmentTimer)
+    }
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer)
+    }
+    
+    // 关闭所有其他弹窗
+    this.seatSelectionModal = null
+    this.levelCompleteModal = null
+    this.gameWinModal = null
+    this.levelToast = null
+    
+    // 设置游戏结束弹窗状态
+    this.gameOverModal = {
+      visible: true,
+      reason: reason,
+      buttons: [
+        { text: '重新开始', x: 0, y: 0, width: 120, height: 40, color: '#27AE60', action: 'restart' },
+        { text: '原地复活', x: 0, y: 0, width: 120, height: 40, color: '#3498DB', action: 'revive', disabled: true }
+      ]
     }
   }
 
@@ -849,54 +880,6 @@ export default class Game {
         ctx.shadowBlur = 0
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 0
-      } else if (ft.type === 'heartText') {
-        // 绘制爱心图片和文字（爱心-1动效）- 小号版本带透明度
-        const heartSize = 16
-        const textOffset = 10
-        
-        ctx.save()
-        ctx.globalAlpha = ft.opacity
-        
-        // 绘制爱心图片
-        if (this.heartImage) {
-          ctx.drawImage(this.heartImage, ft.x - heartSize - textOffset/2, ft.y + ft.offsetY - heartSize/2, heartSize, heartSize)
-        }
-        
-        // 绘制文字（-1）
-        ctx.fillStyle = ft.color
-        ctx.font = 'bold 16px cursive, sans-serif'
-        ctx.textAlign = 'left'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(ft.text, ft.x + textOffset/2, ft.y + ft.offsetY)
-        
-        ctx.restore()
-      } else if (ft.type === 'heartReward') {
-        // 绘制爱心奖励图标（+爱心）
-        const heartSize = 20
-        const plusOffset = 12
-        
-        ctx.save()
-        ctx.globalAlpha = ft.opacity
-        
-        // 绘制 "+" 号在爱心左边
-        ctx.fillStyle = '#E74C3C'
-        ctx.font = 'bold 20px cursive, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText('+', ft.x - plusOffset, ft.y + ft.offsetY)
-        
-        // 绘制爱心图片，如果没有则用红色圆形代替
-        if (this.heartImage) {
-          ctx.drawImage(this.heartImage, ft.x - heartSize/2 + 5, ft.y + ft.offsetY - heartSize/2, heartSize, heartSize)
-        } else {
-          // 后备：红色圆形
-          ctx.fillStyle = '#E74C3C'
-          ctx.beginPath()
-          ctx.arc(ft.x + 5, ft.y + ft.offsetY, heartSize/2, 0, Math.PI * 2)
-          ctx.fill()
-        }
-        
-        ctx.restore()
       } else {
         // 绘制文字
         ctx.fillStyle = ft.color
@@ -993,26 +976,36 @@ export default class Game {
     ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
     ctx.fillText(`  第${this.currentLevel + 1}关`, this.mapX + 180, titleY)
     
+    // 倒计时和治愈目标显示
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const countdownText = `⏱️ ${this.timeRemaining}s`
+    const cureText = `🏥 ${this.curedCount}/${levelConfig.cureTarget}`
+    
+    ctx.font = `bold ${Math.max(13, this.screenWidth * 0.019)}px cursive, sans-serif`
+    
+    // 倒计时（如果时间少于10秒变红色）
+    if (this.timeRemaining <= 10) {
+      ctx.fillStyle = '#FFE66D'  // 黄色警告
+    } else {
+      ctx.fillStyle = '#FFF'
+    }
+    ctx.fillText(countdownText, this.mapX + 260, titleY)
+    
+    // 治愈人数
+    ctx.fillStyle = '#FFF'
+    ctx.fillText(cureText, this.mapX + 340, titleY)
+    
     // 统计
     const fontSize = Math.max(12, this.screenWidth * 0.018)
     ctx.font = `${fontSize}px cursive, sans-serif`
     
     // 荣誉点图标 + 数值（右上角）
-    const honorX = this.mapX + this.mapWidth - 200
+    const honorX = this.mapX + this.mapWidth - 150
     if (this.honorImage) {
       ctx.drawImage(this.honorImage, honorX, this.mapY + (headerHeight - 20) / 2, 20, 20)
     }
     ctx.fillStyle = '#FFF'
     ctx.fillText(`${this.score}`, honorX + 28, titleY)
-    
-    // 爱心图标 + 数值（荣誉点旁边）
-    const heartX = this.mapX + this.mapWidth - 130
-    if (this.heartImage) {
-      ctx.drawImage(this.heartImage, heartX, this.mapY + (headerHeight - 20) / 2, 20, 20)
-      ctx.fillText(`${this.treatedCount}`, heartX + 28, titleY)
-    } else {
-      ctx.fillText(`❤️ ${this.treatedCount}`, heartX, titleY)
-    }
     
     // 音量开关按钮（最右侧）
     const volumeX = this.mapX + this.mapWidth - 50
@@ -1137,8 +1130,9 @@ export default class Game {
       
       // 4. 游戏结束弹窗
       if (this.gameOverModal && this.gameOverModal.visible) {
-        // 游戏结束弹窗的点击处理...
-        return
+        if (this.handleGameOverTouch(x, y)) {
+          return
+        }
       }
       
       // 检查是否点击音量开关按钮
@@ -1656,10 +1650,14 @@ export default class Game {
           if (this.bedAssignmentTimer) {
             clearInterval(this.bedAssignmentTimer)
           }
+          if (this.countdownTimer) {
+            clearInterval(this.countdownTimer)
+          }
           
           this.score = 0
-          this.treatedCount = 0
           this.gameTime = 0
+          this.curedCount = 0
+          this.timeRemaining = 0
           this.patientIdCounter = 1
           this.hasRagingPatient = false  // 重置暴走标记
           this.waitingArea.clear()
@@ -1685,6 +1683,9 @@ export default class Game {
     }
     if (this.bedAssignmentTimer) {
       clearInterval(this.bedAssignmentTimer)
+    }
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer)
     }
     
     // 关闭所有其他弹窗，确保游戏结束弹窗优先级最高
@@ -1752,22 +1753,20 @@ export default class Game {
     }, 2000)
   }
   
-  // 显示关卡完成提示（轻量提示，自动进入下一关）
+  // 显示关卡完成提示（自定义确认弹窗）
   showLevelCompleteModal() {
-    console.log('显示关卡完成提示，当前关卡:', this.currentLevel)
+    console.log('显示关卡完成弹窗，当前关卡:', this.currentLevel)
     
-    // 显示自定义轻量提示
-    this.levelToast = {
+    // 停止游戏运行（等待用户点击继续）
+    this.isRunning = false
+    
+    // 显示自定义确认弹窗
+    this.levelCompleteModal = {
       visible: true,
-      message: `下一波病人即将来临...`,
-      showTime: Date.now()
+      title: '本关目标达成',
+      content: '迎接下一波病人吧！',
+      buttonText: '继续'
     }
-    
-    // 延迟后自动进入下一关
-    setTimeout(() => {
-      this.levelToast = null
-      this.nextLevel()
-    }, 2000)
   }
   
   // 处理游戏胜利弹窗的点击
@@ -1814,6 +1813,52 @@ export default class Game {
       this.nextLevel()
       return true
     }
+    return false
+  }
+
+  // 处理游戏结束弹窗的点击
+  handleGameOverTouch(x, y) {
+    if (!this.gameOverModal || !this.gameOverModal.visible) return false
+    
+    const modalWidth = 280
+    const modalHeight = 160
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // 按钮
+    const btnY = modalY + 100
+    const btnGap = 20
+    const btnWidth = 120
+    const btnHeight = 40
+    const totalBtnWidth = btnWidth * 2 + btnGap
+    const startX = modalX + (modalWidth - totalBtnWidth) / 2
+    
+    // 检查每个按钮
+    for (let i = 0; i < this.gameOverModal.buttons.length; i++) {
+      const btn = this.gameOverModal.buttons[i]
+      const btnX = startX + i * (btnWidth + btnGap)
+      
+      if (x >= btnX && x <= btnX + btnWidth &&
+          y >= btnY && y <= btnY + btnHeight) {
+        
+        if (btn.disabled) {
+          wx.showToast({
+            title: '功能暂未开放',
+            icon: 'none',
+            duration: 1000
+          })
+          return true
+        }
+        
+        if (btn.action === 'restart') {
+          console.log('点击了重新开始按钮')
+          this.gameOverModal.visible = false
+          this.restart()
+          return true
+        }
+      }
+    }
+    
     return false
   }
 
@@ -1960,6 +2005,7 @@ export default class Game {
     this.currentLevel++
     this.spawnedPatientsCount = 0
     this.levelComplete = false
+    this.curedCount = 0
     
     // 清理当前状态
     this.waitingArea.clear()
@@ -1972,6 +2018,9 @@ export default class Game {
     // 清理轮询定时器
     if (this.bedAssignmentTimer) {
       clearInterval(this.bedAssignmentTimer)
+    }
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer)
     }
     
     // 延迟一点再启动，确保清理完成
@@ -2011,6 +2060,9 @@ export default class Game {
     if (this.bedAssignmentTimer) {
       clearInterval(this.bedAssignmentTimer)
     }
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer)
+    }
     
     this.currentLevel = 0
     this.gameOverModal = null
@@ -2019,8 +2071,9 @@ export default class Game {
     this.levelToast = null
     this.isRunning = false
     this.score = 0
-    this.treatedCount = 0
     this.gameTime = 0
+    this.curedCount = 0
+    this.timeRemaining = 0
     this.patientIdCounter = 1
     this.doctorIdCounter = 1  // 重置医生ID计数器
     this.waitingArea.clear()
@@ -2069,10 +2122,15 @@ export default class Game {
     ctx.textBaseline = 'top'
     ctx.fillText('游戏结束', modalX + modalWidth / 2, modalY + 20)
     
-    // 内容文字
+    // 内容文字（显示原因或默认文字）
     ctx.fillStyle = '#333'
     ctx.font = '14px cursive, sans-serif'
-    ctx.fillText('恶评漫天飞，你的急诊室被迫关闭', modalX + modalWidth / 2, modalY + 55)
+    const reasonText = this.gameOverModal.reason || '恶评漫天飞，你的急诊室被迫关闭'
+    // 支持多行文字
+    const lines = reasonText.split('\n')
+    lines.forEach((line, index) => {
+      ctx.fillText(line, modalX + modalWidth / 2, modalY + 50 + index * 20)
+    })
     
     // 按钮
     const btnY = modalY + 100
