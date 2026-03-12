@@ -141,8 +141,8 @@ export default class Game {
     // 当前关卡病人池（用于不重复生成病人）
     this.currentLevelPatientPool = []
     
-    // 1秒轮询定时器（用于自动分配病人到病床）
-    this.bedAssignmentTimer = null
+    // 【已移除】1秒轮询定时器已禁用（玩家需手动分配病人到病床）
+    // this.bedAssignmentTimer = null
     
     this.initTouch()
   }
@@ -234,9 +234,9 @@ export default class Game {
     const waitingX = this.mapX + gap
     this.waitingArea = new WaitingArea(waitingX, availableY, waitingWidth, availableHeight)
     
-    // 治疗区（中间）
+    // 治疗区（中间）- 2张病床 + 输液治疗区（4张输液椅）
     const bedX = waitingX + waitingWidth + gap
-    this.bedArea = new BedArea(bedX, availableY, bedWidth, availableHeight, 4)
+    this.bedArea = new BedArea(bedX, availableY, bedWidth, availableHeight, 2)
     
     // 器材室（右侧）- 更窄
     const equipmentX = bedX + bedWidth + gap
@@ -326,14 +326,11 @@ export default class Game {
     // 清除之前的定时器
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
     if (this.spawnTimer) clearTimeout(this.spawnTimer)
-    if (this.bedAssignmentTimer) clearInterval(this.bedAssignmentTimer)
+    // 【已移除】自动分配定时器已禁用
+    // if (this.bedAssignmentTimer) clearInterval(this.bedAssignmentTimer)
     
-    // 启动1秒轮询：检测空闲病床并按优先级分配病人
-    this.bedAssignmentTimer = setInterval(() => {
-      if (this.isRunning) {
-        this.autoAssignPatientsToBeds()
-      }
-    }, 1000)
+    // 【已移除】不再自动分配病人到病床，玩家需要手动操作
+    // this.bedAssignmentTimer = setInterval(...)
     
     // 前N个病人，使用固定间隔
     let initialSpawnCount = 0
@@ -427,7 +424,10 @@ export default class Game {
     // 更新浮动文字
     this.updateFloatingTexts(deltaTime)
     
+    // 更新等候区病人
     this.waitingArea.patients.forEach(patient => patient.update(deltaTime))
+    
+    // 更新病床上病人
     this.bedArea.getOccupiedBeds().forEach(bed => {
       if (bed.patient) {
         bed.patient.update(deltaTime)
@@ -458,13 +458,52 @@ export default class Game {
       }
     })
     
-    this.waitingArea.patients.forEach(patient => {
-      // 只有正在走向病床的病人耐心不减少
-      if (patient.state === 'movingToBed') {
-        return
+    // 更新输液椅上病人
+    this.bedArea.ivSeats.forEach(seat => {
+      if (seat.patient) {
+        seat.patient.update(deltaTime)
+        
+        // 输液椅上病人耐心减少
+        if (!seat.patient.isLeaving && !seat.patient.tomatoThrown && !seat.patient.isRaging) {
+          seat.patient.patience -= deltaTime / 1000
+          
+          // 耐心归零处理
+          if (seat.patient.patience <= 0 && !seat.patient.isLeaving && !seat.patient.tomatoThrown && !seat.patient.isRaging) {
+            seat.patient.isAngry = true
+            
+            // 检查是否会暴走
+            const rageProbability = seat.patient.patientDetail ? getRageProbability(seat.patient.patientDetail.rageLevel) : 0
+            const randomValue = Math.random()
+            const willRage = seat.patient.patientDetail && randomValue < rageProbability && !this.hasRagingPatient
+            
+            if (willRage && this.doctors.length > 0) {
+              const targetDoctor = this.findAvailableDoctorForRage()
+              if (targetDoctor) {
+                const patient = seat.patient
+                this.hasRagingPatient = true
+                seat.clear()
+                patient.startRage(targetDoctor, this.bedArea)
+              } else {
+                // 没有可用医生，离开输液椅并正常离开
+                const patient = seat.patient
+                seat.clear()
+                this.waitingArea.addPatientToReception(patient)
+                this.startPatientLeaving(patient)
+              }
+            } else {
+              // 不暴走，离开输液椅并正常离开
+              const patient = seat.patient
+              seat.clear()
+              this.waitingArea.addPatientToReception(patient)
+              this.startPatientLeaving(patient)
+            }
+          }
+        }
       }
-      
-      // 排队区和其他状态的病人耐心都会减少
+    })
+    
+    // 处理等候区病人耐心（排队区病人耐心都会减少）
+    this.waitingArea.patients.forEach(patient => {
       patient.patience -= deltaTime / 1000
       // 耐心归零且未开始离开/暴走流程
       if (patient.patience <= 0 && !patient.isLeaving && !patient.tomatoThrown && !patient.isRaging) {
@@ -560,9 +599,10 @@ export default class Game {
     if (this.initialSpawnTimer) {
       clearTimeout(this.initialSpawnTimer)
     }
-    if (this.bedAssignmentTimer) {
-      clearInterval(this.bedAssignmentTimer)
-    }
+    // 【已移除】自动分配定时器已禁用
+    // if (this.bedAssignmentTimer) {
+    //   clearInterval(this.bedAssignmentTimer)
+ // }
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer)
     }
@@ -693,16 +733,10 @@ export default class Game {
   // 从左侧走进来的病人生成
   // 返回值：true=成功生成，false=未生成
   spawnPatientFromLeft() {
-    // 如果站立排队区已满（4人），暂停进场
+    // 如果站立排队区已满（8人），暂停进场
     const queueCount = this.waitingArea.getReceptionQueuePatients().length
-    if (queueCount >= 4) {
+    if (queueCount >= 8) {
       console.log('[生成病人] 站立区已满，暂停生成')
-      return false
-    }
-    
-    // 如果总等候区人数已满（站立区+椅子区），也暂停
-    if (this.waitingArea.patients.length >= 8) {
-      console.log('[生成病人] 等候区已满，暂停生成')
       return false
     }
     
@@ -914,17 +948,17 @@ export default class Game {
     ctx.fillStyle = '#FFE4E1'
     ctx.fillRect(this.mapX + 5, this.mapY + 5, this.mapWidth - 10, this.mapHeight - 10)
     
-    // 等候区背景（浅蓝色）
-    ctx.fillStyle = 'rgba(230, 243, 255, 0.7)'
+    // 等候区背景（白色，80%透明度）
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
     fillRoundRect(ctx, this.waitingArea.x, this.waitingArea.y, this.waitingArea.width, this.waitingArea.height, 15)
-    ctx.strokeStyle = '#E0E0E0'
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'
     ctx.lineWidth = 2
     strokeRoundRect(ctx, this.waitingArea.x, this.waitingArea.y, this.waitingArea.width, this.waitingArea.height, 15)
     
-    // 治疗区背景
-    ctx.fillStyle = 'rgba(181, 234, 215, 0.4)'
+    // 治疗区背景（白色，50%透明度）
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
     fillRoundRect(ctx, this.bedArea.x, this.bedArea.y, this.bedArea.width, this.bedArea.height, 15)
-    ctx.strokeStyle = '#B5EAD7'
+    ctx.strokeStyle = 'rgba(91, 155, 213, 0.4)'
     ctx.lineWidth = 2
     strokeRoundRect(ctx, this.bedArea.x, this.bedArea.y, this.bedArea.width, this.bedArea.height, 15)
     
@@ -1399,10 +1433,10 @@ export default class Game {
     console.log(`病人开始走向病床: ${emptyBed.id + 1}号床，来自${typeName}`)
   }
 
-  // 直接将病人送去病床（急救功能）
+  // 直接将病人送去病床（急救功能）- 点击后直接出现在病床上
   sendPatientToBedDirectly(patient) {
-    // 查找真正空闲的病床（排除已有病人正在走向的）
-    const emptyBed = this.findTrulyEmptyBed()
+    // 查找空闲病床
+    const emptyBed = this.bedArea.findEmptyBed()
     if (!emptyBed) {
       wx.showToast({
         title: '暂无空闲病床',
@@ -1412,40 +1446,37 @@ export default class Game {
       return
     }
     
-    // 立即标记病床为已占用（只设置引用，不设置位置），防止其他病人被分配
-    emptyBed.patient = patient
+    // 从等候区移除病人
+    this.waitingArea.removePatient(patient)
     
-    // 如果病人在站立区，释放站立区位置
-    if (patient.standingPos) {
-      patient.standingPos.occupied = false
-      patient.standingPos.patient = null
-      patient.standingPos = null
+    // 直接将病人分配到病床（不再走过去，直接出现）
+    emptyBed.assignPatient(patient)
+    
+    // 通知医生
+    this.notifyDoctors(emptyBed)
+    
+    console.log(`急救：病人${patient.name}直接出现在${emptyBed.id + 1}号床`)
+  }
+  
+  // 将病人送往治疗区的输液治疗椅 - 点击后直接出现在输液椅上
+  sendPatientToIVSeat(patient) {
+    const emptySeat = this.bedArea.findEmptyIVSeat()
+    if (!emptySeat) {
+      wx.showToast({
+        title: '输液椅已满',
+        icon: 'none',
+        duration: 1000
+      })
+      return
     }
     
-    // 设置病人目标病床并开始移动
-    patient.targetBed = emptyBed
-    patient.state = 'movingToBed'
-    patient.moveSpeed = 0.18 // 急救速度快1.5倍
+    // 从等候区移除病人
+    this.waitingArea.removePatient(patient)
     
-    // 计算病床目标位置
-    const targetX = emptyBed.x + emptyBed.width / 2 - patient.width / 2
-    const targetY = emptyBed.y + emptyBed.height / 2 - patient.height / 2 + emptyBed.height * 0.02
+    // 直接将病人分配到输液椅（不再走过去，直接出现）
+    emptySeat.assignPatient(patient)
     
-    // 让病人走向病床
-    patient.moveTo(targetX, targetY)
-    
-    // 设置到达病床后的回调
-    const game = this
-    patient.onArriveAtBed = function(bed) {
-      // 正式完成病床分配（设置尺寸和位置）
-      bed.assignPatient(this)
-      // 从等候区正式移除
-      game.waitingArea.removePatient(this)
-      // 通知医生
-      game.notifyDoctors(bed)
-    }
-    
-    console.log(`急救：病人${patient.name}直接送往${emptyBed.id + 1}号床`)
+    console.log(`病人 ${patient.name} 直接出现在输液椅`)
   }
   
   // 查找真正空闲的病床（排除已有病人正在走向的）
@@ -1464,8 +1495,8 @@ export default class Game {
 
   // 显示病情分诊弹窗（自定义小弹窗，显示在等候区）
   showSeatSelectionModal(patient) {
-    const emptyCounts = this.waitingArea.getEmptySeatCounts()
-    const hasEmptyBed = this.findTrulyEmptyBed() !== null
+    const hasEmptyIVSeat = this.bedArea.findEmptyIVSeat() !== null
+    const hasEmptyBed = this.bedArea.findEmptyBed() !== null
     
     this.seatSelectionModal = {
       visible: true,
@@ -1479,18 +1510,18 @@ export default class Game {
           isEmergency: true  // 标记为急救按钮
         },
         { 
-          type: 'critical', 
-          label: '重症', 
-          color: '#F39C12', 
-          count: emptyCounts.critical,
-          enabled: emptyCounts.critical > 0
+          type: 'iv', 
+          label: '输液', 
+          color: '#9B59B6', 
+          enabled: hasEmptyIVSeat,
+          isIV: true  // 标记为输液按钮
         },
         { 
           type: 'normal', 
           label: '普通', 
           color: '#2E86AB', 
-          count: emptyCounts.normal,
-          enabled: emptyCounts.normal > 0
+          enabled: true,  // 普通按钮始终可用
+          isNormal: true  // 标记为普通按钮
         }
       ]
     }
@@ -1525,9 +1556,12 @@ export default class Game {
         // 如果是急救按钮，直接送去病床
         if (btn.isEmergency) {
           this.sendPatientToBedDirectly(modal.patient)
-        } else {
-          // 分配病人到选择的椅子类型
-          this.waitingArea.assignPatientToSeatType(modal.patient, btn.type)
+        } else if (btn.isIV) {
+          // 输液：前往治疗区的输液治疗椅坐下
+          this.sendPatientToIVSeat(modal.patient)
+        } else if (btn.isNormal) {
+          // 普通：什么都不做，但是显示耐心条
+          modal.patient.showPatienceBar = true
         }
         
         // 关闭弹窗
@@ -1599,7 +1633,7 @@ export default class Game {
     ctx.font = 'bold 12px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('病情分诊', modalX + modalWidth / 2, modalY + 11)
+    ctx.fillText('分诊选择', modalX + modalWidth / 2, modalY + 11)
     
     // 病情名字（标题下方）
     ctx.fillStyle = '#333'
@@ -1668,9 +1702,10 @@ export default class Game {
           if (this.initialSpawnTimer) {
             clearTimeout(this.initialSpawnTimer)
           }
-          if (this.bedAssignmentTimer) {
-            clearInterval(this.bedAssignmentTimer)
-          }
+          // 【已移除】自动分配定时器已禁用
+          // if (this.bedAssignmentTimer) {
+   // clearInterval(this.bedAssignmentTimer)
+// }
           if (this.countdownTimer) {
             clearInterval(this.countdownTimer)
           }
@@ -1702,9 +1737,10 @@ export default class Game {
     if (this.initialSpawnTimer) {
       clearTimeout(this.initialSpawnTimer)
     }
-    if (this.bedAssignmentTimer) {
-      clearInterval(this.bedAssignmentTimer)
-    }
+    // 【已移除】自动分配定时器已禁用
+    // if (this.bedAssignmentTimer) {
+    //   clearInterval(this.bedAssignmentTimer)
+ // }
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer)
     }
@@ -2037,9 +2073,10 @@ export default class Game {
     })
     
     // 清理轮询定时器
-    if (this.bedAssignmentTimer) {
-      clearInterval(this.bedAssignmentTimer)
-    }
+    // 【已移除】自动分配定时器已禁用
+    // if (this.bedAssignmentTimer) {
+    //   clearInterval(this.bedAssignmentTimer)
+ // }
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer)
     }
@@ -2078,9 +2115,10 @@ export default class Game {
     if (this.initialSpawnTimer) {
       clearTimeout(this.initialSpawnTimer)
     }
-    if (this.bedAssignmentTimer) {
-      clearInterval(this.bedAssignmentTimer)
-    }
+    // 【已移除】自动分配定时器已禁用
+    // if (this.bedAssignmentTimer) {
+    //   clearInterval(this.bedAssignmentTimer)
+ // }
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer)
     }

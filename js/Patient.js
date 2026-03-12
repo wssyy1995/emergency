@@ -128,8 +128,15 @@ export default class Patient {
     this.leaveTargetX = 0
     this.leaveTargetY = 0
     
-    // 病人状态：'queuing'(前台排队), 'seated'(坐在椅子上), 'inbed'(在床上)
+    // 病人状态：'queuing'(前台排队), 'seated'(坐在椅子上), 'inbed'(在床上), 'movingToIV'(走向输液椅)
     this.state = 'queuing'
+    
+    // 是否显示耐心条（点击"普通"按钮后显示，即使没有坐下）
+    this.showPatienceBar = false
+    
+    // 输液椅相关
+    this.targetIVSeat = null
+    this.onArriveAtIVSeat = null
     
     // 暴走相关状态
     this.isRaging = false           // 是否处于暴走状态
@@ -238,6 +245,11 @@ export default class Patient {
         // 如果正在走向病床且已到达
         if (this.state === 'movingToBed' && this.targetBed) {
           this.arriveAtBed()
+        }
+        
+        // 如果正在走向输液椅且已到达
+        if (this.state === 'movingToIV' && this.targetIVSeat && this.onArriveAtIVSeat) {
+          this.onArriveAtIVSeat(this.targetIVSeat)
         }
         
         // 如果正在离开且到达屏幕底部，标记为可移除
@@ -407,7 +419,7 @@ export default class Patient {
     
     ctx.restore()
     
-    // 耐心条（在非离开状态、非暴走状态显示，包括排队区和座位区）
+    // 耐心条（常驻显示，除了床上、已治愈、离开、暴走状态）
     if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging) {
       const patiencePercent = Math.max(0, this.patience / this.maxPatience)
       ctx.save()

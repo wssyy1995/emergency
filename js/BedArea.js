@@ -17,6 +17,38 @@ function getBedImage() {
   return bedImageCache
 }
 
+// ==================== 输液椅图片缓存 ====================
+let ivSeatFreeImageCache = null
+let ivSeatOccupiedImageCache = null
+function getIVSeatFreeImage() {
+  if (!ivSeatFreeImageCache) {
+    const img = wx.createImage()
+    img.onload = () => {
+      ivSeatFreeImageCache = img
+    }
+    img.onerror = () => {
+      console.warn('Failed to load seat image: images/seat_free.png')
+    }
+    img.src = 'images/seat_free.png'
+    ivSeatFreeImageCache = img
+  }
+  return ivSeatFreeImageCache
+}
+function getIVSeatOccupiedImage() {
+  if (!ivSeatOccupiedImageCache) {
+    const img = wx.createImage()
+    img.onload = () => {
+      ivSeatOccupiedImageCache = img
+    }
+    img.onerror = () => {
+      console.warn('Failed to load seat image: images/seat_occupied.png')
+    }
+    img.src = 'images/seat_occupied.png'
+    ivSeatOccupiedImageCache = img
+  }
+  return ivSeatOccupiedImageCache
+}
+
 class Bed {
   constructor(id, x, y, width, height) {
     this.id = id
@@ -26,16 +58,14 @@ class Bed {
     this.height = height
     this.patient = null
     this.treatmentProgress = 0
-    this.assignedDoctor = null // 被分配到这个病床的医生
+    this.assignedDoctor = null
     
-    // 从缓存获取病床图片
     this.bedImage = getBedImage()
   }
 
   assignPatient(patient) {
     this.patient = patient
     this.treatmentProgress = 0
-    // 设置病人尺寸与医生一致（21 x 33.75）
     patient.width = 21
     patient.height = 33.75
     patient.x = this.x + this.width / 2 - patient.width / 2
@@ -64,10 +94,9 @@ class Bed {
   }
 
   render(ctx) {
-    // 绘制病床图片（2号和4号病床左右镜像翻转）
     if (this.bedImage && this.bedImage.width > 0) {
-      // 2号(id=1)和4号(id=3)病床进行水平翻转
-      if (this.id === 1 || this.id === 3) {
+      // 2号床(id=1)水平翻转
+      if (this.id === 1) {
         ctx.save()
         ctx.translate(this.x + this.width, this.y)
         ctx.scale(-1, 1)
@@ -93,39 +122,29 @@ class Bed {
     ctx.textBaseline = 'middle'
     ctx.fillText(`${this.id + 1}`, this.x + this.width / 2, this.y - this.height * 0.03)
     
-    // 绘制床上的病人（图片居中显示在床上）
     if (this.patient && !this.patient.isCured) {
-      // 保存原始状态
       const originalX = this.patient.x
       const originalY = this.patient.y
       const originalWidth = this.patient.width
       const originalHeight = this.patient.height
       
-      // 计算病人图片在床上的合适大小（床宽度的75%）
       const targetPatientWidth = this.width * 0.75
       const patientScale = targetPatientWidth / this.patient.baseWidth
       
-      // 设置病人在床上的位置（每个床位可独立调整）
       this.patient.width = this.patient.baseWidth * patientScale
       this.patient.height = this.patient.baseHeight * patientScale
       
-      // 根据床位ID设置不同的位置偏移（id: [x偏移系数, y偏移系数]）
-      // x偏移：0左侧，1右侧； y偏移：负数向上，正数向下
       const patientOffsets = {
-        0: { x: 0.7, y: -0.1 },   // 1号床：居中，略微靠上
-        1: { x: 0.3, y: -0.1 },   // 2号床：居中，略微靠上
-        2: { x: 0.7, y: -0.1 },   // 3号床：居中，略微靠上
-        3: { x: 0.3, y: -0.1 }    // 4号床：居中，略微靠上
+        0: { x: 0.7, y: -0.1 },
+        1: { x: 0.3, y: -0.1 }
       }
       const offset = patientOffsets[this.id] || { x: 0.5, y: -0.11 }
       
       this.patient.x = this.x + (this.width - this.patient.width) * offset.x
       this.patient.y = this.y + this.height * offset.y
       
-      // 绘制病人
       this.patient.render(ctx)
       
-      // 恢复原始值
       this.patient.x = originalX
       this.patient.y = originalY
       this.patient.width = originalWidth
@@ -134,85 +153,128 @@ class Bed {
   }
 }
 
+// 输液治疗椅类
+class IVSeat {
+  constructor(id, x, y, width, height) {
+    this.id = id
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+    this.patient = null
+    this.type = 'iv'
+    
+    this.seatFreeImage = getIVSeatFreeImage()
+    this.seatOccupiedImage = getIVSeatOccupiedImage()
+  }
+
+  assignPatient(patient) {
+    this.patient = patient
+    patient.width = 16
+    patient.height = 26
+    patient.x = this.x + (this.width - patient.width) / 2
+    patient.y = this.y + this.height * 0.62
+    patient.seat = this
+    patient.state = 'seated'
+    patient.seatedAt = Date.now()
+  }
+
+  clear() {
+    this.patient = null
+  }
+
+  isEmpty() {
+    return this.patient === null
+  }
+
+  contains(x, y) {
+    return x >= this.x && x <= this.x + this.width &&
+           y >= this.y && y <= this.y + this.height
+  }
+
+  render(ctx) {
+    const currentImage = this.patient ? this.seatOccupiedImage : this.seatFreeImage
+    
+    if (currentImage && currentImage.width > 0) {
+      const targetHeight = this.height * 1.3
+      const imageScale = targetHeight / currentImage.height
+      const drawWidth = currentImage.width * imageScale
+      const drawHeight = targetHeight
+      
+      ctx.drawImage(currentImage, this.x + (this.width - drawWidth) / 2, this.y + (this.height - drawHeight) / 2, drawWidth, drawHeight)
+    }
+    
+    // 【已移除】输液椅标识圆点
+    
+    // 绘制坐着的病人
+    if (this.patient) {
+      const originalX = this.patient.x
+      const originalY = this.patient.y
+      const originalState = this.patient.state
+      
+      this.patient.x = this.x + (this.width - this.patient.width) / 2
+      this.patient.y = this.y + this.height * 0.62
+      
+      this.patient.render(ctx)
+      
+      this.patient.x = originalX
+      this.patient.y = originalY
+      this.patient.state = originalState
+    }
+  }
+}
+
 export default class BedArea {
-  constructor(x, y, width, height, bedCount) {
+  constructor(x, y, width, height, bedCount = 2) {
     this.x = x
     this.y = y
     this.width = width
     this.height = height
     this.bedCount = bedCount
     this.beds = []
+    this.ivSeats = [] // 输液治疗区域的椅子
     
     this.initBeds()
+    this.initIVSeats()
   }
 
   initBeds() {
-    // 2列2行布局（4个床位）
-    const cols = 2
-    const rows = 2
-    
-    // 床位尺寸（高度减小，留出底部空间放托盘）
+    // 上半部分：2张病床，横排
     const bedWidth = this.width * 0.45
-    const bedHeight = this.height * 0.32
-    const gapX = (this.width - bedWidth * cols) / (cols + 1)
-    // 减小行间距，让12和34床位更紧凑
-    const gapY = (this.height - bedHeight * rows) / (rows + 1) * 0.7
+    const bedHeight = this.height * 0.38
+    const gapX = (this.width - bedWidth * 2) / 3
     
     const startX = this.x + gapX
-    // 第一行（12床位）往下移动
-    const startY = this.y + gapY + this.height * 0.06
+    const startY = this.y + this.height * 0.05
     
-    for (let i = 0; i < this.bedCount; i++) {
-      const col = i % cols
-      const row = Math.floor(i / cols)
-      const bedX = startX + col * (bedWidth + gapX)
-      const bedY = startY + row * (bedHeight + gapY)
-      this.beds.push(new Bed(i, bedX, bedY, bedWidth, bedHeight))
+    for (let i = 0; i < 2; i++) {
+      const bedX = startX + i * (bedWidth + gapX)
+      this.beds.push(new Bed(i, bedX, startY, bedWidth, bedHeight))
     }
   }
 
-  // 获取走道区域（医生可以在这些区域行走）
-  getWalkableAreas() {
-    const areas = []
-    const cols = 2
-    const rows = 2
-    const bedWidth = this.width * 0.45
-    const bedHeight = this.height * 0.32
-    const gapX = (this.width - bedWidth * cols) / (cols + 1)
-    const gapY = (this.height - bedHeight * rows) / (rows + 1) * 0.7
+  initIVSeats() {
+    // 输液治疗椅子区域：高度为治疗区的三分之一，横排4张椅子
+    const seatWidth = this.width * 0.2
+    const seatHeight = this.height * 0.2  // 高度增加适应区域
+    const gapX = (this.width - seatWidth * 4) / 5
+    
     const startX = this.x + gapX
-    const startY = this.y + gapY + this.height * 0.06
-
-    // 水平走道（床之间的横向走道）
-    for (let row = 0; row < rows; row++) {
-      const bedY = startY + row * (bedHeight + gapY)
-      // 走道在床的下方（除了最后一排）
-      if (row < rows - 1) {
-        areas.push({
-          x: this.x,
-          y: bedY + bedHeight,
-          width: this.width,
-          height: gapY
-        })
-      }
+    // 输液区占据治疗区底部1/3
+    const startY = this.y + this.height * (2/3) - seatHeight * 0.3
+    
+    for (let i = 0; i < 4; i++) {
+      const seatX = startX + i * (seatWidth + gapX)
+      this.ivSeats.push(new IVSeat(i, seatX, startY, seatWidth, seatHeight))
     }
-
-    // 垂直走道（床之间的纵向走道）
-    for (let col = 0; col < cols - 1; col++) {
-      const bedX = startX + col * (bedWidth + gapX)
-      areas.push({
-        x: bedX + bedWidth,
-        y: this.y,
-        width: gapX,
-        height: this.height
-      })
-    }
-
-    return areas
   }
 
   findEmptyBed() {
     return this.beds.find(bed => bed.isEmpty())
+  }
+
+  findEmptyIVSeat() {
+    return this.ivSeats.find(seat => seat.isEmpty())
   }
 
   getOccupiedBeds() {
@@ -228,6 +290,15 @@ export default class BedArea {
     return null
   }
 
+  getIVSeatAt(x, y) {
+    for (let seat of this.ivSeats) {
+      if (seat.contains(x, y)) {
+        return seat
+      }
+    }
+    return null
+  }
+
   contains(x, y) {
     return x >= this.x && x <= this.x + this.width &&
            y >= this.y && y <= this.y + this.height
@@ -235,12 +306,14 @@ export default class BedArea {
 
   clear() {
     this.beds.forEach(bed => bed.clear())
+    this.ivSeats.forEach(seat => seat.clear())
   }
 
   render(ctx) {
-    // 治疗区右上角的柜子已去掉
-    
-    // 绘制床位
+    // 绘制病床（上半部分2/3区域）
     this.beds.forEach(bed => bed.render(ctx))
+    
+    // 绘制输液椅（底部1/3区域，无背景）
+    this.ivSeats.forEach(seat => seat.render(ctx))
   }
 }
