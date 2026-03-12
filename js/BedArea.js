@@ -1,5 +1,22 @@
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 
+// ==================== 全局病床图片缓存 ====================
+let bedImageCache = null
+function getBedImage() {
+  if (!bedImageCache) {
+    const img = wx.createImage()
+    img.onload = () => {
+      bedImageCache = img
+    }
+    img.onerror = () => {
+      console.warn('Failed to load bed image: images/bed.png')
+    }
+    img.src = 'images/bed.png'
+    bedImageCache = img
+  }
+  return bedImageCache
+}
+
 class Bed {
   constructor(id, x, y, width, height) {
     this.id = id
@@ -11,20 +28,8 @@ class Bed {
     this.treatmentProgress = 0
     this.assignedDoctor = null // 被分配到这个病床的医生
     
-    // 加载病床图片
-    this.bedImage = null
-    this.loadImage()
-  }
-  
-  loadImage() {
-    const img = wx.createImage()
-    img.onload = () => {
-      this.bedImage = img
-    }
-    img.onerror = () => {
-      console.warn('Failed to load bed image: images/bed.png')
-    }
-    img.src = 'images/bed.png'
+    // 从缓存获取病床图片
+    this.bedImage = getBedImage()
   }
 
   assignPatient(patient) {

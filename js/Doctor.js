@@ -3,6 +3,46 @@ import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getRandomItem, getItemById, getItemImage, isMedicine } from './Items.js'
 import { getDoctorItemCount } from './GameConfig.js'
 
+// ==================== 全局医生图片缓存 ====================
+const DoctorImageCache = {
+  // 空闲状态图片缓存: { doctorId: image }
+  idleImages: {},
+  // 治疗状态图片缓存: { doctorId: image }
+  treatImages: {},
+  
+  // 获取空闲状态图片
+  getIdleImage(doctorId) {
+    if (!this.idleImages[doctorId]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.idleImages[doctorId] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load doctor idle image: images/doctor_${doctorId}_idle.png`)
+      }
+      img.src = `images/doctor_${doctorId}_idle.png`
+      this.idleImages[doctorId] = img
+    }
+    return this.idleImages[doctorId]
+  },
+  
+  // 获取治疗状态图片
+  getTreatImage(doctorId) {
+    if (!this.treatImages[doctorId]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.treatImages[doctorId] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load doctor treat image: images/doctor_${doctorId}_treat.png`)
+      }
+      img.src = `images/doctor_${doctorId}_treat.png`
+      this.treatImages[doctorId] = img
+    }
+    return this.treatImages[doctorId]
+  }
+}
+
 export default class Doctor {
   constructor(id, bedArea) {
     this.id = id
@@ -47,23 +87,9 @@ export default class Doctor {
     this.lockedByPatient = null
     
     // 加载图片
-    this.idleImage = null
-    this.treatImage = null
-    this.loadImages()
-  }
-  
-  loadImages() {
-    const imageId = this.id
-    const idlePath = `images/doctor_${imageId}_idle.png`
-    const treatPath = `images/doctor_${imageId}_treat.png`
-    
-    const idleImg = wx.createImage()
-    idleImg.onload = () => { this.idleImage = idleImg }
-    idleImg.src = idlePath
-    
-    const treatImg = wx.createImage()
-    treatImg.onload = () => { this.treatImage = treatImg }
-    treatImg.src = treatPath
+    // 从全局缓存获取图片
+    this.idleImage = DoctorImageCache.getIdleImage(this.id)
+    this.treatImage = DoctorImageCache.getTreatImage(this.id)
   }
   
   pickRandomTarget() {

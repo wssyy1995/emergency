@@ -1,6 +1,85 @@
 import { drawStar } from './utils.js'
 import { GameConfig } from './GameConfig.js'
 
+// ==================== 全局病人图片缓存 ====================
+const PatientImageCache = {
+  // 正常状态图片缓存: { patientType: image }
+  normalImages: {},
+  // 生气状态图片缓存: { patientType: image }
+  angryImages: {},
+  // 爆炸图标（全局只加载一次）
+  boomImage: null,
+  // 是否已初始化
+  initialized: false,
+  
+  // 初始化缓存（只调用一次）
+  init() {
+    if (this.initialized) return
+    this.initialized = true
+    
+    // 预加载爆炸图标
+    this.loadBoomImage()
+  },
+  
+  // 加载爆炸图标
+  loadBoomImage() {
+    if (this.boomImage) return this.boomImage
+    
+    const img = wx.createImage()
+    img.onload = () => {
+      this.boomImage = img
+    }
+    img.onerror = () => {
+      console.warn('Failed to load boom image')
+    }
+    img.src = 'images/boom.png'
+    return img
+  },
+  
+  // 获取正常状态图片
+  getNormalImage(patientType) {
+    if (!this.normalImages[patientType]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.normalImages[patientType] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load patient normal image: images/patient_${patientType}_normal.png`)
+      }
+      img.src = `images/patient_${patientType}_normal.png`
+      this.normalImages[patientType] = img
+    }
+    return this.normalImages[patientType]
+  },
+  
+  // 获取生气状态图片
+  getAngryImage(patientType) {
+    if (!this.angryImages[patientType]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.angryImages[patientType] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load patient angry image: images/patient_${patientType}_angry.png`)
+      }
+      img.src = `images/patient_${patientType}_angry.png`
+      this.angryImages[patientType] = img
+    }
+    return this.angryImages[patientType]
+  },
+  
+  // 获取爆炸图标
+  getBoomImage() {
+    if (!this.boomImage) {
+      this.loadBoomImage()
+    }
+    return this.boomImage
+  }
+}
+
+// 立即初始化缓存
+PatientImageCache.init()
+
 export default class Patient {
   constructor(id, patientDetail = null, disease = null) {
     this.id = id
@@ -61,43 +140,10 @@ export default class Patient {
     // 病人图片编号（1-14 号按顺序循环使用）
     this.patientType = ((id - 1) % 14) + 1
     
-    // 加载图片
-    this.normalImage = null
-    this.angryImage = null
-    this.boomImage = null
-    this.loadImages()
-  }
-
-  loadImages() {
-    // 加载正常状态图片
-    const normalImg = wx.createImage()
-    normalImg.onload = () => {
-      this.normalImage = normalImg
-    }
-    normalImg.onerror = () => {
-      console.warn(`Failed to load patient normal image: images/patient_${this.patientType}_normal.png`)
-    }
-    normalImg.src = `images/patient_${this.patientType}_normal.png`
-    
-    // 加载生气状态图片
-    const angryImg = wx.createImage()
-    angryImg.onload = () => {
-      this.angryImage = angryImg
-    }
-    angryImg.onerror = () => {
-      console.warn(`Failed to load patient angry image: images/patient_${this.patientType}_angry.png`)
-    }
-    angryImg.src = `images/patient_${this.patientType}_angry.png`
-    
-    // 加载爆炸图标
-    const boomImg = wx.createImage()
-    boomImg.onload = () => {
-      this.boomImage = boomImg
-    }
-    boomImg.onerror = () => {
-      console.warn('Failed to load boom image: images/boom.png')
-    }
-    boomImg.src = 'images/boom.png'
+    // 从全局缓存获取图片（避免重复加载）
+    this.normalImage = PatientImageCache.getNormalImage(this.patientType)
+    this.angryImage = PatientImageCache.getAngryImage(this.patientType)
+    this.boomImage = PatientImageCache.getBoomImage()
   }
 
   // 根据病情名称获取图标

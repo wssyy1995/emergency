@@ -1,6 +1,28 @@
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import Nurse from './Nurse.js'
 
+// ==================== 全局等候区图片缓存 ====================
+const WaitingAreaImageCache = {
+  // 图片缓存
+  images: {},
+  
+  // 获取图片（带缓存）
+  getImage(key, src) {
+    if (!this.images[key]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.images[key] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load image: ${src}`)
+      }
+      img.src = src
+      this.images[key] = img
+    }
+    return this.images[key]
+  }
+}
+
 export default class WaitingArea {
   constructor(x, y, width, height) {
     this.x = x
@@ -29,45 +51,11 @@ export default class WaitingArea {
   }
 
   loadImages() {
-    // 加载空闲椅子图片
-    const freeImg = wx.createImage()
-    freeImg.onload = () => {
-      this.seatFreeImage = freeImg
-    }
-    freeImg.onerror = () => {
-      console.warn('Failed to load seat free image: images/seat_free.png')
-    }
-    freeImg.src = 'images/seat_free.png'
-    
-    // 加载占用椅子图片
-    const occupiedImg = wx.createImage()
-    occupiedImg.onload = () => {
-      this.seatOccupiedImage = occupiedImg
-    }
-    occupiedImg.onerror = () => {
-      console.warn('Failed to load seat occupied image: images/seat_occupied.png')
-    }
-    occupiedImg.src = 'images/seat_occupied.png'
-    
-    // 加载护士台图片
-    const nurseDeskImg = wx.createImage()
-    nurseDeskImg.onload = () => {
-      this.nurseDeskImage = nurseDeskImg
-    }
-    nurseDeskImg.onerror = () => {
-      console.warn('Failed to load nurse desk image: images/nurse_desk.png')
-    }
-    nurseDeskImg.src = 'images/nurse_desk.png'
-    
-    // 加载植物图片
-    const plantImg = wx.createImage()
-    plantImg.onload = () => {
-      this.plantImage = plantImg
-    }
-    plantImg.onerror = () => {
-      console.warn('Failed to load plant image: images/plant.png')
-    }
-    plantImg.src = 'images/plant.png'
+    // 使用缓存加载图片
+    this.seatFreeImage = WaitingAreaImageCache.getImage('seatFree', 'images/seat_free.png')
+    this.seatOccupiedImage = WaitingAreaImageCache.getImage('seatOccupied', 'images/seat_occupied.png')
+    this.nurseDeskImage = WaitingAreaImageCache.getImage('nurseDesk', 'images/nurse_desk.png')
+    this.plantImage = WaitingAreaImageCache.getImage('plant', 'images/plant.png')
   }
 
   initSeats() {

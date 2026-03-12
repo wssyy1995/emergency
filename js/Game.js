@@ -67,9 +67,6 @@ export default class Game {
     this.mapHeight = this.screenHeight - 20
     
     this.addDebugLog(`地图: ${this.mapWidth}x${this.mapHeight}`)
-    
-    // 初始化三个区域位置
-    this.initAreas()
   }
   
   resize() {
