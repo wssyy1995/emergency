@@ -1313,8 +1313,8 @@ export default class Game {
 
   // 自动分配病人到空闲病床（按椅子优先级：急症椅>危重椅>普通椅）
   autoAssignPatientsToBeds() {
-    // 查找空闲病床
-    const emptyBed = this.bedArea.findEmptyBed()
+    // 查找真正空闲的病床（排除已有病人正在走向的）
+    const emptyBed = this.findTrulyEmptyBed()
     if (!emptyBed) {
       return // 没有空闲病床
     }
@@ -1359,6 +1359,9 @@ export default class Game {
     // 分配优先级最高的病人到病床
     const patientToAssign = waitingPatients[0]
     
+    // 立即标记病床为已占用（只设置引用，不设置位置），防止其他病人被分配
+    emptyBed.patient = patientToAssign
+    
     // 设置病人目标病床并开始移动（比正常速度快1.5倍）
     patientToAssign.targetBed = emptyBed
     patientToAssign.state = 'movingToBed'
@@ -1385,6 +1388,8 @@ export default class Game {
     // 设置到达病床后的回调
     const game = this
     patientToAssign.onArriveAtBed = function(bed) {
+      // 正式完成病床分配（设置尺寸和位置）
+      bed.assignPatient(this)
       // 从等候区正式移除
       game.waitingArea.removePatient(this)
       // 通知医生
@@ -1396,8 +1401,8 @@ export default class Game {
 
   // 直接将病人送去病床（急救功能）
   sendPatientToBedDirectly(patient) {
-    // 查找空闲病床
-    const emptyBed = this.bedArea.findEmptyBed()
+    // 查找真正空闲的病床（排除已有病人正在走向的）
+    const emptyBed = this.findTrulyEmptyBed()
     if (!emptyBed) {
       wx.showToast({
         title: '暂无空闲病床',
@@ -1406,6 +1411,9 @@ export default class Game {
       })
       return
     }
+    
+    // 立即标记病床为已占用（只设置引用，不设置位置），防止其他病人被分配
+    emptyBed.patient = patient
     
     // 如果病人在站立区，释放站立区位置
     if (patient.standingPos) {
@@ -1429,6 +1437,8 @@ export default class Game {
     // 设置到达病床后的回调
     const game = this
     patient.onArriveAtBed = function(bed) {
+      // 正式完成病床分配（设置尺寸和位置）
+      bed.assignPatient(this)
       // 从等候区正式移除
       game.waitingArea.removePatient(this)
       // 通知医生
@@ -1437,11 +1447,25 @@ export default class Game {
     
     console.log(`急救：病人${patient.name}直接送往${emptyBed.id + 1}号床`)
   }
+  
+  // 查找真正空闲的病床（排除已有病人正在走向的）
+  findTrulyEmptyBed() {
+    // 获取所有正在被走向的病床
+    const targetedBeds = new Set()
+    this.waitingArea.patients.forEach(p => {
+      if (p.targetBed && p.state === 'movingToBed') {
+        targetedBeds.add(p.targetBed.id)
+      }
+    })
+    
+    // 找到既没有病人，也没有被分配的病床
+    return this.bedArea.beds.find(bed => bed.isEmpty() && !targetedBeds.has(bed.id))
+  }
 
   // 显示病情分诊弹窗（自定义小弹窗，显示在等候区）
   showSeatSelectionModal(patient) {
     const emptyCounts = this.waitingArea.getEmptySeatCounts()
-    const hasEmptyBed = this.bedArea.findEmptyBed() !== null
+    const hasEmptyBed = this.findTrulyEmptyBed() !== null
     
     this.seatSelectionModal = {
       visible: true,
