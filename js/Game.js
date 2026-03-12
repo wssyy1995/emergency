@@ -386,9 +386,9 @@ export default class Game {
     const spawnNext = () => {
       if (!this.isRunning) return
       
-      // 检查是否还有病人名额，且排队人数未满
+      // 检查是否还有病人名额，且站立排队区未满
       const queueCount = this.waitingArea.getReceptionQueuePatients().length
-      if (this.spawnedPatientsCount < maxPatients && queueCount < 3) {
+      if (this.spawnedPatientsCount < maxPatients && queueCount < 4) {
         const success = this.spawnPatientFromLeft()
         if (success) {
           this.spawnedPatientsCount++
@@ -665,14 +665,15 @@ export default class Game {
   // 从左侧走进来的病人生成
   // 返回值：true=成功生成，false=未生成
   spawnPatientFromLeft() {
-    // 如果排队人数达到3人，暂停进场
-    if (this.waitingArea.getReceptionQueuePatients().length >= 3) {
-      console.log('[生成病人] 排队人数已达3人，暂停生成')
+    // 如果站立排队区已满（4人），暂停进场
+    const queueCount = this.waitingArea.getReceptionQueuePatients().length
+    if (queueCount >= 4) {
+      console.log('[生成病人] 站立区已满，暂停生成')
       return false
     }
     
-    // 如果总等候区人数已满（排队+坐椅子），也暂停
-    if (this.waitingArea.patients.length >= 12) {
+    // 如果总等候区人数已满（站立区+椅子区），也暂停
+    if (this.waitingArea.patients.length >= 8) {
       console.log('[生成病人] 等候区已满，暂停生成')
       return false
     }
@@ -698,16 +699,6 @@ export default class Game {
     const added = this.waitingArea.addPatientToReception(patient)
     
     if (added) {
-      // 让病人走到前台排队位置
-      setTimeout(() => {
-        if (patient.receptionPos) {
-          const offsetX = (Math.random() - 0.5) * 10
-          patient.moveTo(
-            patient.receptionPos.x + offsetX - patient.width / 2,
-            patient.receptionPos.y - patient.height / 2
-          )
-        }
-      }, 100)
       console.log('[生成病人] 成功生成:', patient.name, '病情:', patient.condition.name)
       return true
     } else {
@@ -1367,7 +1358,7 @@ export default class Game {
       return // 没有可分配的病人
     }
     
-    // 按椅子优先级排序（急症椅 priority=1 > 危重椅 priority=2 > 普通椅 priority=3）
+    // 按椅子优先级排序（重症椅 priority=2 > 普通椅 priority=3）
     waitingPatients.sort((a, b) => {
       const priorityA = a.seat.priority || 3
       const priorityB = b.seat.priority || 3
@@ -1384,7 +1375,7 @@ export default class Game {
     
     // 保存当前座位类型用于日志
     const seatType = patientToAssign.seat?.type || 'normal'
-    const typeName = seatType === 'emergency' ? '急症椅' : (seatType === 'critical' ? '危重椅' : '普通椅')
+    const typeName = seatType === 'critical' ? '重症椅' : '普通椅'
     
     // 计算病床目标位置
     const targetX = emptyBed.x + emptyBed.width / 2 - patientToAssign.width / 2
@@ -1412,9 +1403,54 @@ export default class Game {
     console.log(`病人开始走向病床: ${emptyBed.id + 1}号床，来自${typeName}`)
   }
 
+  // 直接将病人送去病床（急救功能）
+  sendPatientToBedDirectly(patient) {
+    // 查找空闲病床
+    const emptyBed = this.bedArea.findEmptyBed()
+    if (!emptyBed) {
+      wx.showToast({
+        title: '暂无空闲病床',
+        icon: 'none',
+        duration: 1000
+      })
+      return
+    }
+    
+    // 如果病人在站立区，释放站立区位置
+    if (patient.standingPos) {
+      patient.standingPos.occupied = false
+      patient.standingPos.patient = null
+      patient.standingPos = null
+    }
+    
+    // 设置病人目标病床并开始移动
+    patient.targetBed = emptyBed
+    patient.state = 'movingToBed'
+    patient.moveSpeed = 0.18 // 急救速度快1.5倍
+    
+    // 计算病床目标位置
+    const targetX = emptyBed.x + emptyBed.width / 2 - patient.width / 2
+    const targetY = emptyBed.y + emptyBed.height / 2 - patient.height / 2 + emptyBed.height * 0.02
+    
+    // 让病人走向病床
+    patient.moveTo(targetX, targetY)
+    
+    // 设置到达病床后的回调
+    const game = this
+    patient.onArriveAtBed = function(bed) {
+      // 从等候区正式移除
+      game.waitingArea.removePatient(this)
+      // 通知医生
+      game.notifyDoctors(bed)
+    }
+    
+    console.log(`急救：病人${patient.name}直接送往${emptyBed.id + 1}号床`)
+  }
+
   // 显示病情分诊弹窗（自定义小弹窗，显示在等候区）
   showSeatSelectionModal(patient) {
     const emptyCounts = this.waitingArea.getEmptySeatCounts()
+    const hasEmptyBed = this.bedArea.findEmptyBed() !== null
     
     this.seatSelectionModal = {
       visible: true,
@@ -1422,14 +1458,14 @@ export default class Game {
       buttons: [
         { 
           type: 'emergency', 
-          label: '急症', 
+          label: '急救', 
           color: '#E74C3C', 
-          count: emptyCounts.emergency,
-          enabled: emptyCounts.emergency > 0
+          enabled: hasEmptyBed,
+          isEmergency: true  // 标记为急救按钮
         },
         { 
           type: 'critical', 
-          label: '危重', 
+          label: '重症', 
           color: '#F39C12', 
           count: emptyCounts.critical,
           enabled: emptyCounts.critical > 0
@@ -1471,8 +1507,13 @@ export default class Game {
           return true
         }
         
-        // 分配病人到选择的椅子类型
-        this.waitingArea.assignPatientToSeatType(modal.patient, btn.type)
+        // 如果是急救按钮，直接送去病床
+        if (btn.isEmergency) {
+          this.sendPatientToBedDirectly(modal.patient)
+        } else {
+          // 分配病人到选择的椅子类型
+          this.waitingArea.assignPatientToSeatType(modal.patient, btn.type)
+        }
         
         // 关闭弹窗
         this.seatSelectionModal = null
@@ -1502,11 +1543,10 @@ export default class Game {
     const modalWidth = 145
     const modalHeight = 75
     
-    // 弹窗位置：在病人上方显示，往上偏移避免遮住头部
-    let modalX = patient.x + patient.width / 2 - modalWidth / 2
-    let modalY = patient.y - modalHeight - 40
-    
-    
+    // 弹窗位置：在病人头部右侧显示
+    // 弹窗左侧边在病人头部右侧
+    let modalX = patient.x + patient.width + 8  // 头部右侧 + 8像素间距
+    let modalY = patient.y - 80  // 与病人头部高度对齐（略微上移）
     
     // 保存弹窗位置用于点击检测
     modal.x = modalX
