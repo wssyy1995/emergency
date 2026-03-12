@@ -138,6 +138,12 @@ export default class Patient {
     this.targetIVSeat = null
     this.onArriveAtIVSeat = null
     
+    // 分数添加标记（防止重复计分）
+    this.scoreAdded = false
+    
+    // 治疗弹窗相关
+    this.ivRecoverTimer = null
+    
     // 暴走相关状态
     this.isRaging = false           // 是否处于暴走状态
     this.rageTargetDoctor = null    // 暴走目标医生
@@ -423,21 +429,49 @@ export default class Patient {
     if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging) {
       const patiencePercent = Math.max(0, this.patience / this.maxPatience)
       ctx.save()
-      ctx.fillStyle = 'rgba(0,0,0,0.3)'
-      // 耐心条位置跟随病人图片移动
-      const barY = this.y - 68 * scale + this.bounceOffset
-      ctx.fillRect(centerX - 18 * scale, barY, 36 * scale, 5 * scale)
-      // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色
-      let barColor
-      if (patiencePercent > 0.5) {
-        barColor = '#2ECC71' // 绿色
-      } else if (patiencePercent > 0.3) {
-        barColor = '#F39C12' // 橙色
+      
+      // 判断是否在输液椅上（耐心暂停状态）
+      const isOnIVSeat = this.seat && this.state === 'seated'
+      
+      // 耐心条位置跟随病人图片移动（向上偏移）
+      const barY = this.y - 69 * scale + this.bounceOffset
+      
+      if (isOnIVSeat) {
+        // 输液椅状态：蓝色背景 + 暂停符号
+        ctx.fillStyle = 'rgba(91, 155, 213, 0.3)' // 浅蓝色背景
+        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale, 5 * scale)
+        
+        // 蓝色进度条（表示暂停中）
+        ctx.fillStyle = '#5B9BD5'
+        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale * patiencePercent, 5 * scale)
+        
+        // 绘制暂停符号 || （两条竖线）
+        ctx.fillStyle = '#FFF'
+        const pauseX = centerX
+        const pauseY = barY + 2.5 * scale
+        const pauseWidth = 1.5 * scale
+        const pauseHeight = 3 * scale
+        const gap = 1.5 * scale
+        ctx.fillRect(pauseX - gap - pauseWidth, pauseY - pauseHeight / 2, pauseWidth, pauseHeight)
+        ctx.fillRect(pauseX + gap, pauseY - pauseHeight / 2, pauseWidth, pauseHeight)
       } else {
-        barColor = '#E74C3C' // 红色
+        // 普通状态：根据耐心值显示颜色
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'
+        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale, 5 * scale)
+        
+        // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色
+        let barColor
+        if (patiencePercent > 0.5) {
+          barColor = '#2ECC71' // 绿色
+        } else if (patiencePercent > 0.3) {
+          barColor = '#F39C12' // 橙色
+        } else {
+          barColor = '#E74C3C' // 红色
+        }
+        ctx.fillStyle = barColor
+        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale * patiencePercent, 5 * scale)
       }
-      ctx.fillStyle = barColor
-      ctx.fillRect(centerX - 18 * scale, barY, 36 * scale * patiencePercent, 5 * scale)
+      
       ctx.restore()
     }
     

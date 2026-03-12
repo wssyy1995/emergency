@@ -31,17 +31,17 @@ export const GameConfig = {
   ],
 
   // ==================== 病情配置 ====================
-  // 每种病情对应的耐心值（秒）
+  // 每种病情对应的耐心值（秒）、治疗时间（毫秒）和所需物品
   diseases: [
-    { disease_id: 1, disease_name: '发烧', patience: 20 },
-    { disease_id: 2, disease_name: '头痛', patience: 30 },
-    { disease_id: 3, disease_name: '骨折', patience: 30 },
-    { disease_id: 4, disease_name: '腹痛', patience: 30 },
-    { disease_id: 5, disease_name: '胸闷', patience: 30 },
-    { disease_id: 6, disease_name: '过敏', patience: 30 },
-    { disease_id: 7, disease_name: '扭伤', patience: 30 },
-    { disease_id: 8, disease_name: '感冒', patience: 30 },
-    { disease_id: 9, disease_name: '中风', patience: 15 }
+    { disease_id: 1, disease_name: '发烧', patience: 20, treat_time: 2000, treat_need: ['thermometer', 'antibiotic'] },
+    { disease_id: 2, disease_name: '头痛', patience: 30, treat_time: 3000, treat_need: ['painkiller', 'thermometer'] },
+    { disease_id: 3, disease_name: '骨折', patience: 30, treat_time: 5000, treat_need: ['scissors', 'tape', 'painkiller'] },
+    { disease_id: 4, disease_name: '腹痛', patience: 30, treat_time: 3000, treat_need: ['thermometer', 'injection'] },
+    { disease_id: 5, disease_name: '胸闷', patience: 30, treat_time: 4000, treat_need: ['aed', 'adrenaline'] },
+    { disease_id: 6, disease_name: '过敏', patience: 30, treat_time: 2500, treat_need: ['adrenaline', 'injection'] },
+    { disease_id: 7, disease_name: '扭伤', patience: 30, treat_time: 2500, treat_need: ['tape', 'painkiller'] },
+    { disease_id: 8, disease_name: '感冒', patience: 30, treat_time: 2000, treat_need: ['thermometer', 'antibiotic', 'injection'] },
+    { disease_id: 9, disease_name: '中风', patience: 15, treat_time: 6000, treat_need: ['aed', 'adrenaline', 'injection'] }
   ],
 
   // ==================== 病人配置 ====================
@@ -98,7 +98,107 @@ export const GameConfig = {
     baseProbability: 0,       // 暴怒值1的基础概率 10%
     probabilityPerLevel: 0,   // 每提升1级暴怒值，概率增加10%
     walkSpeed: 0.14             // 暴走病人移动速度（每毫秒）
-  }
+  },
+
+  // ==================== 药品清单 ====================
+  medicines: [
+    {
+      id: 'antibiotic',
+      name: '抗生素',
+      icon: '💊',
+      imagePath: 'images/antibiotic.png',
+      color: '#FF6B6B',
+      description: '用于治疗细菌感染',
+      effect: '抗菌消炎',
+      price: 50,
+      unlockLevel: 1
+    },
+    {
+      id: 'painkiller',
+      name: '止痛药',
+      icon: '💉',
+      imagePath: 'images/painkiller.png',
+      color: '#4ECDC4',
+      description: '快速缓解疼痛症状',
+      effect: '镇痛',
+      price: 30,
+      unlockLevel: 1
+    },
+    {
+      id: 'adrenaline',
+      name: '肾上腺素',
+      icon: '💓',
+      imagePath: 'images/adrenaline.png',
+      color: '#FFE66D',
+      description: '急救时使用，恢复生命体征',
+      effect: '急救复苏',
+      price: 100,
+      unlockLevel: 2
+    },
+    {
+      id: 'injection',
+      name: '注射液',
+      icon: '🧪',
+      imagePath: 'images/injection.png',
+      color: '#95E1D3',
+      description: '补充水分和电解质',
+      effect: '补液',
+      price: 20,
+      unlockLevel: 1
+    }
+  ],
+
+  // ==================== 器械清单 ====================
+  tools: [
+    {
+      id: 'aed',
+      name: 'AED',
+      icon: '⚡',
+      imagePath: 'images/aed.png',
+      color: '#F38181',
+      description: '自动体外除颤器，用于心脏骤停急救',
+      effect: '除颤急救',
+      price: 200,
+      unlockLevel: 2,
+      durability: 10
+    },
+    {
+      id: 'tape',
+      name: '医用绷带',
+      icon: '🩹',
+      imagePath: 'images/tape.png',
+      color: '#AA96DA',
+      description: '用于包扎伤口',
+      effect: '止血包扎',
+      price: 15,
+      unlockLevel: 1,
+      durability: 20
+    },
+    {
+      id: 'scissors',
+      name: '手术剪',
+      icon: '✂️',
+      imagePath: 'images/scissors.png',
+      color: '#FCBAD3',
+      description: '外科手术用具',
+      effect: '切割',
+      price: 80,
+      unlockLevel: 2,
+      durability: 50
+    },
+    {
+      id: 'thermometer',
+      name: '体温计',
+      icon: '🌡️',
+      imagePath: 'images/thermometer.png',
+      color: '#FFFFD2',
+      description: '测量体温',
+      effect: '体温检测',
+      price: 25,
+      unlockLevel: 1,
+      durability: 100
+    }
+  ]
 }
 
 // 获取指定关卡配置
@@ -156,4 +256,60 @@ export function getRageProbability(rageLevel) {
 export function checkPatientRage(patientDetail) {
   const probability = getRageProbability(patientDetail.rageLevel)
   return Math.random() < probability
+}
+
+// 根据疾病名称获取治疗时间（毫秒）
+export function getTreatTimeByDisease(diseaseName) {
+  const disease = GameConfig.diseases.find(d => d.disease_name === diseaseName)
+  return disease ? disease.treat_time : 3000 // 默认3秒
+}
+
+// 根据疾病名称获取所需治疗物品列表
+export function getTreatNeedByDisease(diseaseName) {
+  const disease = GameConfig.diseases.find(d => d.disease_name === diseaseName)
+  return disease ? disease.treat_need : [] // 默认空数组
+}
+
+// ==================== 药品/器械配置获取函数 ====================
+
+// 获取药品配置
+export function getMedicineConfig(medicineId) {
+  return GameConfig.medicines.find(m => m.id === medicineId) || null
+}
+
+// 获取器械配置
+export function getToolConfig(toolId) {
+  return GameConfig.tools.find(t => t.id === toolId) || null
+}
+
+// 获取所有药品
+export function getAllMedicines() {
+  return GameConfig.medicines
+}
+
+// 获取所有器械
+export function getAllTools() {
+  return GameConfig.tools
+}
+
+// 根据关卡获取已解锁的药品
+export function getUnlockedMedicines(level) {
+  return GameConfig.medicines.filter(m => m.unlockLevel <= level)
+}
+
+// 根据关卡获取已解锁的器械
+export function getUnlockedTools(level) {
+  return GameConfig.tools.filter(t => t.unlockLevel <= level)
+}
+
+// 获取随机药品（根据关卡）
+export function getRandomMedicineByLevel(level) {
+  const unlocked = getUnlockedMedicines(level)
+  return unlocked[Math.floor(Math.random() * unlocked.length)]
+}
+
+// 获取随机器械（根据关卡）
+export function getRandomToolByLevel(level) {
+  const unlocked = getUnlockedTools(level)
+  return unlocked[Math.floor(Math.random() * unlocked.length)]
 }

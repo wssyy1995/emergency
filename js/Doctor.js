@@ -1,7 +1,7 @@
 // 简化版医生 - 像护士一样直接使用，不依赖复杂的走道计算
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getRandomItem, getItemById, getItemImage, isMedicine } from './Items.js'
-import { getDoctorItemCount } from './GameConfig.js'
+import { getDoctorItemCount, getTreatTimeByDisease } from './GameConfig.js'
 
 // ==================== 全局医生图片缓存 ====================
 const DoctorImageCache = {
@@ -219,7 +219,9 @@ export default class Doctor {
         } else if (!this.hasReceivedAllItems()) {
           // 等待物品
         } else {
-          this.targetBed.treatmentProgress += deltaTime / 2000
+          // 根据病人疾病获取治疗时间
+          const treatTime = getTreatTimeByDisease(this.targetBed.patient.condition.name)
+          this.targetBed.treatmentProgress += deltaTime / treatTime
           if (this.targetBed.treatmentProgress >= 1) {
             this.targetBed.patient.isCured = true
             this.targetBed.assignedDoctor = null
