@@ -207,6 +207,24 @@ export default class Game {
       this.curedImage = curedImg
     }
     curedImg.src = 'images/cured.png'
+    
+    // 加载倒计时图标
+    const timerImg = wx.createImage()
+    timerImg.onload = () => {
+      this.timerImage = timerImg
+    }
+    timerImg.src = 'images/timer.png'
+    
+    // 加载疾病图标缓存
+    this.diseaseImages = {}
+    for (let i = 1; i <= 9; i++) {
+      const diseaseImg = wx.createImage()
+      diseaseImg.onload = ((id, img) => {
+        this.diseaseImages[id] = img
+      })(i, diseaseImg)
+      // 尝试小写 png 和大写 PNG
+      diseaseImg.src = `images/disease_${i}.png`
+    }
   }
 
   // 添加浮动文字
@@ -590,6 +608,13 @@ export default class Game {
       if (patient.patience <= 0 && !patient.isLeaving && !patient.tomatoThrown && !patient.isRaging) {
         patient.isAngry = true
         
+        // 【新增】如果该病人的病情分诊弹窗正在显示，强制关闭
+        if (this.seatSelectionModal && 
+            this.seatSelectionModal.visible && 
+            this.seatSelectionModal.patient === patient) {
+          this.seatSelectionModal = null
+        }
+        
         // 检查是否会暴走（根据暴怒值概率判断，且当前没有其他病人暴走）
         const rageProbability = patient.patientDetail ? getRageProbability(patient.patientDetail.rageLevel) : 0
         const randomValue = Math.random()
@@ -809,15 +834,14 @@ export default class Game {
     console.log(`关卡${this.currentLevel + 1}病人池已初始化，共${this.currentLevelPatientPool.length}个病人`)
   }
 
-  // 从当前关卡病人池中获取下一个病人
+  // 从当前关卡病人池中获取下一个病人（按顺序取出）
   getNextPatientFromPool() {
     if (this.currentLevelPatientPool.length === 0) {
       console.warn('病人池已空！')
       return null
     }
-    // 从池中随机取出一个病人
-    const randomIndex = Math.floor(Math.random() * this.currentLevelPatientPool.length)
-    const patient = this.currentLevelPatientPool.splice(randomIndex, 1)[0]
+    // 从池中按顺序取出第一个病人
+    const patient = this.currentLevelPatientPool.shift()
     return patient
   }
 
@@ -838,9 +862,8 @@ export default class Game {
       return
     }
     
-    // 根据病人配置的 disease_id 获取固定疾病
-    const disease = getDiseaseById(patientDetail.disease_id)
-    const patient = new Patient(this.patientIdCounter++, patientDetail, disease)
+    // 创建病人，疾病配置由 Patient 构造函数从 patientDetail.disease_id 获取
+    const patient = new Patient(this.patientIdCounter++, patientDetail)
     
     // 初始位置在等候区左侧外面
     patient.x = this.waitingArea.x - 50
@@ -852,7 +875,7 @@ export default class Game {
     const added = this.waitingArea.addPatientToReception(patient)
     
     if (added) {
-      console.log('[生成病人] 成功生成:', patient.name, '病情:', patient.condition.name)
+      console.log('[生成病人] 成功生成:', patient.name, 'patientDetail.id:', patientDetail.id, 'disease_id:', patientDetail.disease_id, '病情:', patient.condition.name, 'disease:', patient.disease)
       return true
     } else {
       console.log('[生成病人] 添加到排队失败')
@@ -1117,7 +1140,7 @@ export default class Game {
     // ===== 顶部状态栏 =====
     // 顶部状态栏背景（圆角）
     const headerHeight = 45
-    const headerRadius = 12  // 圆角半径
+    const headerRadius = 15  // 圆角半径
     
     ctx.fillStyle = UI_COLORS.header
     fillRoundRect(ctx, this.mapX, this.mapY, this.mapWidth, headerHeight, headerRadius)
@@ -1184,9 +1207,7 @@ export default class Game {
     // 外层：深色托盘
     ctx.fillStyle = outerColor
     fillRoundRect(ctx, x, y, width, height, radius)
-    
-    // 【已移除】外层高光白边
-    
+        
     // 内层：浅色舞台（减去 padding，向下偏移 2px）
     const innerX = x + padding
     const innerY = y + padding + 2
@@ -1260,42 +1281,81 @@ export default class Game {
     ctx.textBaseline = 'middle'
     ctx.fillText('🏥 急诊室模拟器', this.mapX + 15, titleY)
     
-    // 关卡数显示 - 使用胶囊样式
+    // ===== 三个胶囊以倒计时胶囊为中心显示 =====
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const capsuleSpacing = 12  // 胶囊之间的间距（padding）
+    
+    // 1. 先计算三个胶囊的宽度和高度
+    // 关卡胶囊
     const levelText = `第${this.currentLevel + 1}关`
     ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
-    const levelWidth = ctx.measureText(levelText).width + 20
-    
-    // 关卡胶囊背景
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'
-    fillRoundRect(ctx, this.mapX + 160, titleY - 14, levelWidth, 28, 14)
-    ctx.fillStyle = '#FFF'
-    ctx.fillText(levelText, this.mapX + 160 + levelWidth / 2, titleY)
-    
-    // 倒计时和治愈目标显示 - 使用胶囊样式
-    const levelConfig = getLevelConfig(this.currentLevel)
+    const levelMetrics = ctx.measureText(levelText)
+    const levelHeight = 26
+    const levelWidth = levelMetrics.width + 16
     
     // 倒计时胶囊
-    const countdownText = `⏱️ ${this.timeRemaining}s`
+    const countdownText = `${this.timeRemaining}s`
     ctx.font = `bold ${Math.max(13, this.screenWidth * 0.019)}px cursive, sans-serif`
-    const countdownWidth = ctx.measureText(countdownText).width + 20
-    ctx.fillStyle = this.timeRemaining <= 10 ? 'rgba(231,76,60,0.4)' : 'rgba(255,255,255,0.25)'
-    fillRoundRect(ctx, this.mapX + 240, titleY - 12, countdownWidth, 24, 12)
-    ctx.fillStyle = this.timeRemaining <= 10 ? '#FFE66D' : '#FFF'
-    ctx.fillText(countdownText, this.mapX + 240 + countdownWidth / 2, titleY)
+    const countdownMetrics = ctx.measureText(countdownText)
+    const countdownHeight = 24
+    const countdownIconSize = 18  // 图标尺寸
+    const countdownWidth = countdownMetrics.width + countdownIconSize + 20  // 文字 + 图标 + 间距
     
     // 治愈人数胶囊
-    const cureText = `🏥 ${this.curedCount}/${levelConfig.cureTarget}`
-    const cureWidth = ctx.measureText(cureText).width + 20
+    const cureText = `${this.curedCount}/${levelConfig.cureTarget}`
+    const cureMetrics = ctx.measureText(cureText)
+    const cureHeight = 24
+    const cureIconSize = 36  // 图标尺寸
+    const cureWidth = cureMetrics.width + cureIconSize + 20  // 文字 + 图标 + 间距
+    
+    // 2. 以倒计时胶囊为中心，计算位置
+    const centerX = this.mapX + this.mapWidth / 2
+    const countdownX = centerX - countdownWidth / 2
+    const countdownY = titleY - countdownHeight / 2
+    
+    // 3. 绘制三个胶囊
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    
+    // 关卡胶囊（在倒计时胶囊左边，间距 capsuleSpacing）
+    const levelX = countdownX - capsuleSpacing - levelWidth
+    const levelY = titleY - levelHeight / 2
     ctx.fillStyle = 'rgba(255,255,255,0.25)'
-    fillRoundRect(ctx, this.mapX + 320, titleY - 12, cureWidth, 24, 12)
+    fillRoundRect(ctx, levelX, levelY, levelWidth, levelHeight, levelHeight / 2)
     ctx.fillStyle = '#FFF'
-    ctx.fillText(cureText, this.mapX + 320 + cureWidth / 2, titleY)
+    ctx.fillText(levelText, levelX + levelWidth / 2, titleY)
+    
+    // 倒计时胶囊（居中）
+    ctx.fillStyle = this.timeRemaining <= 10 ? 'rgba(231,76,60,0.4)' : 'rgba(255,255,255,0.25)'
+    fillRoundRect(ctx, countdownX, countdownY, countdownWidth, countdownHeight, countdownHeight / 2)
+    // 绘制倒计时图标
+    if (this.timerImage) {
+      ctx.drawImage(this.timerImage, countdownX + 6, countdownY + (countdownHeight - countdownIconSize) / 2, countdownIconSize, countdownIconSize)
+    }
+    // 绘制倒计时文字
+    ctx.fillStyle = this.timeRemaining <= 10 ? '#FFE66D' : '#FFF'
+    ctx.textAlign = 'left'
+    ctx.fillText(countdownText, countdownX + 6 + countdownIconSize + 4, titleY)
+    
+    // 治愈人数胶囊（在倒计时胶囊右边，间距 capsuleSpacing）
+    const cureX = countdownX + countdownWidth + capsuleSpacing
+    const cureY = titleY - cureHeight / 2
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    fillRoundRect(ctx, cureX, cureY, cureWidth, cureHeight, cureHeight / 2)
+    // 绘制治愈图标
+    if (this.curedImage) {
+      ctx.drawImage(this.curedImage, cureX + 6, cureY + (cureHeight - cureIconSize) / 2, cureIconSize, cureIconSize)
+    }
+    // 绘制治愈文字
+    ctx.fillStyle = '#FFF'
+    ctx.textAlign = 'left'
+    ctx.fillText(cureText, cureX + 6 + cureIconSize + 4, titleY)
     
     // 荣誉点胶囊
-    const honorX = this.mapX + this.mapWidth - 140
+    const honorX = this.mapX + this.mapWidth - 160
     const honorText = `${this.score}`
     ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
-    const honorWidth = ctx.measureText(honorText).width + 35
+    const honorWidth = ctx.measureText(honorText).width + 60
     ctx.fillStyle = 'rgba(255,255,255,0.25)'
     fillRoundRect(ctx, honorX - 10, titleY - 13, honorWidth, 26, 13)
     if (this.honorImage) {
@@ -1711,6 +1771,13 @@ export default class Game {
       return
     }
     
+    // 【关键修复】如果病人在输液椅上，先从输液椅移除
+    if (patient.seat) {
+      patient.seat.clear()
+      patient.seat = null
+      console.log(`急救：病人${patient.name}从输液椅移除`)
+    }
+    
     // 从等候区移除病人
     this.waitingArea.removePatient(patient)
     
@@ -1796,21 +1863,21 @@ export default class Game {
         { 
           type: 'emergency', 
           label: '急救', 
-          color: '#E74C3C', 
+          color: '#FF9F43', 
           enabled: hasEmptyBed,
           isEmergency: true  // 标记为急救按钮
         },
         { 
           type: 'iv', 
-          label: '输液', 
-          color: '#9B59B6', 
+          label: '治疗', 
+          color: '#54A0FF', 
           enabled: hasEmptyIVSeat,
           isIV: true  // 标记为输液按钮
         },
         { 
           type: 'normal', 
-          label: '普通', 
-          color: '#2E86AB', 
+          label: '安抚', 
+          color: '#FF9FF3', 
           enabled: true,  // 普通按钮始终可用
           isNormal: true  // 标记为普通按钮
         }
@@ -1871,7 +1938,7 @@ export default class Game {
     return false
   }
 
-  // 绘制病情分诊弹窗（轻量版：病情名 + 3个并排按钮）
+  // 绘制病情分诊弹窗（立体卡片风格：奶白底+粉边框+悬浮标题+立体按钮）
   renderSeatSelectionModal() {
     if (!this.seatSelectionModal || !this.seatSelectionModal.visible) return
     
@@ -1879,14 +1946,13 @@ export default class Game {
     const modal = this.seatSelectionModal
     const patient = modal.patient
     
-    // 弹窗尺寸（轻量小弹窗）
-    const modalWidth = 145
-    const modalHeight = 75
+    // 弹窗尺寸（更大的立体卡片）
+    const modalWidth = 160
+    const modalHeight = 125
     
     // 弹窗位置：在病人头部右侧显示
-    // 弹窗左侧边在病人头部右侧
-    let modalX = patient.x + patient.width + 8  // 头部右侧 + 8像素间距
-    let modalY = patient.y - 80  // 与病人头部高度对齐（略微上移）
+    let modalX = patient.x + patient.width -25
+    let modalY = patient.y -180
     
     // 保存弹窗位置用于点击检测
     modal.x = modalX
@@ -1894,55 +1960,97 @@ export default class Game {
     modal.width = modalWidth
     modal.height = modalHeight
     
-    // 弹窗背景（带阴影）
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)'
-    ctx.shadowBlur = 8
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 3
-    ctx.fillStyle = '#FFF'
-    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 8)
-    ctx.shadowColor = 'transparent'
-    ctx.shadowBlur = 0
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 0
+    // ===== 1. 主卡片：奶白色底 + 粉色边框 =====
+    ctx.fillStyle = '#FDF9F6'  // 奶白色
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 16)
     
-    // 顶部标题栏（更窄）
-    ctx.fillStyle = '#5B9BD5'
-    ctx.beginPath()
-    ctx.moveTo(modalX + 8, modalY)
-    ctx.lineTo(modalX + modalWidth - 8, modalY)
-    ctx.quadraticCurveTo(modalX + modalWidth, modalY, modalX + modalWidth, modalY + 8)
-    ctx.lineTo(modalX + modalWidth, modalY + 22)
-    ctx.lineTo(modalX, modalY + 22)
-    ctx.lineTo(modalX, modalY + 8)
-    ctx.quadraticCurveTo(modalX, modalY, modalX + 8, modalY)
-    ctx.closePath()
-    ctx.fill()
+    // 粉色边框
+    ctx.strokeStyle = '#F1D5D6'
+    ctx.lineWidth = 3
+    strokeRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 16)
+    
+    // ===== 2. 顶部悬浮标题（蓝色渐变胶囊，向上偏移）=====
+    const titleBadgeWidth = 90
+    const titleBadgeHeight = 28
+    const titleBadgeX = modalX + (modalWidth - titleBadgeWidth) / 2
+    const titleBadgeY = modalY - 14  // 向上偏移出边界
+    
+    // 标题阴影
+    ctx.fillStyle = '#5A9BD0'
+    fillRoundRect(ctx, titleBadgeX, titleBadgeY + 3, titleBadgeWidth, titleBadgeHeight, 14)
+    
+    // 标题渐变背景（模拟从上到下的渐变）
+    const titleGradient = ctx.createLinearGradient(0, titleBadgeY, 0, titleBadgeY + titleBadgeHeight)
+    titleGradient.addColorStop(0, '#94C6EB')
+    titleGradient.addColorStop(1, '#73AEE3')
+    ctx.fillStyle = titleGradient
+    fillRoundRect(ctx, titleBadgeX, titleBadgeY, titleBadgeWidth, titleBadgeHeight, 14)
     
     // 标题文字
-    ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 12px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('分诊选择', modalX + modalWidth / 2, modalY + 11)
+    ctx.fillText('病情分诊', modalX + modalWidth / 2, titleBadgeY + titleBadgeHeight / 2 + 1)
     
-    // 病情名字（标题下方）
-    ctx.fillStyle = '#333'
+    // ===== 4. 疾病图标区域（中央大图标）=====
+    const iconY = modalY + 48
+    const iconSize = 28
+    
+    // 图标背景圆圈
+    ctx.fillStyle = 'rgba(148, 198, 235, 0.15)'
+    ctx.beginPath()
+    ctx.arc(modalX + modalWidth / 2, iconY, iconSize, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 病情图标（优先使用图片，没有则回退到emoji）
+    const diseaseId = patient.disease ? patient.disease.disease_id : null
+    const diseaseImage = diseaseId && this.diseaseImages ? this.diseaseImages[diseaseId] : null
+    
+    if (diseaseImage && diseaseImage.width > 0) {
+      // 使用疾病图片，限制在圆圈内
+      const imgSize = iconSize * 1.5  // 图片稍大一点点
+      ctx.drawImage(diseaseImage, 
+        modalX + modalWidth / 2 - imgSize / 2, 
+        iconY - imgSize / 2, 
+        imgSize, 
+        imgSize
+      )
+    } else {
+      // 回退到emoji
+      ctx.fillStyle = '#333'
+      ctx.font = '24px "PingFang SC", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(patient.condition.icon, modalX + modalWidth / 2, iconY)
+    }
+    
+    // 病情名称（图标下方）
+    ctx.fillStyle = '#666'
     ctx.font = 'bold 11px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(patient.condition.name, modalX + modalWidth / 2, modalY + 26)
-    
-    // 3个按钮并排（横向排列）
-    const btnWidth = 40
-    const btnHeight = 20
-    const btnSpacing = 4
+    ctx.fillText(patient.condition.name, modalX + modalWidth / 2, iconY + iconSize -3)
+
+    // ===== 5. 三个立体胶囊按钮 =====
+    const btnWidth = 38
+    const btnHeight = 24
+    const btnSpacing = 8
     const totalBtnsWidth = btnWidth * 3 + btnSpacing * 2
     const btnStartX = modalX + (modalWidth - totalBtnsWidth) / 2
-    const btnY = modalY + 46
+    const btnBottomPadding = 10  // 距离底部 20px
+    const btnY = modalY + modalHeight - btnHeight - btnBottomPadding
+    
+    // 按钮配色（对应 抢救/治疗/安抚）
+    const btnColors = [
+      { normal: '#FF8A8A', shadow: '#E86B6B' },  // 淡红色-抢救
+      { normal: '#54A0FF', shadow: '#3D8AE5' },  // 蓝色-治疗
+      { normal: '#FFB8E0', shadow: '#E899C8' }   // 粉色-安抚
+    ]
     
     modal.buttons.forEach((btn, i) => {
       const btnX = btnStartX + i * (btnWidth + btnSpacing)
+      const colors = btnColors[i]
       
       // 保存按钮位置用于点击检测
       btn.renderX = btnX
@@ -1950,34 +2058,30 @@ export default class Game {
       btn.renderWidth = btnWidth
       btn.renderHeight = btnHeight
       
-      // 按钮圆角
-      const radius = 8
+      // 按钮圆角（胶囊形状）
+      const radius = btnHeight / 2
       
-      // 按钮阴影
       if (btn.enabled) {
-        ctx.shadowColor = btn.color + '60'
-        ctx.shadowBlur = 3
-        ctx.shadowOffsetX = 0
-        ctx.shadowOffsetY = 2
+        // 立体效果：先画底部阴影（厚度）
+        ctx.fillStyle = colors.shadow
+        fillRoundRect(ctx, btnX, btnY + 3, btnWidth, btnHeight, radius)
+        
+        // 再画按钮主体
+        ctx.fillStyle = colors.normal
+        fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, radius)
+      } else {
+        // 不可用状态：灰色扁平
+        ctx.fillStyle = '#D0D0D0'
+        fillRoundRect(ctx, btnX, btnY + 2, btnWidth, btnHeight, radius)
       }
-      
-      // 按钮背景
-      ctx.fillStyle = btn.enabled ? btn.color : '#CCC'
-      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, radius)
-      
-      // 重置阴影
-      ctx.shadowColor = 'transparent'
-      ctx.shadowBlur = 0
-      ctx.shadowOffsetX = 0
-      ctx.shadowOffsetY = 0
       
       // 按钮文字
       ctx.fillStyle = '#FFF'
-      ctx.font = 'bold 10px "PingFang SC", "Microsoft YaHei", sans-serif'
+      ctx.font = 'bold 11px "PingFang SC", "Microsoft YaHei", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       const labelText = btn.enabled ? btn.label : '满'
-      ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2)
+      ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2 + (btn.enabled ? 1 : 2))
     })
   }
 

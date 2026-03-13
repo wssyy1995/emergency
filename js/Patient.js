@@ -1,5 +1,5 @@
 import { drawStar, fillRoundRect, strokeRoundRect } from './utils.js'
-import { GameConfig } from './GameConfig.js'
+import { GameConfig, getDiseaseById } from './GameConfig.js'
 
 // ==================== 全局病人图片缓存 ====================
 const PatientImageCache = {
@@ -90,8 +90,18 @@ export default class Patient {
     this.rageLevel = patientDetail ? patientDetail.rageLevel : 1  // 暴怒值 1-5
     this.age = Math.floor(Math.random() * 50) + 15
     
-    // 病情配置
-    this.disease = disease || { disease_id: 1, disease_name: '发烧', patience: 10 }
+    // 病情配置：优先从 patientDetail.disease_id 获取，否则使用传入的 disease 或默认
+    if (patientDetail && patientDetail.disease_id) {
+      // 从 patientDetail 获取疾病配置
+      this.disease = getDiseaseById(patientDetail.disease_id)
+    } else if (disease) {
+      // 使用传入的疾病配置
+      this.disease = disease
+    } else {
+      // 默认疾病
+      this.disease = { disease_id: 1, disease_name: '发烧', patience: 10 }
+    }
+    
     this.condition = {
       name: this.disease.disease_name,
       icon: this.getDiseaseIcon(this.disease.disease_name),
@@ -153,8 +163,8 @@ export default class Patient {
     this.rageTimeRemaining = 0      // 暴走剩余时间（毫秒）
     this.rageStartTime = 0          // 暴走开始时间
     
-    // 病人图片编号（1-14 号按顺序循环使用）
-    this.patientType = ((id - 1) % 14) + 1
+    // 病人图片编号（使用 patientDetail.id，1-14 号循环）
+    this.patientType = patientDetail ? ((patientDetail.id - 1) % 14) + 1 : ((id - 1) % 14) + 1
     
     // 从全局缓存获取图片（避免重复加载）
     this.normalImage = PatientImageCache.getNormalImage(this.patientType)

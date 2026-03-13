@@ -32,16 +32,17 @@ export const GameConfig = {
 
   // ==================== 病情配置 ====================
   // 每种病情对应的耐心值（秒）、急救治疗时间（毫秒）、自动治疗时间（毫秒）和所需物品
+  // diseases_priority: 1=紧急, 2=普通, 3=轻微
   diseases: [
-    { disease_id: 1, disease_name: '发烧', patience: 20, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic'] },
-    { disease_id: 2, disease_name: '头痛', patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'] },
-    { disease_id: 3, disease_name: '骨折', patience: 30, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'] },
-    { disease_id: 4, disease_name: '腹痛', patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'] },
-    { disease_id: 5, disease_name: '胸闷', patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'] },
-    { disease_id: 6, disease_name: '过敏', patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['adrenaline', 'injection'] },
-    { disease_id: 7, disease_name: '扭伤', patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['tape', 'painkiller'] },
-    { disease_id: 8, disease_name: '感冒', patience: 30, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic', 'injection'] },
-    { disease_id: 9, disease_name: '中风', patience: 15, emerge_treat_time: 6000, auto_treat_time: 12000, treat_need: ['aed', 'adrenaline', 'injection'] }
+    { disease_id: 1, disease_name: '发烧', diseases_priority: 2, patience: 20, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic'] },
+    { disease_id: 2, disease_name: '外伤出血', diseases_priority: 3, patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'] },
+    { disease_id: 3, disease_name: '骨折', diseases_priority: 1, patience: 30, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'] },
+    { disease_id: 4, disease_name: '肠胃炎', diseases_priority: 2, patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'] },
+    { disease_id: 5, disease_name: '胸闷', diseases_priority: 2, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'] },
+    { disease_id: 6, disease_name: '严重过敏', diseases_priority: 1, patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['adrenaline', 'injection'] },
+    { disease_id: 7, disease_name: '扭伤', diseases_priority: 2, patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['tape', 'painkiller'] },
+    { disease_id: 8, disease_name: '感冒', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic', 'injection'] },
+    { disease_id: 9, disease_name: '中风', diseases_priority: 1, patience: 15, emerge_treat_time: 6000, auto_treat_time: 12000, treat_need: ['aed', 'adrenaline', 'injection'] }
   ],
 
   // ==================== 病人配置 ====================
@@ -81,7 +82,7 @@ export const GameConfig = {
     { id: 6, name: '6号', rageLevel: 1, disease_id: 6 },   // 过敏
     { id: 7, name: '7号', rageLevel: 1, disease_id: 7 },   // 扭伤
     { id: 8, name: '8号', rageLevel: 4, disease_id: 8 },   // 感冒
-    { id: 9, name: '9号', rageLevel: 1, disease_id: 9 },   // 中风
+    { id: 9, name: '9号', rageLevel: 1, disease_id: 3 },   // 中风
     { id: 10, name: '10号', rageLevel: 1, disease_id: 1 }, // 发烧
     { id: 11, name: '11号', rageLevel: 4, disease_id: 2 }, // 头痛
     { id: 12, name: '12号', rageLevel: 3, disease_id: 3 }, // 骨折
@@ -90,7 +91,7 @@ export const GameConfig = {
     { id: 15, name: '15号', rageLevel: 1, disease_id: 6 }, // 过敏
     { id: 16, name: '16号', rageLevel: 3, disease_id: 7 }, // 扭伤
     { id: 17, name: '17号', rageLevel: 2, disease_id: 8 }, // 感冒
-    { id: 18, name: '18号', rageLevel: 1, disease_id: 9 }  // 中风
+    { id: 18, name: '18号', rageLevel: 1, disease_id: 6 }  // 中风
   ],
 
   // ==================== 暴走配置 ====================

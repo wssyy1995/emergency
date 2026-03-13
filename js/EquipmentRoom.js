@@ -257,7 +257,7 @@ export default class EquipmentRoom {
     // 左侧药品柜 - 宽度增大，边距减小
     const cabinetWidth = this.width * 0.46
     const cabinetX = this.x + this.width * 0.03
-    const cabinetY = this.y + this.height * 0.2
+    const cabinetY = this.y + this.height * 0.16
     
     // 清空之前的抽屉区域
     this.medicineDrawers = []
@@ -309,7 +309,7 @@ export default class EquipmentRoom {
     // 右侧器械柜 - 宽度增大，边距减小
     const cabinetWidth = this.width * 0.46
     const cabinetX = this.x + this.width - cabinetWidth - this.width * 0.03
-    const cabinetY = this.y + this.height * 0.2
+    const cabinetY = this.y + this.height * 0.16
     
     // 清空之前的抽屉区域
     this.toolDrawers = []

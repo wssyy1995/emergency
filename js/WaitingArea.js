@@ -30,7 +30,7 @@ export default class WaitingArea {
     this.patients = []
     
     // 创建护士位置（相对于内层舞台）
-    this.nurse = new Nurse(this.x + this.width * 0.58, this.y + this.height * 0.22)
+    this.nurse = new Nurse(this.x + this.width * 0.55, this.y + this.height * 0.22)
     this.nurse.setScale(this.width)
     
     this.standingQueue = []
