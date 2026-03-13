@@ -3,10 +3,44 @@ import BedArea from './BedArea.js'
 import EquipmentRoom from './EquipmentRoom.js'
 import Patient from './Patient.js'
 import Doctor from './Doctor.js'
-import { fillRoundRect, strokeRoundRect } from './utils.js'
+import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
-import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease } from './GameConfig.js'
+import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById } from './GameConfig.js'
+
+// ==================== 马卡龙 UI 颜色配置（可自行调整）====================
+const UI_COLORS = {
+  // 全局背景
+  background: '#E6E6FA',      // 浅薰衣草紫
+  
+  // 顶部状态栏
+  header: '#D4BADD',          // 香芋紫色背景
+  headerBorder: '#C5B4E0',    // 顶部状态栏边框色（稍深）
+  
+  // 等候区托盘
+  waiting: {
+    outer: '#FFD1DC',         // 外层深粉色
+    inner: '#FFF0F5',         // 内层白粉色
+    badgeBg: '#FFD1DC',       // 标签背景
+    badgeBorder: '#FFD1DC'    // 标签边框
+  },
+  
+  // 治疗区托盘
+  treatment: {
+    outer: '#C5E0F2',         // 外层天蓝色
+    inner: '#F0F8FF',         // 内层爱丽丝蓝
+    badgeBg: '#C5E0F2',       // 标签背景
+    badgeBorder: '#C5E0F2'    // 标签边框
+  },
+  
+  // 器材室托盘
+  equipment: {
+    outer: '#FFF8E1',        // 外层奶黄色
+    inner: '#FFFAF0',         // 内层花白色
+    badgeBg: '#FFF8E1',       // 标签背景
+    badgeBorder: '#FFF8E1'    // 标签边框
+  }
+}
 
 export default class Game {
   constructor() {
@@ -254,11 +288,14 @@ export default class Game {
     // 顶部状态栏与三个区域之间的间距
     const topPadding = 12
     
-    // 可用区域
+    // 托盘 padding（外层边框宽度）- 增大以显示明显边框
+    const trayPadding = 14
+    
+    // 可用区域（包含托盘边框）
     const availableY = this.mapY + headerHeight + topPadding
     const availableHeight = this.mapHeight - headerHeight - bottomMargin - topPadding
     
-    // 三个区域的间距
+    // 三个区域的间距（托盘之间的间距）
     const gap = 10
     
     // 计算总可用宽度
@@ -270,17 +307,36 @@ export default class Game {
     const bedWidth = availableWidth * 0.35
     const equipmentWidth = availableWidth * 0.30
     
-    // 等候区（左侧）
-    const waitingX = this.mapX + gap
-    this.waitingArea = new WaitingArea(waitingX, availableY, waitingWidth, availableHeight)
+    // 等候区（左侧）- 传入内层舞台坐标（加上 trayPadding）
+    const waitingX = this.mapX + gap + trayPadding
+    this.waitingArea = new WaitingArea(waitingX, availableY + trayPadding, 
+                                        waitingWidth - trayPadding * 2, 
+                                        availableHeight - trayPadding * 2)
+    // 保存托盘位置用于背景绘制
+    this.waitingArea.trayX = this.mapX + gap
+    this.waitingArea.trayY = availableY
+    this.waitingArea.trayWidth = waitingWidth
+    this.waitingArea.trayHeight = availableHeight
     
-    // 治疗区（中间）- 2张病床 + 输液治疗区（4张输液椅）
-    const bedX = waitingX + waitingWidth + gap
-    this.bedArea = new BedArea(bedX, availableY, bedWidth, availableHeight, 2)
+    // 治疗区（中间）
+    const bedX = this.mapX + gap + waitingWidth + gap + trayPadding
+    this.bedArea = new BedArea(bedX, availableY + trayPadding, 
+                               bedWidth - trayPadding * 2, 
+                               availableHeight - trayPadding * 2, 2)
+    this.bedArea.trayX = this.mapX + gap + waitingWidth + gap
+    this.bedArea.trayY = availableY
+    this.bedArea.trayWidth = bedWidth
+    this.bedArea.trayHeight = availableHeight
     
-    // 器材室（右侧）- 更窄
-    const equipmentX = bedX + bedWidth + gap
-    this.equipmentRoom = new EquipmentRoom(equipmentX, availableY, equipmentWidth, availableHeight)
+    // 器材室（右侧）
+    const equipmentX = this.mapX + gap + waitingWidth + gap + bedWidth + gap + trayPadding
+    this.equipmentRoom = new EquipmentRoom(equipmentX, availableY + trayPadding, 
+                                           equipmentWidth - trayPadding * 2, 
+                                           availableHeight - trayPadding * 2)
+    this.equipmentRoom.trayX = this.mapX + gap + waitingWidth + gap + bedWidth + gap
+    this.equipmentRoom.trayY = availableY
+    this.equipmentRoom.trayWidth = equipmentWidth
+    this.equipmentRoom.trayHeight = availableHeight
   }
 
   createDoctors(count) {
@@ -782,8 +838,8 @@ export default class Game {
       return
     }
     
-    // 随机获取病情
-    const disease = getRandomDisease()
+    // 根据病人配置的 disease_id 获取固定疾病
+    const disease = getDiseaseById(patientDetail.disease_id)
     const patient = new Patient(this.patientIdCounter++, patientDetail, disease)
     
     // 初始位置在等候区左侧外面
@@ -812,14 +868,14 @@ export default class Game {
     
     this.ctx.save()
     
-    // 清空画布
-    this.ctx.fillStyle = '#FFF5F5'
+    // 清空画布 - 浅薰衣草紫背景
+    this.ctx.fillStyle = UI_COLORS.background
     this.ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
     
-    // 绘制地图背景
-    this.renderMapBackground()
+    // 绘制马卡龙风格 UI 背景
+    this.renderMacaronBackground()
     
-    // 绘制各个区域
+    // 绘制各个区域（新风格）
     this.waitingArea.render(this.ctx)
     this.bedArea.render(this.ctx)
     this.equipmentRoom.render(this.ctx)
@@ -898,19 +954,6 @@ export default class Game {
       
       ctx.fillText(displayLog, 10, y)
     }
-  }
-
-  // 在治疗区底部渲染托盘
-  renderTrayAtBedArea() {
-    const bedArea = this.bedArea
-    // 托盘位置：治疗区底部居中，宽度为治疗区的一半
-    const trayWidth = bedArea.width * 0.5
-    const trayHeight = 32
-    const trayX = bedArea.x + (bedArea.width - trayWidth) / 2 - 20  // 往左移动20像素
-    const trayY = bedArea.y + bedArea.height - trayHeight - 8
-    
-    // 调用 EquipmentRoom 的 renderTray 方法在治疗区位置渲染
-    this.equipmentRoom.renderTray(this.ctx, trayX, trayY, trayWidth, trayHeight)
   }
 
   renderFloatingTexts() {
@@ -1068,37 +1111,128 @@ export default class Game {
     ctx.restore()
   }
 
-  renderMapBackground() {
+  renderMacaronBackground() {
     const ctx = this.ctx
     
-    // 外边框
-    ctx.fillStyle = '#FFB7B2'
-    ctx.fillRect(this.mapX, this.mapY, this.mapWidth, this.mapHeight)
+    // ===== 顶部状态栏 =====
+    // 顶部状态栏背景（圆角）
+    const headerHeight = 45
+    const headerRadius = 12  // 圆角半径
     
-    // 内部地板
-    ctx.fillStyle = '#FFE4E1'
-    ctx.fillRect(this.mapX + 5, this.mapY + 5, this.mapWidth - 10, this.mapHeight - 10)
+    ctx.fillStyle = UI_COLORS.header
+    fillRoundRect(ctx, this.mapX, this.mapY, this.mapWidth, headerHeight, headerRadius)
     
-    // 等候区背景（白色，80%透明度）
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
-    fillRoundRect(ctx, this.waitingArea.x, this.waitingArea.y, this.waitingArea.width, this.waitingArea.height, 15)
-    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'
+    // 顶部状态栏边框（圆角）
+    ctx.strokeStyle = UI_COLORS.headerBorder
     ctx.lineWidth = 2
-    strokeRoundRect(ctx, this.waitingArea.x, this.waitingArea.y, this.waitingArea.width, this.waitingArea.height, 15)
+    strokeRoundRect(ctx, this.mapX, this.mapY, this.mapWidth, headerHeight, headerRadius)
     
-    // 治疗区背景（白色，50%透明度）
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
-    fillRoundRect(ctx, this.bedArea.x, this.bedArea.y, this.bedArea.width, this.bedArea.height, 15)
-    ctx.strokeStyle = 'rgba(91, 155, 213, 0.4)'
-    ctx.lineWidth = 2
-    strokeRoundRect(ctx, this.bedArea.x, this.bedArea.y, this.bedArea.width, this.bedArea.height, 15)
+    // 顶部状态栏底部阴影
+    ctx.fillStyle = 'rgba(150, 130, 190, 0.3)'
+    ctx.fillRect(this.mapX + headerRadius, this.mapY + headerHeight, this.mapWidth - headerRadius * 2, 3)
     
-    // 器材室背景
-    ctx.fillStyle = 'rgba(245, 245, 245, 0.5)'
-    fillRoundRect(ctx, this.equipmentRoom.x, this.equipmentRoom.y, this.equipmentRoom.width, this.equipmentRoom.height, 15)
-    ctx.strokeStyle = '#CCCCCC'
-    ctx.lineWidth = 2
-    strokeRoundRect(ctx, this.equipmentRoom.x, this.equipmentRoom.y, this.equipmentRoom.width, this.equipmentRoom.height, 15)
+    // ===== 等候区：双层托盘效果 =====
+    this.renderTray(ctx, 
+      this.waitingArea.trayX, this.waitingArea.trayY, 
+      this.waitingArea.trayWidth, this.waitingArea.trayHeight,
+      UI_COLORS.waiting.outer,
+      UI_COLORS.waiting.inner,
+      18,          // 圆角
+      14           // padding（内边距）
+    )
+    
+    // ===== 治疗区：双层托盘效果 =====
+    this.renderTray(ctx, 
+      this.bedArea.trayX, this.bedArea.trayY, 
+      this.bedArea.trayWidth, this.bedArea.trayHeight,
+      UI_COLORS.treatment.outer,
+      UI_COLORS.treatment.inner,
+      18,          // 圆角
+      14           // padding
+    )
+    
+    // ===== 器材室：双层托盘效果 =====
+    this.renderTray(ctx, 
+      this.equipmentRoom.trayX, this.equipmentRoom.trayY, 
+      this.equipmentRoom.trayWidth, this.equipmentRoom.trayHeight,
+      UI_COLORS.equipment.outer,
+      UI_COLORS.equipment.inner,
+      18,          // 圆角
+      14           // padding
+    )
+    
+    // ===== 悬浮标题标签（移到外层内部，避免被挤出）=====
+    this.renderFloatingBadge(ctx, this.waitingArea.trayX + this.waitingArea.trayWidth / 2, 
+                             this.waitingArea.trayY + 16, '等候区', 
+                             UI_COLORS.waiting.badgeBg, UI_COLORS.waiting.badgeBorder)
+    
+    this.renderFloatingBadge(ctx, this.bedArea.trayX + this.bedArea.trayWidth / 2, 
+                             this.bedArea.trayY + 16, '治疗区', 
+                             UI_COLORS.treatment.badgeBg, UI_COLORS.treatment.badgeBorder)
+    
+    this.renderFloatingBadge(ctx, this.equipmentRoom.trayX + this.equipmentRoom.trayWidth / 2, 
+                             this.equipmentRoom.trayY + 16, '器材室', 
+                             UI_COLORS.equipment.badgeBg, UI_COLORS.equipment.badgeBorder)
+  }
+  
+  // 绘制双层托盘（外层深色 + 内层浅色 + 内阴影）
+  renderTray(ctx, x, y, width, height, outerColor, innerColor, radius, padding) {
+    // 托盘投影阴影（在背景上）
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
+    fillRoundRect(ctx, x + 3, y + 4, width, height, radius)
+    
+    // 外层：深色托盘
+    ctx.fillStyle = outerColor
+    fillRoundRect(ctx, x, y, width, height, radius)
+    
+    // 【已移除】外层高光白边
+    
+    // 内层：浅色舞台（减去 padding，向下偏移 2px）
+    const innerX = x + padding
+    const innerY = y + padding + 2
+    const innerWidth = width - padding * 2
+    const innerHeight = height - padding * 2 
+    const innerRadius = Math.max(10, radius - padding / 2)
+    
+    // 内层底色
+    ctx.fillStyle = innerColor
+    fillRoundRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius)
+    
+    // 【已移除】内层顶部内阴影
+    
+    // 内层底部微阴影（增加厚度感）
+    const bottomGradient = ctx.createLinearGradient(innerX, innerY + innerHeight - 10, innerX, innerY + innerHeight)
+    bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)')
+    bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.04)')
+    ctx.fillStyle = bottomGradient
+    ctx.beginPath()
+    roundRect(ctx, innerX, innerY + innerHeight - 10, innerWidth, 10, innerRadius)
+    ctx.fill()
+  }
+  
+  // 渲染悬浮标题标签（双层胶囊）
+  renderFloatingBadge(ctx, centerX, y, text, bgColor, borderColor) {
+    const paddingX = 14
+    ctx.font = 'bold 14px cursive, sans-serif'
+    const textWidth = ctx.measureText(text).width
+    const badgeWidth = textWidth + paddingX * 2
+    const badgeHeight = 26
+    
+    // 下层边框（稍大的圆角矩形）
+    ctx.fillStyle = borderColor
+    fillRoundRect(ctx, centerX - badgeWidth / 2 - 2, y - badgeHeight / 2, 
+                  badgeWidth + 4, badgeHeight, 12)
+    
+    // 上层背景
+    ctx.fillStyle = bgColor
+    fillRoundRect(ctx, centerX - badgeWidth / 2, y - badgeHeight / 2 + 1, 
+                  badgeWidth, badgeHeight - 2, 10)
+    
+    // 文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, centerX, y + 1)
   }
 
   renderPatients() {
@@ -1115,74 +1249,87 @@ export default class Game {
   renderUI() {
     const ctx = this.ctx
     
-    // 顶部状态栏高度（与 initAreas 中的 headerHeight 一致）
+    // 顶部状态栏高度
     const headerHeight = 45
-    
-    // 顶部状态栏
-    const gradient = ctx.createLinearGradient(this.mapX, 0, this.mapX + this.mapWidth, 0)
-    gradient.addColorStop(0, '#FFB7B2')
-    gradient.addColorStop(1, '#FF9AA2')
-    ctx.fillStyle = gradient
-    ctx.fillRect(this.mapX, this.mapY, this.mapWidth, headerHeight)
-    
-    // 标题（垂直居中）
     const titleY = this.mapY + headerHeight / 2
+    
+    // 标题
     ctx.fillStyle = '#FFF'
     ctx.font = `${Math.max(16, this.screenWidth * 0.025)}px cursive, sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     ctx.fillText('🏥 急诊室模拟器', this.mapX + 15, titleY)
     
-    // 关卡数显示
-    ctx.fillStyle = '#FFF'
+    // 关卡数显示 - 使用胶囊样式
+    const levelText = `第${this.currentLevel + 1}关`
     ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
-    ctx.fillText(`  第${this.currentLevel + 1}关`, this.mapX + 180, titleY)
+    const levelWidth = ctx.measureText(levelText).width + 20
     
-    // 倒计时和治愈目标显示
+    // 关卡胶囊背景
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    fillRoundRect(ctx, this.mapX + 160, titleY - 14, levelWidth, 28, 14)
+    ctx.fillStyle = '#FFF'
+    ctx.fillText(levelText, this.mapX + 160 + levelWidth / 2, titleY)
+    
+    // 倒计时和治愈目标显示 - 使用胶囊样式
     const levelConfig = getLevelConfig(this.currentLevel)
+    
+    // 倒计时胶囊
     const countdownText = `⏱️ ${this.timeRemaining}s`
-    const cureText = `🏥 ${this.curedCount}/${levelConfig.cureTarget}`
-    
     ctx.font = `bold ${Math.max(13, this.screenWidth * 0.019)}px cursive, sans-serif`
+    const countdownWidth = ctx.measureText(countdownText).width + 20
+    ctx.fillStyle = this.timeRemaining <= 10 ? 'rgba(231,76,60,0.4)' : 'rgba(255,255,255,0.25)'
+    fillRoundRect(ctx, this.mapX + 240, titleY - 12, countdownWidth, 24, 12)
+    ctx.fillStyle = this.timeRemaining <= 10 ? '#FFE66D' : '#FFF'
+    ctx.fillText(countdownText, this.mapX + 240 + countdownWidth / 2, titleY)
     
-    // 倒计时（如果时间少于10秒变红色）
-    if (this.timeRemaining <= 10) {
-      ctx.fillStyle = '#FFE66D'  // 黄色警告
-    } else {
-      ctx.fillStyle = '#FFF'
-    }
-    ctx.fillText(countdownText, this.mapX + 260, titleY)
-    
-    // 治愈人数
+    // 治愈人数胶囊
+    const cureText = `🏥 ${this.curedCount}/${levelConfig.cureTarget}`
+    const cureWidth = ctx.measureText(cureText).width + 20
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    fillRoundRect(ctx, this.mapX + 320, titleY - 12, cureWidth, 24, 12)
     ctx.fillStyle = '#FFF'
-    ctx.fillText(cureText, this.mapX + 340, titleY)
+    ctx.fillText(cureText, this.mapX + 320 + cureWidth / 2, titleY)
     
-    // 统计
-    const fontSize = Math.max(12, this.screenWidth * 0.018)
-    ctx.font = `${fontSize}px cursive, sans-serif`
-    
-    // 荣誉点图标 + 数值（右上角）
-    const honorX = this.mapX + this.mapWidth - 150
+    // 荣誉点胶囊
+    const honorX = this.mapX + this.mapWidth - 140
+    const honorText = `${this.score}`
+    ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
+    const honorWidth = ctx.measureText(honorText).width + 35
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    fillRoundRect(ctx, honorX - 10, titleY - 13, honorWidth, 26, 13)
     if (this.honorImage) {
-      ctx.drawImage(this.honorImage, honorX, this.mapY + (headerHeight - 20) / 2, 20, 20)
+      ctx.drawImage(this.honorImage, honorX, titleY - 10, 20, 20)
     }
     ctx.fillStyle = '#FFF'
-    ctx.fillText(`${this.score}`, honorX + 28, titleY)
+    ctx.fillText(honorText, honorX + 35, titleY)
     
-    // 音量开关按钮（最右侧）
-    const volumeX = this.mapX + this.mapWidth - 50
-    const volumeY = this.mapY + (headerHeight - 24) / 2
+    // 音量开关按钮（圆形果冻风格）
+    const volumeX = this.mapX + this.mapWidth - 45
+    const volumeY = titleY - 12
     const volumeSize = 24
     
-    // 绘制音量图标背景（圆形）
+    // 按钮阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'
+    ctx.beginPath()
+    ctx.arc(volumeX + volumeSize / 2 + 1, volumeY + volumeSize / 2 + 2, volumeSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 按钮本体
     ctx.fillStyle = this.isMuted ? '#E74C3C' : '#27AE60'
     ctx.beginPath()
     ctx.arc(volumeX + volumeSize / 2, volumeY + volumeSize / 2, volumeSize / 2, 0, Math.PI * 2)
     ctx.fill()
     
-    // 绘制音量图标
+    // 按钮高光
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'
+    ctx.beginPath()
+    ctx.arc(volumeX + volumeSize / 2 - 3, volumeY + volumeSize / 2 - 3, volumeSize / 4, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 音量图标
     ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 14px sans-serif'
+    ctx.font = 'bold 12px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.isMuted ? '🔇' : '🔊', volumeX + volumeSize / 2, volumeY + volumeSize / 2 + 1)
@@ -1195,36 +1342,7 @@ export default class Game {
       height: volumeSize
     }
     
-    // 区域标题
-    const areaTitleY = this.mapY + headerHeight + 32
-    const titleFontSize = Math.max(12, this.screenWidth * 0.018)
-    ctx.font = `${titleFontSize}px cursive, sans-serif`
-    ctx.textBaseline = 'middle'
-    
-    // 等候区标题 - 显示已出现病人数/本关卡总病人数
-    const levelMax = getLevelConfig(this.currentLevel).maxPatients
-    const waitingText = `等候区 (${this.spawnedPatientsCount}/${levelMax})`
-    const waitingX = this.waitingArea.x + this.waitingArea.width / 2
-    ctx.textAlign = 'center'
-    ctx.fillStyle = '#3498DB'
-    ctx.fillText(waitingText, waitingX + 6, areaTitleY)
-    this.renderAreaIcon(ctx, 'waiting', waitingX - ctx.measureText(waitingText).width / 2 - 4, areaTitleY, 18)
-    
-    // 治疗区标题
-    const treatmentX = this.bedArea.x + this.bedArea.width / 2
-    const treatmentText = '治疗区'
-    ctx.fillStyle = '#27AE60'
-    ctx.fillText(treatmentText, treatmentX + 6, areaTitleY)
-    this.renderAreaIcon(ctx, 'treatment', treatmentX - ctx.measureText(treatmentText).width / 2 - 4, areaTitleY, 18)
-    
-    // 器材室标题
-    const equipmentText = '器材室'
-    const equipmentX = this.equipmentRoom.x + this.equipmentRoom.width / 2
-    ctx.fillStyle = '#333333'
-    ctx.fillText(equipmentText, equipmentX + 6, areaTitleY)
-    this.renderAreaIcon(ctx, 'equipment', equipmentX - ctx.measureText(equipmentText).width / 2 - 4, areaTitleY, 18)
-    
-
+    // 【已移除】区域标题现在显示在 renderMacaronBackground 的悬浮标签中
   }
 
   // 渲染区域图标
@@ -1328,6 +1446,21 @@ export default class Game {
           this.equipmentRoom.equipmentSendBtnPressed = false
         }, 150)
         this.handleSendButtonClick()
+        return
+      }
+      
+      // 检查是否点击器材区的清空按钮
+      if (this.equipmentRoom.isClickOnEquipmentClearButton(x, y)) {
+        // 设置按下状态并显示动效
+        this.equipmentRoom.equipmentClearBtnPressed = true
+        setTimeout(() => {
+          this.equipmentRoom.equipmentClearBtnPressed = false
+        }, 150)
+        // 清空选中的器材
+        if (this.equipmentRoom.selectedItems.size > 0) {
+          this.equipmentRoom.clearSelection()
+          console.log('已清空选中的器材')
+        }
         return
       }
       

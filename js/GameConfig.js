@@ -71,26 +71,26 @@ export const GameConfig = {
   },
 
   // ==================== 病人详细配置 ====================
-  // 每个病人的独立配置，用于外观和身份
+  // 每个病人的独立配置，用于外观、身份和固定疾病
   patientDetails: [
-    { id: 1, name: '1号', rageLevel: 1 },
-    { id: 2, name: '2号', rageLevel: 1 },
-    { id: 3, name: '3号', rageLevel: 1 },
-    { id: 4, name: '4号', rageLevel: 1 },
-    { id: 5, name: '5号', rageLevel: 1 },
-    { id: 6, name: '6号', rageLevel: 1 },
-    { id: 7, name: '7号', rageLevel: 1 },
-    { id: 8, name: '8号', rageLevel: 4 },
-    { id: 9, name: '9号', rageLevel: 1 },
-    { id: 10, name: '10号', rageLevel: 1 },
-    { id: 11, name: '11号', rageLevel: 4 },
-    { id: 12, name: '12号', rageLevel: 3 },
-    { id: 13, name: '13号', rageLevel: 2 },
-    { id: 14, name: '14号', rageLevel: 4 },
-    { id: 15, name: '15号', rageLevel: 1 },
-    { id: 16, name: '16号', rageLevel: 3 },
-    { id: 17, name: '17号', rageLevel: 2 },
-    { id: 18, name: '18号', rageLevel: 1 }
+    { id: 1, name: '1号', rageLevel: 1, disease_id: 1 },   // 发烧
+    { id: 2, name: '2号', rageLevel: 1, disease_id: 2 },   // 头痛
+    { id: 3, name: '3号', rageLevel: 1, disease_id: 3 },   // 骨折
+    { id: 4, name: '4号', rageLevel: 1, disease_id: 4 },   // 腹痛
+    { id: 5, name: '5号', rageLevel: 1, disease_id: 5 },   // 胸闷
+    { id: 6, name: '6号', rageLevel: 1, disease_id: 6 },   // 过敏
+    { id: 7, name: '7号', rageLevel: 1, disease_id: 7 },   // 扭伤
+    { id: 8, name: '8号', rageLevel: 4, disease_id: 8 },   // 感冒
+    { id: 9, name: '9号', rageLevel: 1, disease_id: 9 },   // 中风
+    { id: 10, name: '10号', rageLevel: 1, disease_id: 1 }, // 发烧
+    { id: 11, name: '11号', rageLevel: 4, disease_id: 2 }, // 头痛
+    { id: 12, name: '12号', rageLevel: 3, disease_id: 3 }, // 骨折
+    { id: 13, name: '13号', rageLevel: 2, disease_id: 4 }, // 腹痛
+    { id: 14, name: '14号', rageLevel: 4, disease_id: 5 }, // 胸闷
+    { id: 15, name: '15号', rageLevel: 1, disease_id: 6 }, // 过敏
+    { id: 16, name: '16号', rageLevel: 3, disease_id: 7 }, // 扭伤
+    { id: 17, name: '17号', rageLevel: 2, disease_id: 8 }, // 感冒
+    { id: 18, name: '18号', rageLevel: 1, disease_id: 9 }  // 中风
   ],
 
   // ==================== 暴走配置 ====================
@@ -274,6 +274,11 @@ export function getAutoTreatTimeByDisease(diseaseName) {
 export function getTreatNeedByDisease(diseaseName) {
   const disease = GameConfig.diseases.find(d => d.disease_name === diseaseName)
   return disease ? disease.treat_need : [] // 默认空数组
+}
+
+// 根据疾病ID获取疾病配置
+export function getDiseaseById(diseaseId) {
+  return GameConfig.diseases.find(d => d.disease_id === diseaseId) || GameConfig.diseases[0]
 }
 
 // ==================== 药品/器械配置获取函数 ====================

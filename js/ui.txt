@@ -1,0 +1,256 @@
+
+# 马卡龙卡通游戏 UI (双层嵌套果冻版) 开发文档
+
+## 1. WXML (页面结构)
+关键点：在原来的 `.panel` 里面，我们增加了一层 `.inner-card` 作为真正的“内容盛放区”。
+
+```xml
+<!-- 整个游戏的浅紫色大背景 -->
+<view class="game-container">
+
+  <!-- ================= 顶部状态栏 (香芋紫) ================= -->
+  <view class="top-bar">
+    <view class="title-text">急诊室模拟器 第1关</view>
+    
+    <!-- 右侧状态区 (金币、时间等小胶囊) -->
+    <view class="status-group">
+      <view class="status-capsule capsule-yellow">💰 0/5</view>
+      <view class="status-capsule capsule-blue">⏱ 389s</view>
+    </view>
+  </view>
+
+  <!-- ================= 主体内容区：三大板块 ================= -->
+  <view class="main-content">
+    
+    <!-- 1. 左侧：等候区 (粉色双层卡片) -->
+    <view class="panel panel-pink">
+      <!-- 悬浮在卡片顶部的标题 (像一个小标签) -->
+      <view class="panel-badge badge-pink">🎀 等候区</view>
+      
+      <!-- 【核心新增】内层浅色果冻卡片 (用来装人) -->
+      <view class="inner-card inner-pink">
+         <view class="queue-count">(6/10)</view>
+         <!-- 这里渲染排队的小人模型 -->
+      </view>
+    </view>
+
+    <!-- 2. 中间：治疗区 (蓝色双层卡片) -->
+    <view class="panel panel-blue">
+      <view class="panel-badge badge-blue">✚ 治疗区</view>
+      
+      <!-- 【核心新增】内层浅色果冻卡片 (用来装病床) -->
+      <view class="inner-card inner-blue">
+         <!-- 这里渲染病床和医生模型 -->
+      </view>
+    </view>
+
+    <!-- 3. 右侧：器材室 (黄色双层卡片) -->
+    <view class="panel panel-yellow">
+      <view class="panel-badge badge-yellow">📦 器材室</view>
+      
+      <!-- 【核心新增】内层浅色果冻卡片 (用来装格子) -->
+      <view class="inner-card inner-yellow">
+          <!-- 这里使用网格布局排列物品按钮 -->
+          <view class="item-grid">
+            <view class="item-btn"><text>💊</text>抗生素</view>
+            <view class="item-btn"><text>🩹</text>止痛药</view>
+            <view class="item-btn"><text>💉</text>肾上腺</view>
+            <view class="item-btn"><text>🌡</text>体温计</view>
+          </view>
+      </view>
+      
+      <!-- 底部操作按钮 -->
+      <view class="action-group">
+        <view class="btn-clear">清空</view>
+        <view class="btn-send">发送</view>
+      </view>
+    </view>
+
+  </view>
+</view>
+```
+
+## 2. WXSS (样式表)
+加入了“双层卡片”的 CSS 魔法，并强化了 Q 弹的边框投影质感。
+
+```css
+/* ================= 1. 全局配置 ================= */
+.game-container {
+  width: 100vw;
+  height: 100vh;
+  background-color: #E6E6FA; /* 极淡的薰衣草紫底色 */
+  padding: 20rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx; /* 顶部和下面内容的间距 */
+}
+
+/* ================= 2. 顶部状态栏 ================= */
+.top-bar {
+  width: 100%;
+  height: 110rpx;
+  background-color: #C1B3E2; /* 香芋紫 */
+  border: 8rpx solid #A493D1; 
+  border-radius: 50rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40rpx;
+  box-sizing: border-box;
+  box-shadow: 0 10rpx 0 rgba(164, 147, 209, 0.4); /* 底部厚度投影 */
+}
+
+/* 顶部文字游戏字体描边特效 */
+.title-text {
+  color: #FFFFFF;
+  font-size: 40rpx;
+  font-weight: 900;
+  letter-spacing: 2rpx;
+  text-shadow: 
+    -3rpx -3rpx 0 #9581C6,  
+    3rpx -3rpx 0 #9581C6,
+    -3rpx 3rpx 0 #9581C6,
+    3rpx 3rpx 0 #9581C6;
+}
+
+/* 顶部右侧小胶囊 */
+.status-group { display: flex; gap: 20rpx; }
+.status-capsule {
+  padding: 8rpx 24rpx;
+  border-radius: 30rpx;
+  font-size: 26rpx;
+  font-weight: bold;
+  border: 4rpx solid rgba(0,0,0,0.1);
+}
+.capsule-yellow { background: #FFF8D6; color: #D4A32A; }
+.capsule-blue { background: #E3F4FC; color: #4A90E2; }
+
+
+/* ================= 3. 主体内容区 & 外层大卡片 ================= */
+.main-content {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 20rpx; /* 三个大面板间距 */
+  flex: 1; 
+  padding-bottom: 20rpx;
+}
+
+/* 面板通用基础样式 (外层) */
+.panel {
+  flex: 1; 
+  border-radius: 40rpx;
+  padding: 70rpx 24rpx 24rpx 24rpx; /* 顶部留出空间放标题标签 */
+  position: relative; /* 为了定位标题标签 */
+  display: flex;
+  flex-direction: column;
+}
+
+/* 悬浮在卡片顶部的标题标签 (Badge) */
+.panel-badge {
+  position: absolute;
+  top: -24rpx; /* 向上突出一半，增加立体感 */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10rpx 40rpx;
+  border-radius: 30rpx;
+  font-size: 32rpx;
+  font-weight: 900;
+  color: white;
+  z-index: 10;
+}
+
+/* 各自的外层配色 (底色 + 粗边框 + 底部厚度投影) */
+.panel-pink { background-color: #FFEAF0; border: 8rpx solid #FFB6C1; box-shadow: 0 12rpx 0 rgba(255,182,193,0.3); }
+.badge-pink { background-color: #FF8DA1; border: 4rpx solid #FF6B8B; }
+
+.panel-blue { background-color: #E3F4FC; border: 8rpx solid #85CFFF; box-shadow: 0 12rpx 0 rgba(133,207,255,0.3); }
+.badge-blue { background-color: #60B6F4; border: 4rpx solid #48A1E6; }
+
+.panel-yellow { background-color: #FFF8D6; border: 8rpx solid #FDE37B; box-shadow: 0 12rpx 0 rgba(253,227,123,0.3); }
+.badge-yellow { background-color: #F4C430; border: 4rpx solid #E3B022; }
+
+
+/* ================= 4. 【核心魔法】内层果冻卡片 (双层嵌套) ================= */
+/* 
+ * 秘诀：内层卡片使用更浅的颜色(接近纯白)，
+ * 并使用带透明度的边框(rgba)，制造出“果冻包裹”的视觉差。
+ */
+.inner-card {
+  flex: 1; /* 撑满外层卡片剩余空间 */
+  border-radius: 24rpx;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 20rpx;
+  /* 微微的内阴影，增加凹陷/包裹感 */
+  box-shadow: inset 0 6rpx 10rpx rgba(255, 255, 255, 0.8); 
+}
+
+.inner-pink { background-color: rgba(255, 255, 255, 0.7); border: 4rpx solid rgba(255, 182, 193, 0.5); }
+.inner-blue { background-color: rgba(255, 255, 255, 0.7); border: 4rpx solid rgba(133, 207, 255, 0.5); }
+.inner-yellow { background-color: rgba(255, 255, 255, 0.7); border: 4rpx solid rgba(253, 227, 123, 0.5); display: flex; flex-direction: column; }
+
+
+/* ================= 5. 右侧器材室：网格按钮与底部操作区 ================= */
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2列排布 */
+  gap: 16rpx;
+  flex: 1;
+}
+
+.item-btn {
+  background-color: #FFFFFF;
+  border: 4rpx solid #FDE37B;
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-size: 26rpx;
+  color: #A08C5B;
+  font-weight: bold;
+  box-shadow: 0 6rpx 0 #FDE37B; /* 按钮按键厚度 */
+  transition: all 0.1s; /* 点击动画过渡 */
+}
+/* 模拟按钮按下的 Q 弹反馈 */
+.item-btn:active {
+  transform: translateY(6rpx);
+  box-shadow: 0 0rpx 0 #FDE37B;
+}
+
+/* 底部清空与发送按钮组合 */
+.action-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+/* 清空 (幽灵按钮风格) */
+.btn-clear {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  border-radius: 40rpx;
+  background: rgba(255,255,255,0.6);
+  border: 4rpx solid #E3B022;
+  color: #D4A32A;
+  font-weight: bold;
+}
+
+/* 发送 (高亮主操作) */
+.btn-send {
+  flex: 1.5; /* 发送按钮更宽，突出主次 */
+  text-align: center;
+  padding: 16rpx 0;
+  border-radius: 40rpx;
+  background: #60B6F4; /* 使用之前提议的蓝绿色/天蓝色，在黄底上很跳跃 */
+  border: 4rpx solid #48A1E6;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 8rpx 0 #48A1E6;
+}
+.btn-send:active { transform: translateY(6rpx); box-shadow: 0 0 0 #48A1E6; }
+```

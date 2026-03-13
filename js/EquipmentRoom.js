@@ -1,4 +1,4 @@
-import { fillRoundRect, strokeRoundRect } from './utils.js'
+import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
 import { MEDICINES, TOOLS, getItemById, getItemImage } from './Items.js'
 
 export default class EquipmentRoom {
@@ -16,16 +16,16 @@ export default class EquipmentRoom {
     this.medicineDrawers = [] // 药品柜抽屉数组
     this.toolDrawers = [] // 器械柜抽屉数组
     
-    // 托盘状态
-    this.trayItems = [] // 当前托盘中的物品数组（最多4个）
-    this.trayBounds = null // 托盘点击区域
-    
     // 选中的物品（新的选择模式）
     this.selectedItems = new Set() // 存储选中的 itemId
     
     // 器材区发送按钮
     this.equipmentSendBtnBounds = null // 发送按钮点击区域
     this.equipmentSendBtnPressed = false // 发送按钮按下状态
+    
+    // 器材区清空按钮
+    this.equipmentClearBtnBounds = null // 清空按钮点击区域
+    this.equipmentClearBtnPressed = false // 清空按钮按下状态
   }
   
   // 触发震动（仅在真机上生效，开发者工具中不震动）
@@ -64,53 +64,188 @@ export default class EquipmentRoom {
     // 绘制两个柜子：药品柜和器械柜
     this.renderMedicineCabinet(ctx)
     this.renderEquipmentCabinet(ctx)
-    // 绘制器材区底部的发送按钮
+    // 绘制器材区底部的按钮（发送 + 清空）
     this.renderSendButton(ctx)
+    this.renderClearButton(ctx)
   }
   
-  // 绘制器材区发送按钮
+  // 绘制器材区发送按钮（深蓝果冻发光风格）
   renderSendButton(ctx) {
-    // 按钮位置：器材室底部居中
-    const btnWidth = this.width * 0.4
-    const btnHeight = 25
-    const btnX = this.x + (this.width - btnWidth) / 2
-    const btnY = this.y + this.height - btnHeight -1
+    // 按钮位置：器材室底部偏左
+    const btnWidth = this.width * 0.28
+    const btnHeight = 28
+    const gap = 20  // 按钮间距
+    const btnX = this.x + (this.width - btnWidth * 2 - gap) / 2
+    const btnY = this.y + this.height - btnHeight - 4
     
     // 是否有选中的物品
     const hasSelected = this.selectedItems.size > 0
     
-    // 按钮按下动效
-    const btnScale = this.equipmentSendBtnPressed ? 0.95 : 1
+    // 按钮按下动效 - Q弹回弹效果
+    const btnScale = this.equipmentSendBtnPressed ? 0.92 : 1
+    const btnOffsetY = this.equipmentSendBtnPressed ? 2 : 0
     const scaleOffsetX = (btnWidth * (1 - btnScale)) / 2
     const scaleOffsetY = (btnHeight * (1 - btnScale)) / 2
     const drawX = btnX + scaleOffsetX
-    const drawY = btnY + scaleOffsetY
+    const drawY = btnY + scaleOffsetY + btnOffsetY
     const drawW = btnWidth * btnScale
     const drawH = btnHeight * btnScale
+    const radius = drawH / 2  // 大圆角，Q版精髓
     
-    // 按钮背景（圆角）
-    if (this.equipmentSendBtnPressed) {
-      ctx.fillStyle = hasSelected ? '#1E8449' : '#888888'  // 按下时颜色变深
-    } else {
-      ctx.fillStyle = hasSelected ? '#27AE60' : '#CCCCCC'  // 正常状态
+    // 绘制底盘发光弥散阴影
+    if (hasSelected && !this.equipmentSendBtnPressed) {
+      ctx.save()
+      ctx.shadowColor = 'rgba(56, 189, 248, 0.4)'
+      ctx.shadowBlur = 12
+      ctx.shadowOffsetY = 6
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.2)'
+      fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+      ctx.restore()
     }
-    fillRoundRect(ctx, drawX, drawY, drawW, drawH, 8)
     
-    // 按钮边框
-    ctx.strokeStyle = hasSelected ? '#1E8449' : '#AAAAAA'
+    // 绘制渐变背景（天蓝色果冻）
+    const gradient = ctx.createLinearGradient(drawX, drawY, drawX, drawY + drawH)
+    if (hasSelected) {
+      if (this.equipmentSendBtnPressed) {
+        // 按下时颜色变深
+        gradient.addColorStop(0, '#38BDF8')
+        gradient.addColorStop(1, '#0EA5E9')
+      } else {
+        // 正常状态：天蓝色渐变
+        gradient.addColorStop(0, '#7DD3FC')
+        gradient.addColorStop(1, '#38BDF8')
+      }
+    } else {
+      // 未选中状态：浅灰色
+      gradient.addColorStop(0, '#E5E7EB')
+      gradient.addColorStop(1, '#D1D5DB')
+    }
+    ctx.fillStyle = gradient
+    fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+    
+    // 绘制顶部高光（内发光效果）- 使用fillRoundRect裁剪
+    ctx.save()
+    ctx.beginPath()
+    roundRect(ctx, drawX + 2, drawY + 2, drawW - 4, drawH / 2 - 2, radius - 2)
+    ctx.clip()
+    const highlightGradient = ctx.createLinearGradient(drawX, drawY, drawX, drawY + drawH / 2)
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)')
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    ctx.fillStyle = highlightGradient
+    ctx.fillRect(drawX, drawY, drawW, drawH / 2)
+    ctx.restore()
+    
+    // 绘制底部暗角厚度
+    ctx.save()
+    ctx.beginPath()
+    roundRect(ctx, drawX + 2, drawY + drawH / 2, drawW - 4, drawH / 2 - 2, radius - 2)
+    ctx.clip()
+    const shadowGradient = ctx.createLinearGradient(drawX, drawY + drawH / 2, drawX, drawY + drawH)
+    shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0)')
+    shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)')
+    ctx.fillStyle = shadowGradient
+    ctx.fillRect(drawX, drawY + drawH / 2, drawW, drawH / 2)
+    ctx.restore()
+    
+    // 绘制粗白边框（果冻表皮反光）
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
     ctx.lineWidth = 2
-    strokeRoundRect(ctx, drawX, drawY, drawW, drawH, 8)
+    strokeRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
     
     // 按钮文字
-    ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 16px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     const btnText = hasSelected ? `发送 (${this.selectedItems.size})` : '发送'
-    ctx.fillText(btnText, drawX + drawW / 2, drawY + drawH / 2)
+    ctx.fillText(btnText, drawX + drawW / 2, drawY + drawH / 2 + 1)
     
     // 记录按钮点击区域（使用原始大小，不受按下动效影响）
     this.equipmentSendBtnBounds = {
+      x: btnX,
+      y: btnY,
+      width: btnWidth,
+      height: btnHeight
+    }
+  }
+  
+  // 绘制器材区清空按钮（深海幽暗通透风格）
+  renderClearButton(ctx) {
+    // 按钮位置：器材室底部偏右（发送按钮右侧）
+    const btnWidth = this.width * 0.28
+    const btnHeight = 28
+    const gap = 20  // 按钮间距
+    const sendBtnX = this.x + (this.width - btnWidth * 2 - gap) / 2
+    const btnX = sendBtnX + btnWidth + gap
+    const btnY = this.y + this.height - btnHeight - 4
+    
+    // 是否有选中的物品
+    const hasSelected = this.selectedItems.size > 0
+    
+    // 按钮按下动效 - Q弹回弹效果
+    const btnScale = this.equipmentClearBtnPressed ? 0.92 : 1
+    const btnOffsetY = this.equipmentClearBtnPressed ? 2 : 0
+    const scaleOffsetX = (btnWidth * (1 - btnScale)) / 2
+    const scaleOffsetY = (btnHeight * (1 - btnScale)) / 2
+    const drawX = btnX + scaleOffsetX
+    const drawY = btnY + scaleOffsetY + btnOffsetY
+    const drawW = btnWidth * btnScale
+    const drawH = btnHeight * btnScale
+    const radius = drawH / 2  // 大圆角，Q版精髓
+    
+    // 绘制底盘弥散阴影
+    if (hasSelected && !this.equipmentClearBtnPressed) {
+      ctx.save()
+      ctx.shadowColor = 'rgba(56, 189, 248, 0.25)'
+      ctx.shadowBlur = 10
+      ctx.shadowOffsetY = 4
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.15)'
+      fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+      ctx.restore()
+    }
+    
+    // 绘制背景（天蓝色透明）
+    if (hasSelected) {
+      if (this.equipmentClearBtnPressed) {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.35)'
+      } else {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.25)'
+      }
+    } else {
+      ctx.fillStyle = 'rgba(209, 213, 219, 0.4)'
+    }
+    fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+    
+    // 绘制内部高光
+    ctx.save()
+    ctx.beginPath()
+    roundRect(ctx, drawX + 2, drawY + 2, drawW - 4, drawH / 2 - 2, radius - 2)
+    ctx.clip()
+    const highlightGradient = ctx.createLinearGradient(drawX, drawY, drawX, drawY + drawH / 2)
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)')
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    ctx.fillStyle = highlightGradient
+    ctx.fillRect(drawX, drawY, drawW, drawH / 2)
+    ctx.restore()
+    
+    // 绘制粗白边框（果冻表皮反光）
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
+    ctx.lineWidth = 2
+    strokeRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+    
+    // 按钮文字（天蓝色）
+    if (hasSelected) {
+      ctx.fillStyle = '#0284C7'
+    } else {
+      ctx.fillStyle = '#9CA3AF'
+    }
+    ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('清空', drawX + drawW / 2, drawY + drawH / 2 + 1)
+    
+    // 记录按钮点击区域（使用原始大小，不受按下动效影响）
+    this.equipmentClearBtnBounds = {
       x: btnX,
       y: btnY,
       width: btnWidth,
@@ -137,12 +272,9 @@ export default class EquipmentRoom {
     // 根据实际抽屉高度计算柜体高度
     const cabinetHeight = drawerMargin + drawerCount * (drawerHeight + drawerMargin)
     
-    // 柜体外框（在计算完高度后绘制）
+    // 柜体背景（无边框）
     ctx.fillStyle = '#FFF8DC'
     ctx.fillRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
-    ctx.strokeStyle = '#CCCCCC'
-    ctx.lineWidth = 3
-    ctx.strokeRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
     
     for (let i = 0; i < drawerCount; i++) {
       const drawerY = cabinetY + drawerMargin + i * (drawerHeight + drawerMargin)
@@ -165,15 +297,11 @@ export default class EquipmentRoom {
       })
     }
     
-    // 顶部标识
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(cabinetX, cabinetY - this.height * 0.07, cabinetWidth, this.height * 0.07)
-    ctx.strokeStyle = '#CCCCCC'
-    ctx.lineWidth = 2
-    ctx.strokeRect(cabinetX, cabinetY - this.height * 0.07, cabinetWidth, this.height * 0.07)
-    ctx.fillStyle = '#555555'
-    ctx.font = `bold ${Math.max(14, this.width * 0.05)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    // 顶部标识（居中文字）
+    ctx.fillStyle = '#8B7355'
+    ctx.font = `bold ${Math.max(12, this.width * 0.05)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
     ctx.fillText('药品柜', cabinetX + cabinetWidth / 2, cabinetY - this.height * 0.035)
   }
 
@@ -196,12 +324,9 @@ export default class EquipmentRoom {
     // 根据实际抽屉高度计算柜体高度
     const cabinetHeight = drawerMargin + drawerCount * (drawerHeight + drawerMargin)
     
-    // 柜体外框（在计算完高度后绘制）
+    // 柜体背景（无边框）
     ctx.fillStyle = '#E8F8F5'
     ctx.fillRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
-    ctx.strokeStyle = '#CCCCCC'
-    ctx.lineWidth = 3
-    ctx.strokeRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
     
     for (let i = 0; i < drawerCount; i++) {
       const drawerY = cabinetY + drawerMargin + i * (drawerHeight + drawerMargin)
@@ -225,43 +350,43 @@ export default class EquipmentRoom {
     }
     
     // 顶部标识
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(cabinetX, cabinetY - this.height * 0.07, cabinetWidth, this.height * 0.07)
-    ctx.strokeStyle = '#CCCCCC'
-    ctx.lineWidth = 2
-    ctx.strokeRect(cabinetX, cabinetY - this.height * 0.07, cabinetWidth, this.height * 0.07)
-    ctx.fillStyle = '#555555'
-    ctx.font = `bold ${Math.max(14, this.width * 0.05)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    // 顶部标识（居中文字）
+    ctx.fillStyle = '#8B7355'
+    ctx.font = `bold ${Math.max(12, this.width * 0.05)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
     ctx.fillText('器械柜', cabinetX + cabinetWidth / 2, cabinetY - this.height * 0.035)
   }
 
   // 绘制单个抽屉
   renderDrawer(ctx, x, y, width, height, item, index, isSelected = false) {
-    // 抽屉背景（选中时高亮）
+    // 马卡龙黄色卡片风格
     if (isSelected) {
-      ctx.fillStyle = '#E3F2FD' // 浅蓝色高亮背景
-      fillRoundRect(ctx, x, y, width, height, 6)
+      // 选中状态：浅黄色背景 + 橙色边框
+      ctx.fillStyle = '#FFF8E7'
+      fillRoundRect(ctx, x, y, width, height, 8)
+      
       // 高亮边框
-      ctx.strokeStyle = '#3498DB'
-      ctx.lineWidth = 3
-      strokeRoundRect(ctx, x, y, width, height, 6)
+      ctx.strokeStyle = '#F0C050'
+      ctx.lineWidth = 2.5
+      strokeRoundRect(ctx, x, y, width, height, 8)
     } else {
-      ctx.fillStyle = '#F5F5F5'
-      fillRoundRect(ctx, x, y, width, height, 6)
-      // 普通边框
-      ctx.strokeStyle = '#CCCCCC'
-      ctx.lineWidth = 2
-      strokeRoundRect(ctx, x, y, width, height, 6)
+      // 默认状态：白色卡片 + 淡黄色边框
+      ctx.fillStyle = '#FFFFFF'
+      fillRoundRect(ctx, x, y, width, height, 8)
+      // 柔和边框
+      ctx.strokeStyle = '#FFE4C4'
+      ctx.lineWidth = 1.5
+      strokeRoundRect(ctx, x, y, width, height, 8)
     }
     
-    // 图标区域（左侧）- 变大
+    // 图标区域（左侧）
     const iconSize = Math.min(height * 0.6, width * 0.3)
     const iconX = x + width * 0.15
     const iconY = y + height / 2
     
-    // 图标背景圆圈 - 变大
-    ctx.fillStyle = '#E8E8E8'
+    // 图标背景圆圈 - 马卡龙淡黄色
+    ctx.fillStyle = '#FFF5E6'
     ctx.beginPath()
     ctx.arc(iconX + iconSize/2, iconY, iconSize * 0.75, 0, Math.PI * 2)
     ctx.fill()
@@ -269,30 +394,26 @@ export default class EquipmentRoom {
     // 绘制图标（优先使用图片，如果没有则使用emoji）
     const itemImage = getItemImage(item.id)
     if (itemImage) {
-      // 绘制图片 - 变大
       const imgSize = iconSize * 1.3
       ctx.drawImage(itemImage, iconX + iconSize/2 - imgSize/2, iconY - imgSize/2, imgSize, imgSize)
     } else {
-      // 使用emoji回退 - 变大
-      ctx.fillStyle = '#2C3E50'
+      ctx.fillStyle = '#5D4E37'
       ctx.font = `${iconSize * 1.2}px "PingFang SC", "Microsoft YaHei", sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(item.icon, iconX + iconSize/2, iconY)
     }
     
-    // 物品名称 - 字体变大，长名称换行显示
-    ctx.fillStyle = '#2C3E50'
+    // 物品名称
+    ctx.fillStyle = '#5D4E37'
     ctx.font = `bold ${Math.max(11, width * 0.13)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'left'
     
-    // 处理长名称换行（医用胶带、肾上腺素）
-    const maxTextWidth = width * 0.5
-    const textX = x + width * 0.55  // 增加与图标的间距
+    // 处理长名称换行
+    const textX = x + width * 0.55
     const textY = y + height / 2
     
     if (item.name.length > 3) {
-      // 长名称分两行显示
       ctx.textBaseline = 'bottom'
       ctx.fillText(item.name.substring(0, 2), textX, textY)
       ctx.textBaseline = 'top'
@@ -308,8 +429,8 @@ export default class EquipmentRoom {
       const checkX = x + checkSize * 0.5
       const checkY = y + checkSize * 0.5
       
-      // 绿色圆形背景
-      ctx.fillStyle = '#27AE60'
+      // 橙黄色圆形背景
+      ctx.fillStyle = '#F0C050'
       ctx.beginPath()
       ctx.arc(checkX, checkY, checkSize * 0.6, 0, Math.PI * 2)
       ctx.fill()
@@ -353,196 +474,6 @@ export default class EquipmentRoom {
     return null
   }
 
-  // 绘制托盘和发送按钮（在指定位置）
-  renderTray(ctx, trayX, trayY, trayWidth, trayHeight) {
-    // 如果没有传入位置参数，使用默认位置（治疗区底部）
-    if (trayX === undefined) {
-      trayX = this.x + this.width * 0.05
-      trayY = this.y + this.height * 0.82
-      trayWidth = this.width * 0.5
-      trayHeight = this.height * 0.12
-    }
-    
-    // 托盘背景（浅灰色圆角矩形）
-    ctx.fillStyle = '#F0F0F0'
-    fillRoundRect(ctx, trayX, trayY, trayWidth, trayHeight, 8)
-    
-    // 托盘边框
-    ctx.strokeStyle = '#CCCCCC'
-    ctx.lineWidth = 2
-    strokeRoundRect(ctx, trayX, trayY, trayWidth, trayHeight, 8)
-    
-    // 托盘内文字或物品
-    if (this.trayItems.length > 0) {
-      // 计算每个物品的显示位置和大小
-      const itemCount = this.trayItems.length
-      const iconSize = trayHeight * 0.55
-      const spacing = trayWidth * 0.1
-      const totalWidth = itemCount * iconSize * 1.5 + (itemCount - 1) * spacing
-      const startX = trayX + (trayWidth - totalWidth) / 2 + iconSize * 0.75
-      
-      this.trayItems.forEach((item, index) => {
-        const iconX = startX + index * (iconSize * 1.5 + spacing)
-        const iconY = trayY + trayHeight / 2
-        
-        // 物品背景圆圈 - 统一使用浅灰色
-        ctx.fillStyle = '#E0E0E0'
-        ctx.beginPath()
-        ctx.arc(iconX, iconY, iconSize * 0.85, 0, Math.PI * 2)
-        ctx.fill()
-        
-        // 绘制物品图标（图标比背景圆圈大一些）
-        const itemImage = getItemImage(item.id)
-        if (itemImage) {
-          const imgSize = iconSize * 1.3
-          ctx.drawImage(itemImage, iconX - imgSize/2, iconY - imgSize/2, imgSize, imgSize)
-        } else {
-          ctx.fillStyle = '#2C3E50'
-          ctx.font = `${iconSize * 1.2}px "PingFang SC", "Microsoft YaHei", sans-serif`
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          ctx.fillText(item.icon, iconX, iconY)
-        }
-      })
-    } else {
-      // 空托盘提示文字
-      ctx.fillStyle = '#999'
-      ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText('点击器材并配送', trayX + trayWidth / 2, trayY + trayHeight / 2)
-    }
-    
-    // 记录托盘区域
-    this.trayBounds = {
-      x: trayX,
-      y: trayY,
-      width: trayWidth,
-      height: trayHeight
-    }
-    
-    // 计算按钮区域
-    const btnSize = trayHeight * 0.85  // 调整此系数改变按钮大小
-    const btnY = trayY + (trayHeight - btnSize) / 2
-    const gap = 12  // 调整此值改变按钮间距
-    
-    // 绘制重置/清空按钮（在托盘右侧，圆形）
-    const resetBtnX = trayX + trayWidth + 8
-    const hasItems = this.trayItems.length > 0
-    
-    // 重置按钮按下动效（缩小并颜色变深）
-    const resetScale = this.resetButtonPressed ? 0.92 : 1
-    const resetOffset = (btnSize * (1 - resetScale)) / 2
-    
-    // 重置按钮背景 - 根据是否有物品改变颜色（按下时颜色变深）
-    if (this.resetButtonPressed) {
-      ctx.fillStyle = hasItems ? '#A93226' : '#888888'
-    } else {
-      ctx.fillStyle = hasItems ? '#E74C3C' : '#CCCCCC'
-    }
-    ctx.beginPath()
-    ctx.arc(resetBtnX + resetOffset + btnSize * resetScale / 2, btnY + resetOffset + btnSize * resetScale / 2, btnSize * resetScale / 2, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 重置按钮边框
-    ctx.strokeStyle = hasItems ? '#C0392B' : '#AAAAAA'
-    ctx.lineWidth = 2
-    ctx.stroke()
-    
-    // 重置图标（✕ 清除）
-    ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 16px "PingFang SC", "Microsoft YaHei", sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('✕', resetBtnX + btnSize / 2, btnY + btnSize / 2)
-    
-    // 记录重置按钮区域（使用原始大小，不受按下动效影响）
-    this.resetButtonBounds = {
-      x: resetBtnX,
-      y: btnY,
-      width: btnSize,
-      height: btnSize
-    }
-    
-    // 绘制发送按钮（在重置按钮右侧，圆形）
-    const sendBtnX = resetBtnX + btnSize + gap
-    
-    // 发送按钮按下动效（缩小并颜色变深）
-    const sendScale = this.sendButtonPressed ? 0.92 : 1
-    const sendOffset = (btnSize * (1 - sendScale)) / 2
-    
-    // 发送按钮背景（按下时颜色变深）
-    if (this.sendButtonPressed) {
-      ctx.fillStyle = hasItems ? '#1E7E3E' : '#888888'
-    } else {
-      ctx.fillStyle = hasItems ? '#27AE60' : '#CCCCCC'
-    }
-    ctx.beginPath()
-    ctx.arc(sendBtnX + sendOffset + btnSize * sendScale / 2, btnY + sendOffset + btnSize * sendScale / 2, btnSize * sendScale / 2, 0, Math.PI * 2)
-    ctx.fill()
-    
-    // 发送按钮边框
-    ctx.strokeStyle = hasItems ? '#1E8449' : '#AAAAAA'
-    ctx.lineWidth = 2
-    ctx.stroke()
-    
-    // 发送图标（纸飞机）
-    ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 14px "PingFang SC", "Microsoft YaHei", sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('➤', sendBtnX + btnSize / 2, btnY + btnSize / 2)
-    
-    // 记录发送按钮区域（使用原始大小）
-    this.sendButtonBounds = {
-      x: sendBtnX,
-      y: btnY,
-      width: btnSize,
-      height: btnSize
-    }
-  }
-
-  // 添加物品到托盘（如果不在托盘中）
-  addItemToTray(item) {
-    // 检查是否已在托盘中
-    const exists = this.trayItems.some(i => i.id === item.id)
-    if (exists) {
-      return { success: false, reason: 'duplicate' }
-    }
-    // 检查托盘是否已满（最多4个）
-    if (this.trayItems.length >= 4) {
-      return { success: false, reason: 'full' }
-    }
-    this.trayItems.push(item)
-    return { success: true }
-  }
-
-  // 从托盘中移除物品
-  removeItemFromTray(itemId) {
-    const index = this.trayItems.findIndex(i => i.id === itemId)
-    if (index >= 0) {
-      this.trayItems.splice(index, 1)
-      return true
-    }
-    return false
-  }
-
-  // 清空托盘
-  clearTray() {
-    this.trayItems = []
-  }
-
-  // 获取托盘中的所有物品
-  getTrayItems() {
-    return this.trayItems
-  }
-
-  // 获取托盘物品ID集合（用于匹配）
-  getTrayItemIds() {
-    return this.trayItems.map(i => i.id).sort()
-  }
-
-  // 检查点击是否在发送按钮上
   // 检查点击是否在器材区发送按钮上
   isClickOnEquipmentSendButton(x, y) {
     if (!this.equipmentSendBtnBounds) return false
@@ -550,6 +481,20 @@ export default class EquipmentRoom {
                   x <= this.equipmentSendBtnBounds.x + this.equipmentSendBtnBounds.width &&
                   y >= this.equipmentSendBtnBounds.y && 
                   y <= this.equipmentSendBtnBounds.y + this.equipmentSendBtnBounds.height
+    if (isHit) {
+      // 触发短震动（仅真机）
+      this.vibrate()
+    }
+    return isHit
+  }
+  
+  // 检查点击是否在器材区清空按钮上
+  isClickOnEquipmentClearButton(x, y) {
+    if (!this.equipmentClearBtnBounds) return false
+    const isHit = x >= this.equipmentClearBtnBounds.x && 
+                  x <= this.equipmentClearBtnBounds.x + this.equipmentClearBtnBounds.width &&
+                  y >= this.equipmentClearBtnBounds.y && 
+                  y <= this.equipmentClearBtnBounds.y + this.equipmentClearBtnBounds.height
     if (isHit) {
       // 触发短震动（仅真机）
       this.vibrate()

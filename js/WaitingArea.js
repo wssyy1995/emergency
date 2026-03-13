@@ -29,8 +29,8 @@ export default class WaitingArea {
     this.height = height
     this.patients = []
     
-    // 创建护士位置
-    this.nurse = new Nurse(this.x + this.width * 0.53, this.y + this.height * 0.24)
+    // 创建护士位置（相对于内层舞台）
+    this.nurse = new Nurse(this.x + this.width * 0.58, this.y + this.height * 0.22)
     this.nurse.setScale(this.width)
     
     this.standingQueue = []
@@ -59,7 +59,7 @@ export default class WaitingArea {
     
     const standingTotalWidth = standingCols * standingWidth + (standingCols - 1) * standingGapX
     const leftStartX = this.x + (this.width - standingTotalWidth) / 2
-    const startY = this.y + this.height * 0.42
+    const startY = this.y + this.height * 0.48
     
     // 创建站立排队位置（从左上开始，从左到右，然后下一行）
     let standingIndex = 0
@@ -159,13 +159,10 @@ export default class WaitingArea {
   }
 
   render(ctx) {
-    // 浅粉色踢脚线
-    const baseboardColor = '#FFB6C1'
-    const positionRatio = 0.35
-    const baseboardHeight = 10
-    const baseboardY = this.y + this.height * positionRatio
-    ctx.fillStyle = baseboardColor
-    ctx.fillRect(this.x, baseboardY, this.width, baseboardHeight)
+    // 粉色横向踢脚线（装饰）
+    const baseboardY = this.y + this.height * 0.35
+    ctx.fillStyle = '#FFB6C1'
+    ctx.fillRect(this.x + 8, baseboardY, this.width - 16, 6)
     
     // 绘制护士
     this.nurse.render(ctx)
@@ -233,21 +230,18 @@ export default class WaitingArea {
   }
 
   renderStandingQueue(ctx) {
-    // 绘制站立位置标记
+    // 绘制站立位置标记 - 灰色椭圆阴影
     this.standingQueue.forEach((pos, i) => {
-      // 统一浅粉色，有人时透明度更高，阴影尺寸缩小
-      ctx.fillStyle = pos.occupied ? 'rgba(255, 182, 193, 0.4)' : 'rgba(255, 182, 193, 0.2)'
+      ctx.fillStyle = pos.occupied ? 'rgba(128, 128, 128, 0.5)' : 'rgba(128, 128, 128, 0.25)'
       ctx.beginPath()
       ctx.ellipse(
         pos.x + pos.width / 2, 
         pos.y + pos.height * 0.75, 
-        pos.width * 0.35,  // 宽度从 0.5 缩小到 0.35
-        pos.height * 0.08, // 高度从 0.12 缩小到 0.08
+        pos.width * 0.25,
+        pos.height * 0.06,
         0, 0, Math.PI * 2
       )
       ctx.fill()
-      
-      // 【已移除】排队序号不再显示
     })
   }
 }

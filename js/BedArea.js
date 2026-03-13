@@ -204,7 +204,6 @@ class IVSeat {
       ctx.drawImage(currentImage, this.x + (this.width - drawWidth) / 2, this.y + (this.height - drawHeight) / 2, drawWidth, drawHeight)
     }
     
-    // 【已移除】输液椅标识圆点
     
     // 绘制坐着的病人
     if (this.patient) {
@@ -245,7 +244,7 @@ export default class BedArea {
     const gapX = (this.width - bedWidth * 2) / 3
     
     const startX = this.x + gapX
-    const startY = this.y + this.height * 0.05
+    const startY = this.y + this.height * 0.15
     
     for (let i = 0; i < 2; i++) {
       const bedX = startX + i * (bedWidth + gapX)
@@ -255,13 +254,13 @@ export default class BedArea {
 
   initIVSeats() {
     // 输液治疗椅子区域：高度为治疗区的三分之一，横排4张椅子
-    const seatWidth = this.width * 0.2
+    const seatWidth = this.width * 0.21
     const seatHeight = this.height * 0.2  // 高度增加适应区域
     const gapX = (this.width - seatWidth * 4) / 5
     
     const startX = this.x + gapX
-    // 输液区占据治疗区底部1/3
-    const startY = this.y + this.height * (2/3) - seatHeight * 0.2
+    // 输液区域再治疗区底部
+    const startY = this.y + this.height * 0.75
     
     for (let i = 0; i < 4; i++) {
       const seatX = startX + i * (seatWidth + gapX)
