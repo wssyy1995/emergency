@@ -62,4 +62,16 @@ export default class Nurse {
     
     ctx.restore()
   }
+  
+  // 点击检测（扩大点击范围方便玩家点击）
+  contains(x, y) {
+    // 使用较大的点击区域（以护士为中心的一个矩形区域）
+    const hitWidth = 60 * this.scale
+    const hitHeight = 120 * this.scale
+    const hitX = this.x - hitWidth / 2
+    const hitY = this.y - hitHeight / 2
+    
+    return x >= hitX && x <= hitX + hitWidth &&
+           y >= hitY && y <= hitY + hitHeight
+  }
 }

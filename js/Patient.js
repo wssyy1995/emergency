@@ -438,13 +438,42 @@ export default class Patient {
     
     ctx.restore()
     
-    // 输液椅上病人：显示治疗进度条或完成图标
+    // 输液椅上病人：显示治疗进度条或耐心值进度条
     if (this.seat && this.state === 'seated' && !this.isLeaving && !this.isRaging) {
       ctx.save()
       const barY = this.y - 75 * scale + this.bounceOffset
       
-      if (this.ivTreatmentComplete) {
-        // 治疗完成：显示"完成"图标（绿色圆圈 + ✓）
+      // 判断是否为紧急疾病（priority 1）
+      const isEmergencyPriority = this.disease && this.disease.diseases_priority === 1
+      
+      if (isEmergencyPriority) {
+        // 【紧急疾病】显示真实的耐心值进度条（绿色/橙色/红色）
+        const patiencePercent = Math.max(0, this.patience / this.maxPatience)
+        const barWidth = 40 * scale
+        const barHeight = 8 * scale
+        const barX = centerX - barWidth / 2
+        const radius = barHeight / 2
+        
+        // 进度条背景（灰色圆角）
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
+        fillRoundRect(ctx, barX, barY, barWidth, barHeight, radius)
+        
+        // 耐心值进度条颜色：>50%绿色，30%-50%橙色，<30%红色
+        let barColor
+        if (patiencePercent > 0.5) {
+          barColor = '#2ECC71' // 绿色
+        } else if (patiencePercent > 0.3) {
+          barColor = '#F39C12' // 橙色
+        } else {
+          barColor = '#E74C3C' // 红色
+        }
+        ctx.fillStyle = barColor
+        const progressWidth = barWidth * patiencePercent
+        if (progressWidth > 0) {
+          fillRoundRect(ctx, barX, barY, progressWidth, barHeight, radius)
+        }
+      } else if (this.ivTreatmentComplete) {
+        // 【非紧急疾病】治疗完成：显示"完成"图标（绿色圆圈 + ✓）
         const iconSize = 14 * scale
         
         // 绿色圆圈背景
@@ -463,7 +492,7 @@ export default class Patient {
         ctx.lineTo(centerX + 5 * scale, barY + 2 * scale)
         ctx.stroke()
       } else {
-        // 治疗中：显示蓝色圆角进度条
+        // 【非紧急疾病】治疗中：显示蓝色圆角进度条
         const barWidth = 40 * scale
         const barHeight = 8 * scale
         const barX = centerX - barWidth / 2

@@ -35,10 +35,10 @@ const UI_COLORS = {
   
   // 器材室托盘
   equipment: {
-    outer: '#FFF8E1',        // 外层奶黄色
+    outer: '#FFE7C6',        // 外层奶黄色
     inner: '#FFFAF0',         // 内层花白色
-    badgeBg: '#FFF8E1',       // 标签背景
-    badgeBorder: '#FFF8E1'    // 标签边框
+    badgeBg: '#FFE7C6',       // 标签背景
+    badgeBorder: '#FFE7C6'    // 标签边框
   }
 }
 
@@ -168,6 +168,12 @@ export default class Game {
     
     // 输液区病人选择弹窗状态（急救）
     this.ivPatientSelectionModal = null
+    
+    // 疾病清单弹窗状态（点击护士显示）
+    this.diseaseListModal = null
+    
+    // 按钮轻量提示状态
+    this.buttonTooltip = null
     
     // 暴走提示状态（只显示一次）
     this.hasShownRageToast = false
@@ -579,8 +585,25 @@ export default class Game {
       if (seat.patient) {
         seat.patient.update(deltaTime)
         
-        // 【修改】输液椅上病人耐心暂停减少（保持当前值不变）
-        // 不执行任何耐心值增减操作
+        // 【修改】输液椅上病人耐心处理
+        // 如果疾病priority为1（紧急），耐心值继续减少；否则暂停减少
+        const isEmergencyPriority = seat.patient.disease && seat.patient.disease.diseases_priority === 1
+        if (isEmergencyPriority) {
+          // 紧急疾病：耐心值继续减少
+          seat.patient.patience -= deltaTime / 1000
+          // 检查耐心是否归零
+          if (seat.patient.patience <= 0 && !seat.patient.isLeaving && !seat.patient.tomatoThrown) {
+            seat.patient.isAngry = true
+            seat.patient.startLeaving(this.screenHeight)
+            // 从输液椅移除
+            setTimeout(() => {
+              if (seat.patient && seat.patient.shouldRemove) {
+                seat.clear()
+              }
+            }, 1000)
+          }
+        }
+        // 非紧急疾病：耐心值保持不变（暂停减少）
         
         // 输液治疗进度更新
         if (!seat.patient.ivTreatmentComplete) {
@@ -922,6 +945,7 @@ export default class Game {
     this.renderGameWinModal()
     this.renderSeatSelectionModal()
     this.renderIVPatientSelectionModal()
+    this.renderDiseaseListModal()
 
     
     // 调试日志已禁用
@@ -1482,6 +1506,13 @@ export default class Game {
         }
       }
       
+      // 5. 疾病清单弹窗（点击护士显示）
+      if (this.diseaseListModal && this.diseaseListModal.visible) {
+        if (this.handleDiseaseListTouch(x, y)) {
+          return
+        }
+      }
+      
       // 检查是否点击音量开关按钮
       if (this.volumeBtnBounds &&
           x >= this.volumeBtnBounds.x && x <= this.volumeBtnBounds.x + this.volumeBtnBounds.width &&
@@ -1566,6 +1597,16 @@ export default class Game {
         // 显示椅子选择弹窗
         this.showSeatSelectionModal(patient)
         console.log('[点击检测] 弹窗已显示')
+        return
+      }
+      
+      // 检查是否点击护士（显示疾病清单）
+      if (this.waitingArea.nurse.contains(x, y)) {
+        console.log('[点击检测] 点击护士，显示疾病清单')
+        // 点击时震动（仅真机）
+        this.vibrate()
+        // 显示疾病清单弹窗
+        this.showDiseaseListModal()
         return
       }
       
@@ -2083,6 +2124,9 @@ export default class Game {
       const labelText = btn.enabled ? btn.label : '满'
       ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2 + (btn.enabled ? 1 : 2))
     })
+    
+    // 绘制按钮提示（如果有）
+    this.renderButtonTooltip()
   }
 
   reset() {
@@ -2893,6 +2937,503 @@ export default class Game {
     }
     
     return false
+  }
+
+  // 显示疾病清单弹窗（点击护士）
+  showDiseaseListModal() {
+    this.diseaseListModal = {
+      visible: true,
+      currentPage: 0,  // 当前页码
+      itemsPerPage: 4  // 每页显示条数（会根据高度动态计算）
+    }
+  }
+
+  // 绘制疾病清单弹窗（参考ui.txt风格：弥散阴影+圆角卡片+胶囊徽章，支持分页）
+  renderDiseaseListModal() {
+    if (!this.diseaseListModal || !this.diseaseListModal.visible) return
+    
+    const ctx = this.ctx
+    const diseases = GameConfig.diseases
+    
+    // ===== 分页计算 =====
+    const modalWidth = 240
+    const rowHeight = 36
+    const rowSpacing = 8
+    const headerHeight = 55
+    const footerHeight = 20  // 底部文字按钮区域
+    const padding = 12
+    
+    // 固定每页5个疾病
+    const itemsPerPage = 4
+    
+    // 总页数
+    const totalPages = Math.ceil(diseases.length / itemsPerPage)
+    const currentPage = this.diseaseListModal.currentPage || 0
+    
+    // 当前页显示的疾病
+    const startIndex = currentPage * itemsPerPage
+    const endIndex = Math.min(startIndex + itemsPerPage, diseases.length)
+    const pageDiseases = diseases.slice(startIndex, endIndex)
+    
+    // 实际弹窗高度（根据内容动态计算）
+    const contentHeight = pageDiseases.length * (rowHeight + rowSpacing)
+    const modalHeight = headerHeight + contentHeight + footerHeight + padding
+    
+    // 弹窗位置（居中）
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // 保存弹窗位置用于点击检测
+    this.diseaseListModal.x = modalX
+    this.diseaseListModal.y = modalY
+    this.diseaseListModal.width = modalWidth
+    this.diseaseListModal.height = modalHeight
+    this.diseaseListModal.itemsPerPage = itemsPerPage
+    this.diseaseListModal.totalPages = totalPages
+    
+    // 绘制半透明背景遮罩
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    // ===== 1. 绘制外层白色大卡片（带弥散阴影）=====
+    ctx.save()
+    ctx.shadowColor = 'rgba(175, 199, 227, 0.5)'
+    ctx.shadowBlur = 20
+    ctx.shadowOffsetY = 8
+    ctx.fillStyle = '#FFFFFF'
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 20)
+    ctx.restore()
+    
+    // ===== 2. 绘制标题 =====
+    ctx.fillStyle = '#333333'
+    ctx.font = 'bold 18px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('🏥 护士站分诊指南', modalX + modalWidth / 2, modalY + 25)
+    
+    // 页码指示器（如：1/3）
+    if (totalPages > 1) {
+      ctx.fillStyle = '#999999'
+      ctx.font = '11px "PingFang SC", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(`${currentPage + 1}/${totalPages}`, modalX + modalWidth / 2, modalY + 50)
+    }
+    
+    // 表头文字
+    ctx.fillStyle = '#666666'
+    ctx.font = '12px "PingFang SC", sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText('疾病名称', modalX + 30, modalY + 68)
+    ctx.textAlign = 'right'
+    ctx.fillText('分诊分类', modalX + modalWidth - 30, modalY + 68)
+    
+    // ===== 3. 绘制疾病列表 =====
+    let startY = modalY + headerHeight + padding - 10
+    
+    // 初始化胶囊点击区域数组
+    if (!this.diseaseListModal.pillBadges) {
+      this.diseaseListModal.pillBadges = []
+    }
+    this.diseaseListModal.pillBadges = []
+    
+    pageDiseases.forEach((disease, index) => {
+      const rowY = startY + index * (rowHeight + rowSpacing)
+      
+      // 3.1 绘制单行底色（极浅的蓝灰底色）
+      ctx.fillStyle = '#F4F8FB'
+      fillRoundRect(ctx, modalX + 15, rowY, modalWidth - 30, rowHeight, 12)
+      
+      // 3.2 绘制疾病图标（使用疾病图片或emoji回退）
+      const diseaseImage = this.diseaseImages && this.diseaseImages[disease.disease_id]
+      if (diseaseImage && diseaseImage.width > 0) {
+        // 使用疾病图片
+        const iconSize = 30
+        ctx.drawImage(diseaseImage, modalX + 25, rowY + 4, iconSize, iconSize)
+      } else {
+        // 回退到emoji
+        ctx.font = '20px sans-serif'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(disease.condition ? disease.condition.icon : '🏥', modalX + 30, rowY + rowHeight / 2)
+      }
+      
+      // 3.3 绘制疾病名称
+      ctx.fillStyle = '#333333'
+      ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(disease.disease_name, modalX + 65, rowY + rowHeight / 2)
+      
+      // 3.4 绘制右侧分类胶囊徽章
+      const priorityConfig = this.getPriorityConfig(disease.diseases_priority)
+      const pillX = modalX + modalWidth - 90
+      const pillY = rowY + 4
+      const pillW = 55
+      const pillH = 28
+      this.drawPillBadge(ctx, priorityConfig.label, priorityConfig.color, priorityConfig.shadow, pillX, pillY)
+      
+      // 保存胶囊位置和提示信息（用于点击检测）
+      this.diseaseListModal.pillBadges.push({
+        x: pillX,
+        y: pillY,
+        width: pillW,
+        height: pillH,
+        priority: disease.diseases_priority,
+        label: priorityConfig.label
+      })
+    })
+    
+    // ===== 4. 绘制底部分页文字按钮 =====
+    const btnY = modalY + modalHeight - 16  // 距离底部16px
+    const btnPadding = 20
+    
+    ctx.font = '12px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textBaseline = 'middle'
+    
+    // 左下角：上一页（如果不是第一页）
+    if (currentPage > 0) {
+      ctx.fillStyle = '#38BDF8'
+      ctx.textAlign = 'left'
+      ctx.fillText('上一页', modalX + btnPadding, btnY)
+      
+      // 保存按钮位置
+      this.diseaseListModal.prevBtn = {
+        x: modalX + btnPadding,
+        y: btnY - 10,
+        width: 50,
+        height: 20
+      }
+    } else {
+      this.diseaseListModal.prevBtn = null
+    }
+    
+    // 右下角：下一页/知道了
+    const isLastPage = currentPage >= totalPages - 1
+    const nextText = isLastPage ? '知道了' : '下一页'
+    const textWidth = ctx.measureText(nextText).width
+    
+    ctx.fillStyle = isLastPage ? '#999999' : '#38BDF8'
+    ctx.textAlign = 'right'
+    ctx.fillText(nextText, modalX + modalWidth - btnPadding, btnY)
+    
+    // 保存按钮位置
+    this.diseaseListModal.nextBtn = {
+      x: modalX + modalWidth - btnPadding - textWidth,
+      y: btnY - 10,
+      width: textWidth,
+      height: 20
+    }
+    
+    // 绘制胶囊提示（如果有）
+    this.renderPillTooltip(ctx)
+  }
+  
+  // 绘制胶囊轻量提示（带箭头）
+  renderPillTooltip(ctx) {
+    if (!this.diseaseListModal || !this.diseaseListModal.pillTooltip) return
+    
+    const tooltip = this.diseaseListModal.pillTooltip
+    
+    // 计算提示框尺寸
+    const lines = tooltip.text.split('\n')
+    ctx.font = '11px "PingFang SC", "Microsoft YaHei", sans-serif'
+    let maxWidth = 0
+    lines.forEach(line => {
+      const width = ctx.measureText(line).width
+      maxWidth = Math.max(maxWidth, width)
+    })
+    
+    const paddingX = 12
+    const paddingY = 8
+    const lineHeight = 16
+    const tooltipWidth = maxWidth + paddingX * 2
+    const tooltipHeight = lines.length * lineHeight + paddingY * 2
+    
+    // 计算提示框位置（在胶囊上方）
+    const arrowHeight = 6
+    const tooltipX = tooltip.badgeX + tooltip.badgeWidth / 2 - tooltipWidth / 2
+    const tooltipY = tooltip.badgeY - tooltipHeight - arrowHeight - 4
+    
+    // 保存位置用于点击检测
+    tooltip.tooltipX = tooltipX
+    tooltip.tooltipY = tooltipY
+    tooltip.tooltipWidth = tooltipWidth
+    tooltip.tooltipHeight = tooltipHeight
+    tooltip.arrowHeight = arrowHeight
+    
+    // 绘制提示框背景（白色半透明+阴影）
+    ctx.save()
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)'
+    ctx.shadowBlur = 10
+    ctx.shadowOffsetY = 4
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+    
+    // 绘制圆角矩形
+    const radius = 10
+    fillRoundRect(ctx, tooltipX, tooltipY, tooltipWidth, tooltipHeight, radius)
+    
+    // 绘制箭头（三角形，指向胶囊）
+    ctx.beginPath()
+    ctx.moveTo(tooltip.badgeX + tooltip.badgeWidth / 2 - arrowHeight, tooltipY + tooltipHeight)
+    ctx.lineTo(tooltip.badgeX + tooltip.badgeWidth / 2, tooltipY + tooltipHeight + arrowHeight)
+    ctx.lineTo(tooltip.badgeX + tooltip.badgeWidth / 2 + arrowHeight, tooltipY + tooltipHeight)
+    ctx.closePath()
+    ctx.fill()
+    
+    ctx.restore()
+    
+    // 绘制文字（深色以便在白色背景上阅读）
+    ctx.fillStyle = '#333333'
+    ctx.font = '11px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    
+    lines.forEach((line, index) => {
+      const textY = tooltipY + paddingY + lineHeight / 2 + index * lineHeight
+      ctx.fillText(line, tooltipX + tooltipWidth / 2, textY)
+    })
+  }
+  
+  // 获取优先级配置
+  getPriorityConfig(priority) {
+    const configs = {
+      1: { label: '紧急', color: '#E45555', shadow: 'rgba(228,85,85,0.4)' },    // 红色-紧急
+      2: { label: '普通', color: '#F6B94A', shadow: 'rgba(246,185,74,0.4)' },    // 黄色-普通
+      3: { label: '轻微', color: '#68C488', shadow: 'rgba(104,196,136,0.4)' }     // 绿色-轻微
+    }
+    return configs[priority] || configs[3]
+  }
+  
+  // 绘制胶囊徽章按钮
+  drawPillBadge(ctx, text, color, shadowColor, x, y) {
+    const w = 55
+    const h = 28
+    const r = 15  // 胶囊圆角刚好是高度的一半
+    
+    // 画底色和阴影
+    ctx.save()
+    ctx.shadowColor = shadowColor
+    ctx.shadowBlur = 8
+    ctx.shadowOffsetY = 2
+    ctx.fillStyle = color
+    fillRoundRect(ctx, x, y, w, h, r)
+    ctx.restore()
+    
+    // 画白色居中文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 12px "PingFang SC", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, x + w / 2, y + h / 2 + 1)
+  }
+
+  // 处理疾病清单弹窗的点击
+  handleDiseaseListTouch(x, y) {
+    if (!this.diseaseListModal || !this.diseaseListModal.visible) return false
+    
+    const modal = this.diseaseListModal
+    const currentPage = modal.currentPage || 0
+    const totalPages = modal.totalPages || 1
+    
+    // 点击弹窗外部关闭弹窗
+    if (x < modal.x || x > modal.x + modal.width || y < modal.y || y > modal.y + modal.height) {
+      this.diseaseListModal = null
+      return true
+    }
+    
+    // 检查是否点击了【上一页】按钮
+    if (modal.prevBtn && currentPage > 0 &&
+        x >= modal.prevBtn.x && x <= modal.prevBtn.x + modal.prevBtn.width &&
+        y >= modal.prevBtn.y && y <= modal.prevBtn.y + modal.prevBtn.height) {
+      // 上一页
+      this.diseaseListModal.currentPage = currentPage - 1
+      this.diseaseListModal.pillTooltip = null  // 清除提示
+      this.vibrate()  // 震动反馈
+      return true
+    }
+    
+    // 检查是否点击了【下一页/知道了】按钮
+    if (modal.nextBtn &&
+        x >= modal.nextBtn.x && x <= modal.nextBtn.x + modal.nextBtn.width &&
+        y >= modal.nextBtn.y && y <= modal.nextBtn.y + modal.nextBtn.height) {
+      
+      if (currentPage < totalPages - 1) {
+        // 下一页
+        this.diseaseListModal.currentPage = currentPage + 1
+        this.diseaseListModal.pillTooltip = null  // 清除提示
+        this.vibrate()  // 震动反馈
+      } else {
+        // 最后一页，关闭弹窗
+        this.diseaseListModal = null
+      }
+      return true
+    }
+    
+    // 检查是否点击了分类胶囊
+    if (modal.pillBadges) {
+      for (const badge of modal.pillBadges) {
+        if (x >= badge.x && x <= badge.x + badge.width &&
+            y >= badge.y && y <= badge.y + badge.height) {
+          // 显示提示
+          this.showPillTooltip(badge)
+          this.vibrate()
+          return true
+        }
+      }
+    }
+    
+    // 检查是否点击了提示框本身（点击提示不关闭）
+    if (modal.pillTooltip) {
+      const tooltip = modal.pillTooltip
+      // 检查点击是否在提示框区域内（包括箭头）
+      const arrowHeight = tooltip.arrowHeight || 6
+      const inTooltip = x >= tooltip.tooltipX && x <= tooltip.tooltipX + tooltip.tooltipWidth &&
+                       y >= tooltip.tooltipY && y <= tooltip.tooltipY + tooltip.tooltipHeight + arrowHeight
+      if (inTooltip) {
+        return true  // 点击提示框，不关闭，只阻止事件传递
+      }
+      
+      // 点击其他区域清除提示
+      this.diseaseListModal.pillTooltip = null
+      return true
+    }
+    
+    // 点击其他区域不处理（防止误触）
+    return true
+  }
+  
+  // 显示胶囊提示
+  showPillTooltip(badge) {
+    // 根据优先级设置提示文本
+    let tooltipText = ''
+    if (badge.priority === 1) {
+      // 紧急
+      tooltipText = '病人需立刻送往急救区，\n无法在治疗椅恢复！'
+    } else if (badge.priority === 2) {
+      // 普通
+      tooltipText = '病人可在治疗椅上恢复生命'
+    } else {
+      // 轻微
+      tooltipText = '病人生命值较高，\n可在等候区等待'
+    }
+    
+    // 设置提示状态（不自动消失，点击其他地方关闭）
+    this.diseaseListModal.pillTooltip = {
+      text: tooltipText,
+      badgeX: badge.x,
+      badgeY: badge.y,
+      badgeWidth: badge.width,
+      badgeHeight: badge.height
+    }
+  }
+
+  // 显示按钮轻量提示
+  showButtonTooltip(btn) {
+    // 清除之前的定时器
+    if (this.buttonTooltip && this.buttonTooltip.timer) {
+      clearTimeout(this.buttonTooltip.timer)
+    }
+    
+    // 根据按钮类型设置提示文本
+    let tooltipText = ''
+    if (btn.isEmergency) {
+      tooltipText = '病人需立刻送往急救区，\n无法在治疗椅恢复！'
+    } else if (btn.isIV) {
+      tooltipText = '病人可在治疗椅上恢复生命'
+    } else if (btn.isNormal) {
+      tooltipText = '病人生命值较高，\n可在等候区等待'
+    }
+    
+    // 设置提示状态
+    this.buttonTooltip = {
+      buttonType: btn.type,
+      text: tooltipText,
+      btnX: btn.renderX,
+      btnY: btn.renderY,
+      btnWidth: btn.renderWidth,
+      btnHeight: btn.renderHeight,
+      timer: setTimeout(() => {
+        this.buttonTooltip = null
+      }, 2500) // 2.5秒后自动消失
+    }
+  }
+  
+  // 执行按钮操作
+  executeButtonAction(btn, patient) {
+    // 清除提示
+    if (this.buttonTooltip && this.buttonTooltip.timer) {
+      clearTimeout(this.buttonTooltip.timer)
+    }
+    this.buttonTooltip = null
+    
+    // 执行对应操作
+    if (btn.isEmergency) {
+      this.sendPatientToBedDirectly(patient)
+    } else if (btn.isIV) {
+      this.sendPatientToIVSeat(patient)
+    } else if (btn.isNormal) {
+      patient.showPatienceBar = true
+    }
+    
+    // 关闭弹窗
+    this.seatSelectionModal = null
+  }
+  
+  // 绘制按钮轻量提示（带箭头）
+  renderButtonTooltip() {
+    if (!this.buttonTooltip) return
+    
+    const ctx = this.ctx
+    const tooltip = this.buttonTooltip
+    
+    // 计算提示框尺寸
+    const lines = tooltip.text.split('\n')
+    ctx.font = '11px "PingFang SC", "Microsoft YaHei", sans-serif'
+    let maxWidth = 0
+    lines.forEach(line => {
+      const width = ctx.measureText(line).width
+      maxWidth = Math.max(maxWidth, width)
+    })
+    
+    const paddingX = 12
+    const paddingY = 8
+    const lineHeight = 16
+    const tooltipWidth = maxWidth + paddingX * 2
+    const tooltipHeight = lines.length * lineHeight + paddingY * 2
+    
+    // 计算提示框位置（在按钮上方）
+    const arrowHeight = 6
+    const tooltipX = tooltip.btnX + tooltip.btnWidth / 2 - tooltipWidth / 2
+    const tooltipY = tooltip.btnY - tooltipHeight - arrowHeight - 4
+    
+    // 绘制提示框背景（半透明黑色）
+    ctx.save()
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
+    
+    // 绘制圆角矩形
+    const radius = 8
+    fillRoundRect(ctx, tooltipX, tooltipY, tooltipWidth, tooltipHeight, radius)
+    
+    // 绘制箭头（三角形）
+    ctx.beginPath()
+    ctx.moveTo(tooltip.btnX + tooltip.btnWidth / 2 - arrowHeight, tooltipY + tooltipHeight)
+    ctx.lineTo(tooltip.btnX + tooltip.btnWidth / 2, tooltipY + tooltipHeight + arrowHeight)
+    ctx.lineTo(tooltip.btnX + tooltip.btnWidth / 2 + arrowHeight, tooltipY + tooltipHeight)
+    ctx.closePath()
+    ctx.fill()
+    
+    ctx.restore()
+    
+    // 绘制文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = '11px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    
+    lines.forEach((line, index) => {
+      const textY = tooltipY + paddingY + lineHeight / 2 + index * lineHeight
+      ctx.fillText(line, tooltipX + tooltipWidth / 2, textY)
+    })
   }
 
 }
