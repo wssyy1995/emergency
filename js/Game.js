@@ -134,6 +134,9 @@ export default class Game {
     // 治疗弹窗状态
     this.treatmentModal = null
     
+    // 输液区病人选择弹窗状态（治疗/急救）
+    this.ivPatientSelectionModal = null
+    
     // 暴走提示状态（只显示一次）
     this.hasShownRageToast = false
     
@@ -809,6 +812,7 @@ export default class Game {
     this.renderLevelToast()
     this.renderGameWinModal()
     this.renderSeatSelectionModal()
+    this.renderIVPatientSelectionModal()
     this.renderTreatmentModal()
     
     // 调试日志已禁用
@@ -1140,21 +1144,28 @@ export default class Game {
       
       // 优先处理弹窗点击（按优先级顺序）
       
-      // 1. 椅子选择弹窗
+      // 1. 输液区病人选择弹窗（治疗/急救）
+      if (this.ivPatientSelectionModal && this.ivPatientSelectionModal.visible) {
+        if (this.handleIVPatientSelectionTouch(x, y)) {
+          return
+        }
+      }
+      
+      // 2. 椅子选择弹窗
       if (this.seatSelectionModal && this.seatSelectionModal.visible) {
         if (this.handleSeatSelectionTouch(x, y)) {
           return
         }
       }
       
-      // 2. 游戏胜利弹窗
+      // 3. 游戏胜利弹窗
       if (this.gameWinModal && this.gameWinModal.visible) {
         if (this.handleGameWinTouch(x, y)) {
           return
         }
       }
       
-      // 3. 关卡完成弹窗
+      // 4. 关卡完成弹窗
       if (this.levelCompleteModal && this.levelCompleteModal.visible) {
         if (this.handleLevelCompleteTouch(x, y)) {
           return
@@ -1279,12 +1290,12 @@ export default class Game {
         return
       }
       
-      // 检查是否点击输液椅上的病人（显示治疗弹窗）
+      // 检查是否点击输液椅上的病人（显示头上选择弹窗：治疗/急救）
       const ivSeatPatient = this.findIVSeatPatientAt(x, y)
       if (ivSeatPatient) {
         console.log('[点击检测] 点击输液椅上病人:', ivSeatPatient.name)
         this.vibrate()
-        this.showTreatmentModal(ivSeatPatient)
+        this.showIVPatientSelectionModal(ivSeatPatient)
         return
       }
     })
@@ -2403,12 +2414,35 @@ export default class Game {
     })
   }
   
-  // 显示治疗弹窗（点击输液椅上病人时）
+  // 显示输液区病人选择弹窗（头上弹窗：治疗/急救）
+  showIVPatientSelectionModal(patient) {
+    const hasEmptyBed = this.bedArea.findEmptyBed() !== null
+    
+    this.ivPatientSelectionModal = {
+      visible: true,
+      patient: patient,
+      buttons: [
+        { 
+          type: 'treat', 
+          label: '治疗', 
+          color: '#9B59B6'  // 紫色
+        },
+        { 
+          type: 'emergency', 
+          label: '急救', 
+          color: '#E74C3C',  // 红色
+          enabled: hasEmptyBed
+        }
+      ]
+    }
+  }
+  
+  // 显示治疗弹窗（点击"治疗"按钮后）
   showTreatmentModal(patient) {
     this.treatmentModal = {
       visible: true,
       patient: patient,
-      title: '请选择治疗病人的器材',
+      title: '请选择器材',
       slots: [null, null, null], // 3个槽位
       selectedSlot: -1, // 当前选中的槽位
       message: null, // 提示消息
@@ -2565,6 +2599,121 @@ export default class Game {
     modal.slots[emptySlotIndex] = item
     this.vibrate()
     return true
+  }
+  
+  // 渲染输液区病人选择弹窗（头上弹窗：治疗/急救）
+  renderIVPatientSelectionModal() {
+    if (!this.ivPatientSelectionModal || !this.ivPatientSelectionModal.visible) return
+    
+    const ctx = this.ctx
+    const modal = this.ivPatientSelectionModal
+    const patient = modal.patient
+    
+    // 弹窗尺寸（轻量小弹窗）
+    const modalWidth = 120
+    const modalHeight = 55
+    
+    // 弹窗位置：在病人头部右侧显示
+    let modalX = patient.x + patient.width + 8
+    let modalY = patient.y - 60
+    
+    // 保存位置用于点击检测
+    modal.x = modalX
+    modal.y = modalY
+    modal.width = modalWidth
+    modal.height = modalHeight
+    
+    // 弹窗背景（带阴影）
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)'
+    ctx.shadowBlur = 8
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 3
+    ctx.fillStyle = '#FFF'
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 8)
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+    
+    // 2个按钮并排
+    const btnWidth = 50
+    const btnHeight = 32
+    const btnGap = 8
+    const totalBtnsWidth = btnWidth * 2 + btnGap
+    const btnStartX = modalX + (modalWidth - totalBtnsWidth) / 2
+    const btnY = modalY + 12
+    
+    modal.buttons.forEach((btn, i) => {
+      const btnX = btnStartX + i * (btnWidth + btnGap)
+      
+      // 保存按钮位置用于点击检测
+      btn.renderX = btnX
+      btn.renderY = btnY
+      btn.renderWidth = btnWidth
+      btn.renderHeight = btnHeight
+      
+      // 按钮背景
+      ctx.fillStyle = btn.enabled !== false ? btn.color : '#CCC'
+      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 6)
+      
+      // 按钮文字
+      ctx.fillStyle = '#FFF'
+      ctx.font = 'bold 12px "PingFang SC", "Microsoft YaHei", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const labelText = btn.enabled !== false ? btn.label : '满'
+      ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2)
+    })
+  }
+  
+  // 处理输液区病人选择弹窗的点击
+  handleIVPatientSelectionTouch(x, y) {
+    if (!this.ivPatientSelectionModal || !this.ivPatientSelectionModal.visible) return false
+    
+    const modal = this.ivPatientSelectionModal
+    
+    // 检查是否点击了某个按钮
+    for (let i = 0; i < modal.buttons.length; i++) {
+      const btn = modal.buttons[i]
+      
+      if (x >= btn.renderX && x <= btn.renderX + btn.renderWidth &&
+          y >= btn.renderY && y <= btn.renderY + btn.renderHeight) {
+        
+        // 点击按钮时震动
+        this.vibrate()
+        
+        if (btn.enabled === false) {
+          wx.showToast({
+            title: '暂无空闲病床',
+            icon: 'none',
+            duration: 1000
+          })
+          return true
+        }
+        
+        // 关闭当前弹窗
+        this.ivPatientSelectionModal = null
+        
+        // 根据按钮类型执行不同操作
+        if (btn.type === 'treat') {
+          // 治疗：显示器材选择弹窗
+          this.showTreatmentModal(modal.patient)
+        } else if (btn.type === 'emergency') {
+          // 急救：直接送去病床
+          this.sendPatientToBedDirectly(modal.patient)
+        }
+        
+        return true
+      }
+    }
+    
+    // 点击弹窗外部关闭弹窗
+    if (x < modal.x || x > modal.x + modal.width || y < modal.y || y > modal.y + modal.height) {
+      this.ivPatientSelectionModal = null
+      return true
+    }
+    
+    return false
   }
   
   // 渲染治疗弹窗（轻量风格，类似分诊选择弹窗）
