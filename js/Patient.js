@@ -1,4 +1,4 @@
-import { drawStar } from './utils.js'
+import { drawStar, fillRoundRect, strokeRoundRect } from './utils.js'
 import { GameConfig } from './GameConfig.js'
 
 // ==================== 全局病人图片缓存 ====================
@@ -141,8 +141,11 @@ export default class Patient {
     // 分数添加标记（防止重复计分）
     this.scoreAdded = false
     
-    // 治疗弹窗相关
-    this.ivRecoverTimer = null
+    // 输液治疗相关
+    this.ivTreatmentProgress = 0       // 输液治疗进度 (0-1)
+    this.ivTreatmentComplete = false   // 输液治疗是否完成
+    this.ivTreatmentTime = 0           // 当前已治疗时间（毫秒）
+    this.ivTotalTreatmentTime = 0      // 总治疗时间（毫秒）
     
     // 暴走相关状态
     this.isRaging = false           // 是否处于暴走状态
@@ -425,51 +428,80 @@ export default class Patient {
     
     ctx.restore()
     
-    // 耐心条（常驻显示，除了床上、已治愈、离开、暴走状态）
-    if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging) {
+    // 输液椅上病人：显示治疗进度条或完成图标
+    if (this.seat && this.state === 'seated' && !this.isLeaving && !this.isRaging) {
+      ctx.save()
+      const barY = this.y - 75 * scale + this.bounceOffset
+      
+      if (this.ivTreatmentComplete) {
+        // 治疗完成：显示"完成"图标（绿色圆圈 + ✓）
+        const iconSize = 14 * scale
+        
+        // 绿色圆圈背景
+        ctx.fillStyle = '#27AE60'
+        ctx.beginPath()
+        ctx.arc(centerX, barY + 5 * scale, iconSize, 0, Math.PI * 2)
+        ctx.fill()
+        
+        // 白色对勾
+        ctx.strokeStyle = '#FFF'
+        ctx.lineWidth = 2 * scale
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(centerX - 4 * scale, barY + 5 * scale)
+        ctx.lineTo(centerX - 1 * scale, barY + 8 * scale)
+        ctx.lineTo(centerX + 5 * scale, barY + 2 * scale)
+        ctx.stroke()
+      } else {
+        // 治疗中：显示蓝色圆角进度条
+        const barWidth = 40 * scale
+        const barHeight = 8 * scale
+        const barX = centerX - barWidth / 2
+        const radius = barHeight / 2  // 圆角半径为高度的一半，形成圆润的胶囊形状
+        
+        // 进度条背景（灰色圆角）
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
+        fillRoundRect(ctx, barX, barY, barWidth, barHeight, radius)
+        
+        // 蓝色进度条（圆角）
+        ctx.fillStyle = '#3498DB'
+        const progressWidth = barWidth * this.ivTreatmentProgress
+        if (progressWidth > 0) {
+          fillRoundRect(ctx, barX, barY, progressWidth, barHeight, radius)
+        }
+      }
+      
+      ctx.restore()
+    }
+    // 其他状态：显示耐心条（常驻显示，除了床上、已治愈、离开、暴走状态）
+    else if (!this.inBed && !this.isCured && !this.isLeaving && !this.isRaging) {
       const patiencePercent = Math.max(0, this.patience / this.maxPatience)
       ctx.save()
       
-      // 判断是否在输液椅上（耐心暂停状态）
-      const isOnIVSeat = this.seat && this.state === 'seated'
-      
       // 耐心条位置跟随病人图片移动（向上偏移）
+      const barWidth = 36 * scale
+      const barHeight = 6 * scale
+      const barX = centerX - barWidth / 2
       const barY = this.y - 69 * scale + this.bounceOffset
+      const radius = barHeight / 2  // 圆角半径为高度的一半，形成圆润的胶囊形状
       
-      if (isOnIVSeat) {
-        // 输液椅状态：蓝色背景 + 暂停符号
-        ctx.fillStyle = 'rgba(91, 155, 213, 0.3)' // 浅蓝色背景
-        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale, 5 * scale)
-        
-        // 蓝色进度条（表示暂停中）
-        ctx.fillStyle = '#5B9BD5'
-        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale * patiencePercent, 5 * scale)
-        
-        // 绘制暂停符号 || （两条竖线）
-        ctx.fillStyle = '#FFF'
-        const pauseX = centerX
-        const pauseY = barY + 2.5 * scale
-        const pauseWidth = 1.5 * scale
-        const pauseHeight = 3 * scale
-        const gap = 1.5 * scale
-        ctx.fillRect(pauseX - gap - pauseWidth, pauseY - pauseHeight / 2, pauseWidth, pauseHeight)
-        ctx.fillRect(pauseX + gap, pauseY - pauseHeight / 2, pauseWidth, pauseHeight)
+      // 耐心条背景（灰色圆角）
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
+      fillRoundRect(ctx, barX, barY, barWidth, barHeight, radius)
+      
+      // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色
+      let barColor
+      if (patiencePercent > 0.5) {
+        barColor = '#2ECC71' // 绿色
+      } else if (patiencePercent > 0.3) {
+        barColor = '#F39C12' // 橙色
       } else {
-        // 普通状态：根据耐心值显示颜色
-        ctx.fillStyle = 'rgba(0,0,0,0.3)'
-        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale, 5 * scale)
-        
-        // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色
-        let barColor
-        if (patiencePercent > 0.5) {
-          barColor = '#2ECC71' // 绿色
-        } else if (patiencePercent > 0.3) {
-          barColor = '#F39C12' // 橙色
-        } else {
-          barColor = '#E74C3C' // 红色
-        }
-        ctx.fillStyle = barColor
-        ctx.fillRect(centerX - 18 * scale, barY, 36 * scale * patiencePercent, 5 * scale)
+        barColor = '#E74C3C' // 红色
+      }
+      ctx.fillStyle = barColor
+      const progressWidth = barWidth * patiencePercent
+      if (progressWidth > 0) {
+        fillRoundRect(ctx, barX, barY, progressWidth, barHeight, radius)
       }
       
       ctx.restore()

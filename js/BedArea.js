@@ -261,7 +261,7 @@ export default class BedArea {
     
     const startX = this.x + gapX
     // 输液区占据治疗区底部1/3
-    const startY = this.y + this.height * (2/3) - seatHeight * 0.3
+    const startY = this.y + this.height * (2/3) - seatHeight * 0.2
     
     for (let i = 0; i < 4; i++) {
       const seatX = startX + i * (seatWidth + gapX)

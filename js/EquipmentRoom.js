@@ -19,12 +19,13 @@ export default class EquipmentRoom {
     // 托盘状态
     this.trayItems = [] // 当前托盘中的物品数组（最多4个）
     this.trayBounds = null // 托盘点击区域
-    this.sendButtonBounds = null // 发送按钮点击区域
-    this.resetButtonBounds = null // 重置按钮点击区域
     
-    // 按钮按下状态
-    this.resetButtonPressed = false
-    this.sendButtonPressed = false
+    // 选中的物品（新的选择模式）
+    this.selectedItems = new Set() // 存储选中的 itemId
+    
+    // 器材区发送按钮
+    this.equipmentSendBtnBounds = null // 发送按钮点击区域
+    this.equipmentSendBtnPressed = false // 发送按钮按下状态
   }
   
   // 触发震动（仅在真机上生效，开发者工具中不震动）
@@ -63,38 +64,96 @@ export default class EquipmentRoom {
     // 绘制两个柜子：药品柜和器械柜
     this.renderMedicineCabinet(ctx)
     this.renderEquipmentCabinet(ctx)
-    // 托盘移到治疗区底部，不在器材室渲染
+    // 绘制器材区底部的发送按钮
+    this.renderSendButton(ctx)
+  }
+  
+  // 绘制器材区发送按钮
+  renderSendButton(ctx) {
+    // 按钮位置：器材室底部居中
+    const btnWidth = this.width * 0.4
+    const btnHeight = 25
+    const btnX = this.x + (this.width - btnWidth) / 2
+    const btnY = this.y + this.height - btnHeight -1
+    
+    // 是否有选中的物品
+    const hasSelected = this.selectedItems.size > 0
+    
+    // 按钮按下动效
+    const btnScale = this.equipmentSendBtnPressed ? 0.95 : 1
+    const scaleOffsetX = (btnWidth * (1 - btnScale)) / 2
+    const scaleOffsetY = (btnHeight * (1 - btnScale)) / 2
+    const drawX = btnX + scaleOffsetX
+    const drawY = btnY + scaleOffsetY
+    const drawW = btnWidth * btnScale
+    const drawH = btnHeight * btnScale
+    
+    // 按钮背景（圆角）
+    if (this.equipmentSendBtnPressed) {
+      ctx.fillStyle = hasSelected ? '#1E8449' : '#888888'  // 按下时颜色变深
+    } else {
+      ctx.fillStyle = hasSelected ? '#27AE60' : '#CCCCCC'  // 正常状态
+    }
+    fillRoundRect(ctx, drawX, drawY, drawW, drawH, 8)
+    
+    // 按钮边框
+    ctx.strokeStyle = hasSelected ? '#1E8449' : '#AAAAAA'
+    ctx.lineWidth = 2
+    strokeRoundRect(ctx, drawX, drawY, drawW, drawH, 8)
+    
+    // 按钮文字
+    ctx.fillStyle = '#FFF'
+    ctx.font = 'bold 16px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const btnText = hasSelected ? `发送 (${this.selectedItems.size})` : '发送'
+    ctx.fillText(btnText, drawX + drawW / 2, drawY + drawH / 2)
+    
+    // 记录按钮点击区域（使用原始大小，不受按下动效影响）
+    this.equipmentSendBtnBounds = {
+      x: btnX,
+      y: btnY,
+      width: btnWidth,
+      height: btnHeight
+    }
   }
 
   renderMedicineCabinet(ctx) {
     // 左侧药品柜 - 宽度增大，边距减小
     const cabinetWidth = this.width * 0.46
-    const cabinetHeight = this.height * 0.75
     const cabinetX = this.x + this.width * 0.03
     const cabinetY = this.y + this.height * 0.2
     
-    // 柜体外框
+    // 清空之前的抽屉区域
+    this.medicineDrawers = []
+    
+    // 4个抽屉（高度减5像素，为底部发送按钮留出空间）
+    const drawerCount = 4
+    const drawerMargin = cabinetWidth * 0.06
+    // 基于原始高度计算抽屉高度
+    const originalCabinetHeight = this.height * 0.75
+    const drawerHeight = (originalCabinetHeight - drawerMargin * (drawerCount + 1)) / drawerCount - 5
+    
+    // 根据实际抽屉高度计算柜体高度
+    const cabinetHeight = drawerMargin + drawerCount * (drawerHeight + drawerMargin)
+    
+    // 柜体外框（在计算完高度后绘制）
     ctx.fillStyle = '#FFF8DC'
     ctx.fillRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
     ctx.strokeStyle = '#CCCCCC'
     ctx.lineWidth = 3
     ctx.strokeRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
     
-    // 清空之前的抽屉区域
-    this.medicineDrawers = []
-    
-    // 4个抽屉
-    const drawerCount = 4
-    const drawerMargin = cabinetWidth * 0.06
-    const drawerHeight = (cabinetHeight - drawerMargin * (drawerCount + 1)) / drawerCount
-    
     for (let i = 0; i < drawerCount; i++) {
       const drawerY = cabinetY + drawerMargin + i * (drawerHeight + drawerMargin)
       const drawerX = cabinetX + drawerMargin
       const drawerW = cabinetWidth - drawerMargin * 2
       
+      // 检查是否被选中
+      const isSelected = this.selectedItems.has(MEDICINES[i].id)
+      
       // 绘制抽屉
-      this.renderDrawer(ctx, drawerX, drawerY, drawerW, drawerHeight, MEDICINES[i], i)
+      this.renderDrawer(ctx, drawerX, drawerY, drawerW, drawerHeight, MEDICINES[i], i, isSelected)
       
       // 记录抽屉点击区域
       this.medicineDrawers.push({
@@ -121,32 +180,39 @@ export default class EquipmentRoom {
   renderEquipmentCabinet(ctx) {
     // 右侧器械柜 - 宽度增大，边距减小
     const cabinetWidth = this.width * 0.46
-    const cabinetHeight = this.height * 0.75
     const cabinetX = this.x + this.width - cabinetWidth - this.width * 0.03
     const cabinetY = this.y + this.height * 0.2
     
-    // 柜体外框
+    // 清空之前的抽屉区域
+    this.toolDrawers = []
+    
+    // 4个抽屉（高度减5像素，为底部发送按钮留出空间）
+    const drawerCount = 4
+    const drawerMargin = cabinetWidth * 0.06
+    // 基于原始高度计算抽屉高度
+    const originalCabinetHeight = this.height * 0.75
+    const drawerHeight = (originalCabinetHeight - drawerMargin * (drawerCount + 1)) / drawerCount - 5
+    
+    // 根据实际抽屉高度计算柜体高度
+    const cabinetHeight = drawerMargin + drawerCount * (drawerHeight + drawerMargin)
+    
+    // 柜体外框（在计算完高度后绘制）
     ctx.fillStyle = '#E8F8F5'
     ctx.fillRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
     ctx.strokeStyle = '#CCCCCC'
     ctx.lineWidth = 3
     ctx.strokeRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
     
-    // 清空之前的抽屉区域
-    this.toolDrawers = []
-    
-    // 4个抽屉
-    const drawerCount = 4
-    const drawerMargin = cabinetWidth * 0.06
-    const drawerHeight = (cabinetHeight - drawerMargin * (drawerCount + 1)) / drawerCount
-    
     for (let i = 0; i < drawerCount; i++) {
       const drawerY = cabinetY + drawerMargin + i * (drawerHeight + drawerMargin)
       const drawerX = cabinetX + drawerMargin
       const drawerW = cabinetWidth - drawerMargin * 2
       
+      // 检查是否被选中
+      const isSelected = this.selectedItems.has(TOOLS[i].id)
+      
       // 绘制抽屉
-      this.renderDrawer(ctx, drawerX, drawerY, drawerW, drawerHeight, TOOLS[i], i)
+      this.renderDrawer(ctx, drawerX, drawerY, drawerW, drawerHeight, TOOLS[i], i, isSelected)
       
       // 记录抽屉点击区域
       this.toolDrawers.push({
@@ -171,15 +237,23 @@ export default class EquipmentRoom {
   }
 
   // 绘制单个抽屉
-  renderDrawer(ctx, x, y, width, height, item, index) {
-    // 抽屉背景
-    ctx.fillStyle = '#F5F5F5'
-    fillRoundRect(ctx, x, y, width, height, 6)
-    
-    // 抽屉边框
-    ctx.strokeStyle = '#CCCCCC'
-    ctx.lineWidth = 2
-    strokeRoundRect(ctx, x, y, width, height, 6)
+  renderDrawer(ctx, x, y, width, height, item, index, isSelected = false) {
+    // 抽屉背景（选中时高亮）
+    if (isSelected) {
+      ctx.fillStyle = '#E3F2FD' // 浅蓝色高亮背景
+      fillRoundRect(ctx, x, y, width, height, 6)
+      // 高亮边框
+      ctx.strokeStyle = '#3498DB'
+      ctx.lineWidth = 3
+      strokeRoundRect(ctx, x, y, width, height, 6)
+    } else {
+      ctx.fillStyle = '#F5F5F5'
+      fillRoundRect(ctx, x, y, width, height, 6)
+      // 普通边框
+      ctx.strokeStyle = '#CCCCCC'
+      ctx.lineWidth = 2
+      strokeRoundRect(ctx, x, y, width, height, 6)
+    }
     
     // 图标区域（左侧）- 变大
     const iconSize = Math.min(height * 0.6, width * 0.3)
@@ -226,6 +300,29 @@ export default class EquipmentRoom {
     } else {
       ctx.textBaseline = 'middle'
       ctx.fillText(item.name, textX, textY)
+    }
+    
+    // 如果被选中，在左上角绘制勾号
+    if (isSelected) {
+      const checkSize = Math.min(width, height) * 0.25
+      const checkX = x + checkSize * 0.5
+      const checkY = y + checkSize * 0.5
+      
+      // 绿色圆形背景
+      ctx.fillStyle = '#27AE60'
+      ctx.beginPath()
+      ctx.arc(checkX, checkY, checkSize * 0.6, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // 白色对勾
+      ctx.strokeStyle = '#FFF'
+      ctx.lineWidth = 2
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(checkX - checkSize * 0.25, checkY)
+      ctx.lineTo(checkX - checkSize * 0.08, checkY + checkSize * 0.2)
+      ctx.lineTo(checkX + checkSize * 0.25, checkY - checkSize * 0.15)
+      ctx.stroke()
     }
   }
 
@@ -446,43 +543,53 @@ export default class EquipmentRoom {
   }
 
   // 检查点击是否在发送按钮上
+  // 检查点击是否在器材区发送按钮上
+  isClickOnEquipmentSendButton(x, y) {
+    if (!this.equipmentSendBtnBounds) return false
+    const isHit = x >= this.equipmentSendBtnBounds.x && 
+                  x <= this.equipmentSendBtnBounds.x + this.equipmentSendBtnBounds.width &&
+                  y >= this.equipmentSendBtnBounds.y && 
+                  y <= this.equipmentSendBtnBounds.y + this.equipmentSendBtnBounds.height
+    if (isHit) {
+      // 触发短震动（仅真机）
+      this.vibrate()
+    }
+    return isHit
+  }
+  
+  // 切换物品的选中状态
+  toggleItemSelection(itemId) {
+    if (this.selectedItems.has(itemId)) {
+      this.selectedItems.delete(itemId)
+      return false  // 取消选中
+    } else {
+      this.selectedItems.add(itemId)
+      return true  // 选中
+    }
+  }
+  
+  // 获取选中的物品列表
+  getSelectedItems() {
+    return Array.from(this.selectedItems).map(id => getItemById(id)).filter(item => item !== null)
+  }
+  
+  // 清空选中状态
+  clearSelection() {
+    this.selectedItems.clear()
+  }
+
+  // 【废弃】旧的发送按钮检测（治疗区托盘用）
   isClickOnSendButton(x, y) {
-    if (!this.sendButtonBounds) return false
-    // 圆形按钮检测（增加 8px 额外点击区域）
-    const centerX = this.sendButtonBounds.x + this.sendButtonBounds.width / 2
-    const centerY = this.sendButtonBounds.y + this.sendButtonBounds.height / 2
-    const radius = this.sendButtonBounds.width / 2 + 4
-    const dx = x - centerX
-    const dy = y - centerY
-    const isHit = dx * dx + dy * dy <= radius * radius
-    if (isHit) {
-      // 触发短震动（仅真机）
-      this.vibrate()
-    }
-    return isHit
+    return false
   }
 
-  // 检查点击是否在重置按钮上
+  // 【废弃】重置按钮检测
   isClickOnResetButton(x, y) {
-    if (!this.resetButtonBounds) return false
-    // 圆形按钮检测
-    const centerX = this.resetButtonBounds.x + this.resetButtonBounds.width / 2
-    const centerY = this.resetButtonBounds.y + this.resetButtonBounds.height / 2
-    const radius = this.resetButtonBounds.width / 2
-    const dx = x - centerX
-    const dy = y - centerY
-    const isHit = dx * dx + dy * dy <= radius * radius
-    if (isHit) {
-      // 触发短震动（仅真机）
-      this.vibrate()
-    }
-    return isHit
+    return false
   }
 
-  // 检查点击是否在托盘上
+  // 【废弃】托盘检测
   isClickOnTray(x, y) {
-    if (!this.trayBounds) return false
-    return x >= this.trayBounds.x && x <= this.trayBounds.x + this.trayBounds.width &&
-           y >= this.trayBounds.y && y <= this.trayBounds.y + this.trayBounds.height
+    return false
   }
 }

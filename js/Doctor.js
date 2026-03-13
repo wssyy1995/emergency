@@ -436,13 +436,19 @@ export default class Doctor {
       ctx.translate(this.x, this.y - 55 * scale)
       
       const barW = 40 * scale
-      const barH = 6 * scale
+      const barH = 8 * scale
+      const radius = barH / 2  // 圆角半径为高度的一半，形成圆润的胶囊形状
       
+      // 进度条背景（灰色圆角）
       ctx.fillStyle = '#E0E0E0'
-      ctx.fillRect(-barW/2, -barH/2, barW, barH)
+      fillRoundRect(ctx, -barW/2, -barH/2, barW, barH, radius)
       
-      ctx.fillStyle = '#27AE60'
-      ctx.fillRect(-barW/2, -barH/2, barW * this.targetBed.treatmentProgress, barH)
+      // 蓝色进度条（圆角）
+      ctx.fillStyle = '#3498DB'
+      const progressWidth = barW * this.targetBed.treatmentProgress
+      if (progressWidth > 0) {
+        fillRoundRect(ctx, -barW/2, -barH/2, progressWidth, barH, radius)
+      }
       
       ctx.restore()
     }

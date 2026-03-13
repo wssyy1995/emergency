@@ -31,17 +31,17 @@ export const GameConfig = {
   ],
 
   // ==================== 病情配置 ====================
-  // 每种病情对应的耐心值（秒）、治疗时间（毫秒）和所需物品
+  // 每种病情对应的耐心值（秒）、急救治疗时间（毫秒）、自动治疗时间（毫秒）和所需物品
   diseases: [
-    { disease_id: 1, disease_name: '发烧', patience: 20, treat_time: 2000, treat_need: ['thermometer', 'antibiotic'] },
-    { disease_id: 2, disease_name: '头痛', patience: 30, treat_time: 3000, treat_need: ['painkiller', 'thermometer'] },
-    { disease_id: 3, disease_name: '骨折', patience: 30, treat_time: 5000, treat_need: ['scissors', 'tape', 'painkiller'] },
-    { disease_id: 4, disease_name: '腹痛', patience: 30, treat_time: 3000, treat_need: ['thermometer', 'injection'] },
-    { disease_id: 5, disease_name: '胸闷', patience: 30, treat_time: 4000, treat_need: ['aed', 'adrenaline'] },
-    { disease_id: 6, disease_name: '过敏', patience: 30, treat_time: 2500, treat_need: ['adrenaline', 'injection'] },
-    { disease_id: 7, disease_name: '扭伤', patience: 30, treat_time: 2500, treat_need: ['tape', 'painkiller'] },
-    { disease_id: 8, disease_name: '感冒', patience: 30, treat_time: 2000, treat_need: ['thermometer', 'antibiotic', 'injection'] },
-    { disease_id: 9, disease_name: '中风', patience: 15, treat_time: 6000, treat_need: ['aed', 'adrenaline', 'injection'] }
+    { disease_id: 1, disease_name: '发烧', patience: 20, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic'] },
+    { disease_id: 2, disease_name: '头痛', patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'] },
+    { disease_id: 3, disease_name: '骨折', patience: 30, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'] },
+    { disease_id: 4, disease_name: '腹痛', patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'] },
+    { disease_id: 5, disease_name: '胸闷', patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'] },
+    { disease_id: 6, disease_name: '过敏', patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['adrenaline', 'injection'] },
+    { disease_id: 7, disease_name: '扭伤', patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['tape', 'painkiller'] },
+    { disease_id: 8, disease_name: '感冒', patience: 30, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic', 'injection'] },
+    { disease_id: 9, disease_name: '中风', patience: 15, emerge_treat_time: 6000, auto_treat_time: 12000, treat_need: ['aed', 'adrenaline', 'injection'] }
   ],
 
   // ==================== 病人配置 ====================
@@ -258,10 +258,16 @@ export function checkPatientRage(patientDetail) {
   return Math.random() < probability
 }
 
-// 根据疾病名称获取治疗时间（毫秒）
+// 根据疾病名称获取急救治疗时间（毫秒）
 export function getTreatTimeByDisease(diseaseName) {
   const disease = GameConfig.diseases.find(d => d.disease_name === diseaseName)
-  return disease ? disease.treat_time : 3000 // 默认3秒
+  return disease ? disease.emerge_treat_time : 3000 // 默认3秒
+}
+
+// 根据疾病名称获取自动治疗时间（毫秒）
+export function getAutoTreatTimeByDisease(diseaseName) {
+  const disease = GameConfig.diseases.find(d => d.disease_name === diseaseName)
+  return disease ? disease.auto_treat_time : 6000 // 默认6秒
 }
 
 // 根据疾病名称获取所需治疗物品列表

@@ -6,7 +6,7 @@ import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
-import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getTreatNeedByDisease } from './GameConfig.js'
+import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease } from './GameConfig.js'
 
 export default class Game {
   constructor() {
@@ -112,6 +112,7 @@ export default class Game {
     
     // 图标图片
     this.honorImage = null
+    this.curedImage = null
     this.loadIcons()
     
     // 浮动文字动画
@@ -131,10 +132,7 @@ export default class Game {
     // 椅子选择弹窗状态
     this.seatSelectionModal = null
     
-    // 治疗弹窗状态
-    this.treatmentModal = null
-    
-    // 输液区病人选择弹窗状态（治疗/急救）
+    // 输液区病人选择弹窗状态（急救）
     this.ivPatientSelectionModal = null
     
     // 暴走提示状态（只显示一次）
@@ -168,6 +166,13 @@ export default class Game {
       this.honorImage = honorImg
     }
     honorImg.src = 'images/honor.png'
+    
+    // 加载治愈图标
+    const curedImg = wx.createImage()
+    curedImg.onload = () => {
+      this.curedImage = curedImg
+    }
+    curedImg.src = 'images/cured.png'
   }
 
   // 添加浮动文字
@@ -178,6 +183,35 @@ export default class Game {
       x,
       y,
       color,
+      opacity: 1,
+      offsetY: 0,
+      life: 1000 // 1秒动画
+    })
+  }
+  
+  // 添加浮动奖励（图标+数值）
+  // rewardType: 'honor' | 'cured'
+  addFloatingReward(rewardType, value, x, y) {
+    this.floatingTexts.push({
+      type: 'reward',
+      rewardType,  // 'honor' 或 'cured'
+      value,       // 数值
+      x,
+      y,
+      opacity: 1,
+      offsetY: 0,
+      life: 1000 // 1秒动画
+    })
+  }
+  
+  // 添加组合奖励动效（荣誉点 + 治愈，两行显示）
+  addFloatingRewardsCombined(honorValue, curedValue, x, y) {
+    this.floatingTexts.push({
+      type: 'rewardCombined',
+      honorValue,
+      curedValue,
+      x,
+      y,
       opacity: 1,
       offsetY: 0,
       life: 1000 // 1秒动画
@@ -446,8 +480,10 @@ export default class Game {
             this.curedCount++
             bed.scoreAdded = true
             
-            // 添加浮动文字动画
-            this.addFloatingText(`+${addedScore}`, bed.x + bed.width / 2, bed.y, '#FFD700')
+            // 添加浮动奖励动效（荣誉点 + 治愈，两行显示）
+            const centerX = bed.x + bed.width / 2
+            const centerY = bed.y
+            this.addFloatingRewardsCombined(addedScore, 1, centerX, centerY)
             
             // 检查是否完成关卡目标
             this.checkLevelTarget()
@@ -472,26 +508,21 @@ export default class Game {
         // 【修改】输液椅上病人耐心暂停减少（保持当前值不变）
         // 不执行任何耐心值增减操作
         
-        // 处理已治愈的病人（通过治疗弹窗治愈）
-        if (seat.patient.isCured && !seat.patient.scoreAdded) {
-          // 增加分数和治愈人数（只加一次）
-          const addedScore = 10 + Math.floor(Math.random() * 20)
-          this.score += addedScore
-          this.curedCount++
-          seat.patient.scoreAdded = true
-          
-          // 添加浮动文字动画
-          this.addFloatingText(`+${addedScore}`, seat.patient.x, seat.patient.y, '#FFD700')
-          
-          // 病人离开
-          if (!seat.patient.leaveTimer) {
-            seat.patient.leaveTimer = setTimeout(() => {
-              seat.clear()
-            }, 1000)
+        // 输液治疗进度更新
+        if (!seat.patient.ivTreatmentComplete) {
+          // 初始化总治疗时间（只需要一次）
+          if (seat.patient.ivTotalTreatmentTime === 0) {
+            seat.patient.ivTotalTreatmentTime = getAutoTreatTimeByDisease(seat.patient.condition.name)
           }
           
-          // 检查是否完成关卡目标
-          this.checkLevelTarget()
+          // 更新治疗时间
+          seat.patient.ivTreatmentTime += deltaTime
+          seat.patient.ivTreatmentProgress = Math.min(1, seat.patient.ivTreatmentTime / seat.patient.ivTotalTreatmentTime)
+          
+          // 治疗完成
+          if (seat.patient.ivTreatmentProgress >= 1) {
+            seat.patient.ivTreatmentComplete = true
+          }
         }
       }
     })
@@ -793,8 +824,7 @@ export default class Game {
     this.bedArea.render(this.ctx)
     this.equipmentRoom.render(this.ctx)
     
-    // 在治疗区底部绘制托盘和按钮
-    this.renderTrayAtBedArea()
+    // 【已移除】治疗区底部托盘和按钮已移到器材室
     
     // 渲染医生身体
     this.doctors.forEach(doctor => doctor.render(this.ctx))
@@ -813,7 +843,7 @@ export default class Game {
     this.renderGameWinModal()
     this.renderSeatSelectionModal()
     this.renderIVPatientSelectionModal()
-    this.renderTreatmentModal()
+
     
     // 调试日志已禁用
     // this.renderDebugLogs()
@@ -890,7 +920,102 @@ export default class Game {
     this.floatingTexts.forEach(ft => {
       ctx.globalAlpha = ft.opacity
       
-      if (ft.type === 'item' && ft.item) {
+      if (ft.type === 'rewardCombined') {
+        // 绘制组合奖励（荣誉点 + 治愈，两行显示）
+        const iconSize = 22
+        const lineHeight = 26
+        const spacing = 6
+        const centerX = ft.x
+        const centerY = ft.y + ft.offsetY
+        
+        // 更深的颜色
+        const honorColor = '#E6A700'  // 深黄色（金色）
+        const curedColor = '#1F618D'  // 深蓝色
+        
+        // 添加阴影效果
+        ctx.shadowColor = 'rgba(0,0,0,0.4)'
+        ctx.shadowBlur = 4
+        ctx.shadowOffsetX = 2
+        ctx.shadowOffsetY = 2
+        
+        // 第一行：荣誉点
+        const honorText = `+${ft.honorValue}`
+        ctx.font = 'bold 22px cursive, sans-serif'
+        const honorTextWidth = ctx.measureText(honorText).width
+        const honorTotalWidth = iconSize + spacing + honorTextWidth
+        const honorStartX = centerX - honorTotalWidth / 2
+        const honorY = centerY - lineHeight / 2
+        
+        // 绘制荣誉点图标
+        if (this.honorImage && this.honorImage.width > 0) {
+          ctx.drawImage(this.honorImage, honorStartX, honorY - iconSize/2, iconSize, iconSize)
+        }
+        // 绘制荣誉点数值
+        ctx.fillStyle = honorColor
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(honorText, honorStartX + iconSize + spacing, honorY)
+        
+        // 第二行：治愈数
+        const curedText = `+${ft.curedValue}`
+        ctx.font = 'bold 22px cursive, sans-serif'
+        const curedTextWidth = ctx.measureText(curedText).width
+        const curedTotalWidth = iconSize + spacing + curedTextWidth
+        const curedStartX = centerX - curedTotalWidth / 2
+        const curedY = centerY + lineHeight / 2
+        
+        // 绘制治愈图标
+        if (this.curedImage && this.curedImage.width > 0) {
+          ctx.drawImage(this.curedImage, curedStartX, curedY - iconSize/2, iconSize, iconSize)
+        }
+        // 绘制治愈数值
+        ctx.fillStyle = curedColor
+        ctx.fillText(curedText, curedStartX + iconSize + spacing, curedY)
+        
+        // 重置阴影
+        ctx.shadowColor = 'transparent'
+        ctx.shadowBlur = 0
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = 0
+      } else if (ft.type === 'reward') {
+        // 绘制奖励图标+数值（荣誉点或治愈）- 单行显示（备用）
+        const iconSize = 24
+        const text = `+${ft.value}`
+        const isHonor = ft.rewardType === 'honor'
+        const iconImage = isHonor ? this.honorImage : this.curedImage
+        const textColor = isHonor ? '#E6A700' : '#1F618D'  // 深黄色或深蓝色
+        
+        // 计算总宽度（图标 + 间距 + 文字）
+        ctx.font = 'bold 24px cursive, sans-serif'
+        const textWidth = ctx.measureText(text).width
+        const spacing = 6
+        const totalWidth = iconSize + spacing + textWidth
+        const startX = ft.x - totalWidth / 2
+        const centerY = ft.y + ft.offsetY
+        
+        // 添加阴影效果
+        ctx.shadowColor = 'rgba(0,0,0,0.4)'
+        ctx.shadowBlur = 4
+        ctx.shadowOffsetX = 2
+        ctx.shadowOffsetY = 2
+        
+        // 绘制图标
+        if (iconImage && iconImage.width > 0) {
+          ctx.drawImage(iconImage, startX, centerY - iconSize/2, iconSize, iconSize)
+        }
+        
+        // 绘制数值文字
+        ctx.fillStyle = textColor
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(text, startX + iconSize + spacing, centerY)
+        
+        // 重置阴影
+        ctx.shadowColor = 'transparent'
+        ctx.shadowBlur = 0
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = 0
+      } else if (ft.type === 'item' && ft.item) {
         // 绘制物品图片
         const itemSize = 32
         const itemImage = getItemImage(ft.item.id)
@@ -1144,7 +1269,7 @@ export default class Game {
       
       // 优先处理弹窗点击（按优先级顺序）
       
-      // 1. 输液区病人选择弹窗（治疗/急救）
+      // 1. 输液区病人选择弹窗（急救）
       if (this.ivPatientSelectionModal && this.ivPatientSelectionModal.visible) {
         if (this.handleIVPatientSelectionTouch(x, y)) {
           return
@@ -1195,71 +1320,32 @@ export default class Game {
         return
       }
       
-      // 检查是否点击重置按钮（优先检测，避免和器械柜重叠）
-      if (this.equipmentRoom.isClickOnResetButton(x, y)) {
+      // 检查是否点击器材区的发送按钮
+      if (this.equipmentRoom.isClickOnEquipmentSendButton(x, y)) {
         // 设置按下状态并显示动效
-        this.equipmentRoom.resetButtonPressed = true
+        this.equipmentRoom.equipmentSendBtnPressed = true
         setTimeout(() => {
-          this.equipmentRoom.resetButtonPressed = false
-        }, 150)
-        const trayItems = this.equipmentRoom.getTrayItems()
-        if (trayItems.length > 0) {
-          this.equipmentRoom.clearTray()
-        }
-        return
-      }
-      
-      // 检查是否点击发送按钮（优先检测，避免和器械柜重叠）
-      if (this.equipmentRoom.isClickOnSendButton(x, y)) {
-        // 设置按下状态并显示动效
-        this.equipmentRoom.sendButtonPressed = true
-        setTimeout(() => {
-          this.equipmentRoom.sendButtonPressed = false
+          this.equipmentRoom.equipmentSendBtnPressed = false
         }, 150)
         this.handleSendButtonClick()
         return
       }
       
-      // 检查是否点击器材室的物品
+      // 检查是否点击器材室的物品（新的选择模式）
       const itemId = this.equipmentRoom.getItemAt(x, y)
       if (itemId) {
         // 点击器材时震动（仅真机）
         this.vibrate()
         const item = getItemById(itemId)
         if (item) {
-          // 如果治疗弹窗打开，优先放入治疗弹窗槽位
-          if (this.treatmentModal && this.treatmentModal.visible) {
-            const added = this.addItemToTreatmentSlot(item)
-            if (added) {
-              console.log('已将', item.name, '放入治疗槽位')
-            }
+          // 切换选中状态
+          const isSelected = this.equipmentRoom.toggleItemSelection(itemId)
+          if (isSelected) {
+            console.log('选中器材:', item.name)
           } else {
-            // 将物品放入托盘
-            const result = this.equipmentRoom.addItemToTray(item)
-            if (result.success) {
-              console.log('已将', item.name, '放入托盘')
-            } else if (result.reason === 'duplicate') {
-              console.log(item.name, '已在托盘中')
-            } else if (result.reason === 'full') {
-              wx.showToast({
-                title: '托盘已满(最多4个)',
-                icon: 'none',
-                duration: 1200
-              })
-            }
+            console.log('取消选中:', item.name)
           }
         }
-        return
-      }
-      
-      // 检查治疗弹窗的点击（在器材室检测之后，避免拦截器材室点击）
-      if (this.treatmentModal && this.treatmentModal.visible) {
-        // 先检查是否点击弹窗内部（按钮和槽位）
-        if (this.handleTreatmentModalClick(x, y)) {
-          return
-        }
-        // 点击弹窗外部关闭弹窗（但器材室点击已处理过，不会到这里）
-        this.treatmentModal = null
         return
       }
       
@@ -1290,12 +1376,19 @@ export default class Game {
         return
       }
       
-      // 检查是否点击输液椅上的病人（显示头上选择弹窗：治疗/急救）
+      // 检查是否点击输液椅上的病人
       const ivSeatPatient = this.findIVSeatPatientAt(x, y)
       if (ivSeatPatient) {
         console.log('[点击检测] 点击输液椅上病人:', ivSeatPatient.name)
         this.vibrate()
-        this.showIVPatientSelectionModal(ivSeatPatient)
+        
+        // 如果治疗已完成，点击触发治愈
+        if (ivSeatPatient.ivTreatmentComplete) {
+          this.completeIVTreatment(ivSeatPatient)
+        } else {
+          // 治疗未完成，显示急救弹窗
+          this.showIVPatientSelectionModal(ivSeatPatient)
+        }
         return
       }
     })
@@ -1516,6 +1609,32 @@ export default class Game {
     emptySeat.assignPatient(patient)
     
     console.log(`病人 ${patient.name} 直接出现在输液椅`)
+  }
+  
+  // 完成输液治疗（点击已完成的病人）
+  completeIVTreatment(patient) {
+    if (!patient || !patient.ivTreatmentComplete || patient.scoreAdded) return
+    
+    // 标记已计分
+    patient.scoreAdded = true
+    
+    // 增加分数和治愈人数
+    const addedScore = 10 + Math.floor(Math.random() * 20)
+    this.score += addedScore
+    this.curedCount++
+    
+    // 添加浮动奖励动效（荣誉点 + 治愈，两行显示）
+    this.addFloatingRewardsCombined(addedScore, 1, patient.x, patient.y)
+    
+    // 病人离开
+    if (patient.seat) {
+      patient.seat.clear()
+    }
+    
+    // 检查是否完成关卡目标
+    this.checkLevelTarget()
+    
+    console.log(`输液治疗完成: ${patient.name}, 获得 ${addedScore} 分`)
   }
   
   // 查找真正空闲的病床（排除已有病人正在走向的）
@@ -1960,8 +2079,9 @@ export default class Game {
 
   // 处理发送按钮点击
   handleSendButtonClick() {
-    const trayItems = this.equipmentRoom.getTrayItems()
-    if (trayItems.length === 0) {
+    // 获取选中的物品
+    const selectedItems = this.equipmentRoom.getSelectedItems()
+    if (selectedItems.length === 0) {
       wx.showToast({
         title: '请先选择物品',
         icon: 'none',
@@ -1970,8 +2090,8 @@ export default class Game {
       return
     }
     
-    // 获取托盘物品ID集合
-    const trayItemIds = this.equipmentRoom.getTrayItemIds()
+    // 获取选中物品ID集合
+    const selectedItemIds = selectedItems.map(item => item.id)
     
     // 获取所有正在申请物品且有未满足需求的医生
     const requestingDoctors = []
@@ -1998,12 +2118,12 @@ export default class Game {
     for (const doctor of requestingDoctors) {
       const requiredIds = doctor.getRequiredItemIds()
       
-      // 检查托盘所有物品是否都在该医生的需求列表中
-      const allItemsMatch = trayItemIds.every(id => requiredIds.includes(id))
+      // 检查选中物品是否都在该医生的需求列表中
+      const allItemsMatch = selectedItemIds.every(id => requiredIds.includes(id))
       
       if (allItemsMatch) {
         // 计算匹配的ID列表
-        const matchedIds = trayItemIds.filter(id => requiredIds.includes(id))
+        const matchedIds = selectedItemIds.filter(id => requiredIds.includes(id))
         validDoctorMatches.push({
           doctor,
           matchedIds,
@@ -2018,7 +2138,7 @@ export default class Game {
       const partialMatches = []
       for (const doctor of requestingDoctors) {
         const requiredIds = doctor.getRequiredItemIds()
-        const matchedIds = trayItemIds.filter(id => requiredIds.includes(id))
+        const matchedIds = selectedItemIds.filter(id => requiredIds.includes(id))
         if (matchedIds.length > 0) {
           partialMatches.push({ doctor, matchedCount: matchedIds.length })
         }
@@ -2065,7 +2185,7 @@ export default class Game {
       matchedIds = validDoctorMatches[0].matchedIds
     }
     
-    // 配送该医生在托盘中的所有物品
+    // 配送该医生在选中物品中的所有匹配物品
     let deliveredCount = 0
     for (const itemId of matchedIds) {
       if (targetDoctor.receiveItem(itemId)) {
@@ -2077,10 +2197,11 @@ export default class Game {
         if (drawerCenter) {
           this.addFloatingItem(item, drawerCenter.x, drawerCenter.y - 20)
         }
-        
-        this.equipmentRoom.removeItemFromTray(itemId)
       }
     }
+    
+    // 清空选中状态（发送后重置）
+    this.equipmentRoom.clearSelection()
     
     if (deliveredCount > 0) {
       const remainingRequired = targetDoctor.getRequiredItemIds()
@@ -2414,7 +2535,7 @@ export default class Game {
     })
   }
   
-  // 显示输液区病人选择弹窗（头上弹窗：治疗/急救）
+  // 显示输液区病人选择弹窗（头上弹窗：急救）
   showIVPatientSelectionModal(patient) {
     const hasEmptyBed = this.bedArea.findEmptyBed() !== null
     
@@ -2422,11 +2543,6 @@ export default class Game {
       visible: true,
       patient: patient,
       buttons: [
-        { 
-          type: 'treat', 
-          label: '治疗', 
-          color: '#9B59B6'  // 紫色
-        },
         { 
           type: 'emergency', 
           label: '急救', 
@@ -2437,171 +2553,7 @@ export default class Game {
     }
   }
   
-  // 显示治疗弹窗（点击"治疗"按钮后）
-  showTreatmentModal(patient) {
-    this.treatmentModal = {
-      visible: true,
-      patient: patient,
-      title: '请选择器材',
-      slots: [null, null, null], // 3个槽位
-      selectedSlot: -1, // 当前选中的槽位
-      message: null, // 提示消息
-      buttons: {
-        treat: { text: '治疗', color: '#27AE60' },
-        cancel: { text: '取消', color: '#95A5A6' }
-      }
-    }
-  }
-  
-  // 处理治疗弹窗的触摸事件（只处理弹窗内部的点击）
-  handleTreatmentModalClick(x, y) {
-    if (!this.treatmentModal || !this.treatmentModal.visible) return false
-    
-    const modal = this.treatmentModal
-    const patient = modal.patient
-    
-    // 弹窗尺寸和位置（与渲染一致）
-    const modalWidth = 220
-    const modalHeight = 140
-    const modalX = patient.x + patient.width + 8
-    const modalY = patient.y - 100
-    
-    // 保存位置
-    modal.x = modalX
-    modal.y = modalY
-    modal.width = modalWidth
-    modal.height = modalHeight
-    
-    // 检查点击槽位（小尺寸）
-    const slotWidth = 50
-    const slotHeight = 50
-    const slotGap = 10
-    const slotsTotalWidth = slotWidth * 3 + slotGap * 2
-    const slotsStartX = modalX + (modalWidth - slotsTotalWidth) / 2
-    const slotsY = modalY + 35
-    
-    for (let i = 0; i < 3; i++) {
-      const slotX = slotsStartX + i * (slotWidth + slotGap)
-      if (x >= slotX && x <= slotX + slotWidth && y >= slotsY && y <= slotsY + slotHeight) {
-        this.vibrate()
-        modal.selectedSlot = i
-        return true
-      }
-    }
-    
-    // 检查点击按钮（小尺寸）
-    const btnWidth = 60
-    const btnHeight = 28
-    const btnGap = 20
-    const btnTotalWidth = btnWidth * 2 + btnGap
-    const btnStartX = modalX + (modalWidth - btnTotalWidth) / 2
-    const btnY = modalY + modalHeight - 40
-    
-    // 治疗按钮
-    if (x >= btnStartX && x <= btnStartX + btnWidth && y >= btnY && y <= btnY + btnHeight) {
-      this.vibrate()
-      this.handleTreatButton()
-      return true
-    }
-    
-    // 取消按钮
-    if (x >= btnStartX + btnWidth + btnGap && x <= btnStartX + btnWidth * 2 + btnGap && y >= btnY && y <= btnY + btnHeight) {
-      this.vibrate()
-      this.treatmentModal = null
-      return true
-    }
-    
-    // 点击弹窗外部 - 返回false，让外部处理关闭逻辑
-    if (x < modalX || x > modalX + modalWidth || y < modalY || y > modalY + modalHeight) {
-      return false
-    }
-    
-    // 点击弹窗内部但未命中特定元素
-    return true
-  }
-  
-  // 处理治疗按钮
-  handleTreatButton() {
-    const modal = this.treatmentModal
-    const patient = modal.patient
-    
-    // 获取病人疾病所需物品
-    const requiredItems = getTreatNeedByDisease(patient.condition.name)
-    
-    // 获取玩家选择的物品
-    const selectedItems = modal.slots.filter(item => item !== null).map(item => item.id)
-    
-    // 检查是否匹配（顺序不重要，内容相同即可）
-    const isMatch = this.arraysEqualIgnoreOrder(selectedItems, requiredItems)
-    
-    if (isMatch) {
-      // 治疗成功
-      modal.message = '治疗成功！'
-      patient.isCured = true
-      // 从输液椅移除
-      if (patient.seat) {
-        patient.seat.clear()
-      }
-      // 增加分数
-      const addedScore = 10 + Math.floor(Math.random() * 20)
-      this.score += addedScore
-      this.curedCount++
-      this.addFloatingText(`+${addedScore}`, patient.x, patient.y, '#FFD700')
-      // 关闭弹窗
-      setTimeout(() => {
-        this.treatmentModal = null
-      }, 1000)
-    } else {
-      // 治疗失败：弹窗立即消失
-      this.treatmentModal = null
-      
-      // 病人耐心值归零，头上冒火，然后离开
-      patient.patience = 0
-      patient.isAngry = true
-      patient.tomatoThrown = true
-      
-      // 从输液椅移除并离开
-      if (patient.seat) {
-        patient.seat.clear()
-      }
-      patient.startLeaving(this.screenHeight)
-    }
-  }
-  
-  // 数组比较（忽略顺序）
-  arraysEqualIgnoreOrder(arr1, arr2) {
-    if (arr1.length !== arr2.length) return false
-    const sorted1 = [...arr1].sort()
-    const sorted2 = [...arr2].sort()
-    return sorted1.every((val, idx) => val === sorted2[idx])
-  }
-  
-  // 添加物品到治疗弹窗槽位
-  addItemToTreatmentSlot(item) {
-    if (!this.treatmentModal || !this.treatmentModal.visible) return false
-    
-    const modal = this.treatmentModal
-    
-    // 找到第一个空槽位
-    const emptySlotIndex = modal.slots.findIndex(slot => slot === null)
-    if (emptySlotIndex === -1) {
-      // 槽位已满
-      wx.showToast({ title: '槽位已满', icon: 'none', duration: 1000 })
-      return false
-    }
-    
-    // 检查物品是否已在槽位中
-    if (modal.slots.some(slot => slot && slot.id === item.id)) {
-      wx.showToast({ title: '该器材已选择', icon: 'none', duration: 1000 })
-      return false
-    }
-    
-    modal.slots[emptySlotIndex] = item
-    this.vibrate()
-    return true
-  }
-  
-  // 渲染输液区病人选择弹窗（头上弹窗：治疗/急救）
+  // 渲染输液区病人选择弹窗（头上弹窗：急救）
   renderIVPatientSelectionModal() {
     if (!this.ivPatientSelectionModal || !this.ivPatientSelectionModal.visible) return
     
@@ -2609,8 +2561,8 @@ export default class Game {
     const modal = this.ivPatientSelectionModal
     const patient = modal.patient
     
-    // 弹窗尺寸（轻量小弹窗）
-    const modalWidth = 120
+    // 弹窗尺寸（轻量小弹窗）- 单个按钮，尺寸更小
+    const modalWidth = 70
     const modalHeight = 55
     
     // 弹窗位置：在病人头部右侧显示
@@ -2635,17 +2587,13 @@ export default class Game {
     ctx.shadowOffsetX = 0
     ctx.shadowOffsetY = 0
     
-    // 2个按钮并排
+    // 单个按钮居中
     const btnWidth = 50
     const btnHeight = 32
-    const btnGap = 8
-    const totalBtnsWidth = btnWidth * 2 + btnGap
-    const btnStartX = modalX + (modalWidth - totalBtnsWidth) / 2
+    const btnX = modalX + (modalWidth - btnWidth) / 2
     const btnY = modalY + 12
     
-    modal.buttons.forEach((btn, i) => {
-      const btnX = btnStartX + i * (btnWidth + btnGap)
-      
+    modal.buttons.forEach((btn) => {
       // 保存按钮位置用于点击检测
       btn.renderX = btnX
       btn.renderY = btnY
@@ -2694,14 +2642,8 @@ export default class Game {
         // 关闭当前弹窗
         this.ivPatientSelectionModal = null
         
-        // 根据按钮类型执行不同操作
-        if (btn.type === 'treat') {
-          // 治疗：显示器材选择弹窗
-          this.showTreatmentModal(modal.patient)
-        } else if (btn.type === 'emergency') {
-          // 急救：直接送去病床
-          this.sendPatientToBedDirectly(modal.patient)
-        }
+        // 急救：直接送去病床
+        this.sendPatientToBedDirectly(modal.patient)
         
         return true
       }
@@ -2715,126 +2657,5 @@ export default class Game {
     
     return false
   }
-  
-  // 渲染治疗弹窗（轻量风格，类似分诊选择弹窗）
-  renderTreatmentModal() {
-    if (!this.treatmentModal || !this.treatmentModal.visible) return
-    
-    const ctx = this.ctx
-    const modal = this.treatmentModal
-    const patient = modal.patient
-    
-    // 弹窗尺寸（轻量小弹窗）
-    const modalWidth = 220
-    const modalHeight = 140
-    
-    // 弹窗位置：在病人头部右侧显示
-    let modalX = patient.x + patient.width + 8
-    let modalY = patient.y - 100
-    
-    // 保存位置用于点击检测
-    modal.x = modalX
-    modal.y = modalY
-    modal.width = modalWidth
-    modal.height = modalHeight
-    
-    // 弹窗背景（带阴影，无蒙层）
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)'
-    ctx.shadowBlur = 8
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 3
-    ctx.fillStyle = '#FFF'
-    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 8)
-    ctx.shadowColor = 'transparent'
-    ctx.shadowBlur = 0
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 0
-    
-    // 顶部标题栏
-    ctx.fillStyle = '#5B9BD5'
-    ctx.beginPath()
-    ctx.moveTo(modalX + 8, modalY)
-    ctx.lineTo(modalX + modalWidth - 8, modalY)
-    ctx.quadraticCurveTo(modalX + modalWidth, modalY, modalX + modalWidth, modalY + 8)
-    ctx.lineTo(modalX + modalWidth, modalY + 22)
-    ctx.lineTo(modalX, modalY + 22)
-    ctx.lineTo(modalX, modalY + 8)
-    ctx.quadraticCurveTo(modalX, modalY, modalX + 8, modalY)
-    ctx.closePath()
-    ctx.fill()
-    
-    // 标题文字
-    ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 11px "PingFang SC", "Microsoft YaHei", sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('请选择器材', modalX + modalWidth / 2, modalY + 11)
-    
-    // 渲染3个槽位（小尺寸）
-    const slotWidth = 50
-    const slotHeight = 50
-    const slotGap = 10
-    const slotsTotalWidth = slotWidth * 3 + slotGap * 2
-    const slotsStartX = modalX + (modalWidth - slotsTotalWidth) / 2
-    const slotsY = modalY + 35
-    
-    for (let i = 0; i < 3; i++) {
-      const slotX = slotsStartX + i * (slotWidth + slotGap)
-      const slot = modal.slots[i]
-      const isSelected = modal.selectedSlot === i
-      
-      // 槽位背景
-      if (isSelected) {
-        ctx.fillStyle = '#E3F2FD'
-        ctx.strokeStyle = '#5B9BD5'
-        ctx.lineWidth = 2
-      } else {
-        ctx.fillStyle = '#F5F5F5'
-        ctx.strokeStyle = '#DDD'
-        ctx.lineWidth = 1
-      }
-      
-      fillRoundRect(ctx, slotX, slotsY, slotWidth, slotHeight, 6)
-      strokeRoundRect(ctx, slotX, slotsY, slotWidth, slotHeight, 6)
-      
-      // 渲染槽位中的物品
-      if (slot) {
-        const itemImage = getItemImage(slot.id)
-        if (itemImage) {
-          ctx.drawImage(itemImage, slotX + 8, slotsY + 8, slotWidth - 16, slotHeight - 16)
-        } else {
-          ctx.fillStyle = '#333'
-          ctx.font = '18px sans-serif'
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          ctx.fillText(slot.icon, slotX + slotWidth / 2, slotsY + slotHeight / 2)
-        }
-      }
-    }
-    
-    // 渲染按钮（小尺寸）
-    const btnWidth = 60
-    const btnHeight = 28
-    const btnGap = 20
-    const btnTotalWidth = btnWidth * 2 + btnGap
-    const btnStartX = modalX + (modalWidth - btnTotalWidth) / 2
-    const btnY = modalY + modalHeight - 40
-    
-    // 治疗按钮
-    const treatBtn = modal.buttons.treat
-    ctx.fillStyle = treatBtn.color
-    fillRoundRect(ctx, btnStartX, btnY, btnWidth, btnHeight, 6)
-    ctx.fillStyle = '#FFF'
-    ctx.font = 'bold 12px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(treatBtn.text, btnStartX + btnWidth / 2, btnY + btnHeight / 2)
-    
-    // 取消按钮
-    const cancelBtn = modal.buttons.cancel
-    ctx.fillStyle = cancelBtn.color
-    fillRoundRect(ctx, btnStartX + btnWidth + btnGap, btnY, btnWidth, btnHeight, 6)
-    ctx.fillStyle = '#FFF'
-    ctx.fillText(cancelBtn.text, btnStartX + btnWidth + btnGap + btnWidth / 2, btnY + btnHeight / 2)
-  }
+
 }
