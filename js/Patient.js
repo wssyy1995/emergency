@@ -525,11 +525,11 @@ export default class Patient {
         }
       } else if (this.ivTreatmentComplete) {
         // 【非紧急疾病】治疗完成：显示 cured.png 图标（带上下跳动动画）
-        const iconSize = 45 * scale  // 图标大小
+        const iconSize = 38 * scale  // 图标大小
         // 上下跳动动画：周期约0.8秒，跳动幅度 3px
         const bounceOffset = Math.sin(this.animationTime / 160) * 3 * scale
         if (curedImage && curedImage.width > 0) {
-          ctx.drawImage(curedImage, centerX - iconSize/2, barY - iconSize/2 + 1.5 * scale + bounceOffset, iconSize, iconSize)
+          ctx.drawImage(curedImage, centerX - iconSize/2, barY - iconSize/2 + 1.4 * scale + bounceOffset, iconSize, iconSize)
         } else {
           // 回退：绿色圆圈 + 对勾
           ctx.fillStyle = '#27AE60'

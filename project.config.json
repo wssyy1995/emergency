@@ -37,7 +37,7 @@
     "disableSWC": true
   },
   "compileType": "game",
-  "libVersion": "2.30.0",
+  "libVersion": "3.14.3",
   "appid": "wx66609bc8a552ed69",
   "projectname": "emergency-room-game",
   "condition": {},

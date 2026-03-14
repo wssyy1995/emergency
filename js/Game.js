@@ -1378,7 +1378,7 @@ export default class Game {
     const cureText = `${this.curedCount}/${levelConfig.cureTarget}`
     const cureMetrics = ctx.measureText(cureText)
     const cureHeight = 24
-    const cureIconSize = 36  // 图标尺寸
+    const cureIconSize = 28  // 图标尺寸
     const cureWidth = cureMetrics.width + cureIconSize + 20  // 文字 + 图标 + 间距
     
     // 2. 以倒计时胶囊为中心，计算位置
