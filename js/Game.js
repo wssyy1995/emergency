@@ -14,7 +14,7 @@ const UI_COLORS = {
   background: '#E6E6FA',      // 浅薰衣草紫
   
   // 顶部状态栏
-  header: '#D4BADD',          // 香芋紫色背景
+  header: '#B496C4',          // 香芋紫色背景
   headerBorder: '#C5B4E0',    // 顶部状态栏边框色（稍深）
   
   // 等候区托盘
@@ -182,6 +182,9 @@ export default class Game {
     this.isMuted = false
     this.volumeBtnBounds = null
     
+    // 调试按钮状态（点击荣誉点+100）
+    this.debugHonorBtnBounds = null
+    
     // 当前关卡病人池（用于不重复生成病人）
     this.currentLevelPatientPool = []
     
@@ -326,21 +329,21 @@ export default class Game {
 
   initAreas() {
     // 顶部状态栏高度
-    const headerHeight = 45
+    const headerHeight = 48
     // 底部留白
-    const bottomMargin = 10
+    const bottomMargin = 8
     // 顶部状态栏与三个区域之间的间距
-    const topPadding = 12
+    const topPadding = 10
     
     // 托盘 padding（外层边框宽度）- 增大以显示明显边框
-    const trayPadding = 14
+    const trayPadding = 10
     
     // 可用区域（包含托盘边框）
     const availableY = this.mapY + headerHeight + topPadding
     const availableHeight = this.mapHeight - headerHeight - bottomMargin - topPadding
     
     // 三个区域的间距（托盘之间的间距）
-    const gap = 10
+    const gap = 8
     
     // 计算总可用宽度
     const totalGap = gap * 4  // 左右边距 + 中间两个间距
@@ -1083,7 +1086,7 @@ export default class Game {
         
         // 绘制治愈图标
         if (this.curedImage && this.curedImage.width > 0) {
-          ctx.drawImage(this.curedImage, curedStartX, curedY - iconSize/2, iconSize, iconSize)
+          ctx.drawImage(this.curedImage, curedStartX, curedY - iconSize/2 - 3, iconSize + 8, iconSize + 18)
         }
         // 绘制治愈数值
         ctx.fillStyle = curedColor
@@ -1228,8 +1231,8 @@ export default class Game {
       this.waitingArea.trayWidth, this.waitingArea.trayHeight,
       UI_COLORS.waiting.outer,
       UI_COLORS.waiting.inner,
-      18,          // 圆角
-      14           // padding（内边距）
+      29,          // 圆角
+      9    // padding（托盘外层和内层边距）
     )
     
     // ===== 治疗区：双层托盘效果 =====
@@ -1238,8 +1241,8 @@ export default class Game {
       this.bedArea.trayWidth, this.bedArea.trayHeight,
       UI_COLORS.treatment.outer,
       UI_COLORS.treatment.inner,
-      18,          // 圆角
-      14           // padding
+      29,          // 圆角
+      9           // padding
     )
     
     // ===== 器材室：双层托盘效果 =====
@@ -1248,8 +1251,8 @@ export default class Game {
       this.equipmentRoom.trayWidth, this.equipmentRoom.trayHeight,
       UI_COLORS.equipment.outer,
       UI_COLORS.equipment.inner,
-      18,          // 圆角
-      14           // padding
+      29,          // 圆角
+      9           // padding
     )
     
     // ===== 悬浮标题标签（移到外层内部，避免被挤出）=====
@@ -1281,18 +1284,16 @@ export default class Game {
     fillRoundRect(ctx, x, y, width, height, radius)
         
     // 内层：浅色舞台（减去 padding，向下偏移 2px）
-    const innerX = x + padding
-    const innerY = y + padding + 2
+    const innerX = x +padding
+    const innerY = y + padding 
     const innerWidth = width - padding * 2
-    const innerHeight = height - padding * 2 
+    const innerHeight = height - padding *2
     const innerRadius = Math.max(10, radius - padding / 2)
     
     // 内层底色
     ctx.fillStyle = innerColor
     fillRoundRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius)
-    
-    // 【已移除】内层顶部内阴影
-    
+ 
     // 内层底部微阴影（增加厚度感）
     const bottomGradient = ctx.createLinearGradient(innerX, innerY + innerHeight - 10, innerX, innerY + innerHeight)
     bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)')
@@ -1306,7 +1307,7 @@ export default class Game {
   // 渲染悬浮标题标签（双层胶囊）
   renderFloatingBadge(ctx, centerX, y, text, bgColor, borderColor) {
     const paddingX = 14
-    ctx.font = 'bold 14px cursive, sans-serif'
+    ctx.font = 'bold 16px cursive, sans-serif'
     const textWidth = ctx.measureText(text).width
     const badgeWidth = textWidth + paddingX * 2
     const badgeHeight = 26
@@ -1370,7 +1371,7 @@ export default class Game {
     ctx.font = `bold ${Math.max(13, this.screenWidth * 0.019)}px cursive, sans-serif`
     const countdownMetrics = ctx.measureText(countdownText)
     const countdownHeight = 24
-    const countdownIconSize = 18  // 图标尺寸
+    const countdownIconSize = 20  // 图标尺寸
     const countdownWidth = countdownMetrics.width + countdownIconSize + 20  // 文字 + 图标 + 间距
     
     // 治愈人数胶囊
@@ -1435,6 +1436,38 @@ export default class Game {
     }
     ctx.fillStyle = '#FFF'
     ctx.fillText(honorText, honorX + 35, titleY)
+    
+    // 调试加号按钮（在荣誉点左边）
+    const debugBtnSize = 20
+    const debugBtnX = honorX - 30
+    const debugBtnY = titleY - 10
+    
+    // 按钮阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'
+    ctx.beginPath()
+    ctx.arc(debugBtnX + debugBtnSize / 2 + 1, debugBtnY + debugBtnSize / 2 + 2, debugBtnSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 按钮本体（金色）
+    ctx.fillStyle = '#FFD700'
+    ctx.beginPath()
+    ctx.arc(debugBtnX + debugBtnSize / 2, debugBtnY + debugBtnSize / 2, debugBtnSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 加号
+    ctx.fillStyle = '#5D4E37'
+    ctx.font = 'bold 14px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('+', debugBtnX + debugBtnSize / 2, debugBtnY + debugBtnSize / 2 + 1)
+    
+    // 记录调试按钮区域用于点击检测
+    this.debugHonorBtnBounds = {
+      x: debugBtnX,
+      y: debugBtnY,
+      width: debugBtnSize,
+      height: debugBtnSize
+    }
     
     // 音量开关按钮（圆形果冻风格）
     const volumeX = this.mapX + this.mapWidth - 45
@@ -1559,6 +1592,15 @@ export default class Game {
         if (this.handleDiseaseListTouch(x, y)) {
           return
         }
+      }
+      
+      // 检查是否点击调试荣誉点按钮
+      if (this.debugHonorBtnBounds &&
+          x >= this.debugHonorBtnBounds.x && x <= this.debugHonorBtnBounds.x + this.debugHonorBtnBounds.width &&
+          y >= this.debugHonorBtnBounds.y && y <= this.debugHonorBtnBounds.y + this.debugHonorBtnBounds.height) {
+        this.score += 100
+        console.log('调试：荣誉点 +100，当前：', this.score)
+        return
       }
       
       // 检查是否点击音量开关按钮
@@ -1955,7 +1997,7 @@ export default class Game {
         { 
           type: 'emergency', 
           label: '急救', 
-          color: '#FF9F43', 
+          color: '#E45555', 
           enabled: hasEmptyBed,
           isEmergency: true  // 标记为急救按钮
         },
@@ -1969,7 +2011,7 @@ export default class Game {
         { 
           type: 'normal', 
           label: '安抚', 
-          color: '#FF9FF3', 
+          color: '#F5B2AE', 
           enabled: hasEnoughHonor,  // 荣誉点足够10点才可用
           isNormal: true,  // 标记为普通按钮
           disabledReason: hasEnoughHonor ? '' : '荣誉点不足'  // 禁用原因
@@ -2154,9 +2196,9 @@ export default class Game {
     
     // 按钮配色（对应 抢救/治疗/安抚）
     const btnColors = [
-      { normal: '#FF8A8A', shadow: '#E86B6B' },  // 淡红色-抢救
+      { normal: '#E45555', shadow: '#C44444' },  // 红色-急救（与分诊指南紧急颜色一致）
       { normal: '#54A0FF', shadow: '#3D8AE5' },  // 蓝色-治疗
-      { normal: '#FFB8E0', shadow: '#E899C8' }   // 粉色-安抚
+      { normal: '#F5B2AE', shadow: '#E0908C' }   // 粉色-安抚
     ]
     
     modal.buttons.forEach((btn, i) => {
@@ -3020,7 +3062,7 @@ export default class Game {
         { 
           type: 'emergency', 
           label: '急救', 
-          color: '#E74C3C',  // 红色
+          color: '#E45555',  // 红色（与分诊指南紧急颜色一致）
           enabled: hasEmptyBed
         }
       ]

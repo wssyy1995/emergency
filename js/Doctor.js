@@ -143,7 +143,8 @@ export default class Doctor {
     switch (this.state) {
       case 'idle':
         this.idleTime += deltaTime
-        this.bounceOffset = Math.sin(this.animationTime / 600) * -2
+        // 待机时缓慢上下跃动（跟护士一样）
+        this.bounceOffset = Math.sin(this.animationTime / 500) * -2
         
         const occupiedBeds = bedArea.getOccupiedBeds()
         const needsTreatment = occupiedBeds.find(bed => 
@@ -190,7 +191,7 @@ export default class Doctor {
         
       case 'treating':
         this.treatAnimation += deltaTime
-        this.bounceOffset = Math.sin(this.animationTime / 80) * -2
+        this.bounceOffset = 0  // 去掉申请物品时的上下跳动
         
         if (!this.targetBed || !this.targetBed.patient || this.targetBed.patient.isCured) {
           if (this.targetBed) {
@@ -394,8 +395,8 @@ export default class Doctor {
       
       ctx.save()
       
-      // 呼吸动效：3秒周期，缩放 1.0 ~ 1.05
-      const breathScale = 1 + Math.sin(this.animationTime / 3000 * Math.PI * 2) * 0.03
+      // 呼吸动效：1.5秒周期，缩放 0.92 ~ 1.08（更明显）
+      const breathScale = 1 + Math.sin(this.animationTime / 250) * 0.08
       ctx.translate(this.x, this.y - 75 * scale)
       ctx.scale(breathScale, breathScale)
       

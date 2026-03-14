@@ -8,14 +8,14 @@ export const GameConfig = {
       timeLimit: 200,           // 倒计时（秒）
       cureTarget: 5,            // 治愈人数目标
       doctorItemCount: 1,       // 医生请求物品数量
-      patients: [1, 2, 3, 4, 5, 6]  // 本关出现的病人ID列表
+      patients: [1, 2, 3, 4, 5, 6]  // 本关出现的病人ID列表：6
     },
     { 
       id: 2,                    // 第2关
       timeLimit: 180,            // 倒计时（秒）
       cureTarget: 5,            // 治愈人数目标
       doctorItemCount: 2,       // 医生请求物品数量
-      patients: [1, 2, 3, 4, 5, 6, 7, 8]  // 本关出现的病人ID列表
+      patients: [2,10,4,7,8,9,6,11]  // 本关出现的病人ID列表： 8， 增加5个新病人，2种新疾病
     },
     { 
       id: 3,                    // 第3关
@@ -26,7 +26,7 @@ export const GameConfig = {
         max: 3,                  // 最多3个
         probability: 0.5         // 50%概率请求max个，否则请求min个
       },
-      patients: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]  // 本关出现的病人ID列表
+      patients: [10,11,12,3,5,6,7,13,2,4,9,8]  // 本关出现的病人ID列表： 12， 增加2个新病人，1种新疾病
     }
   ],
 
@@ -37,11 +37,11 @@ export const GameConfig = {
     { disease_id: 1, disease_name: '发烧', diseases_priority: 2, patience: 30, emerge_treat_time: 3000, auto_treat_time: 9000, treat_need: ['thermometer', 'antibiotic'], unlock_level: 1 },
     { disease_id: 2, disease_name: '外伤出血', diseases_priority: 3, patience: 40, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'], unlock_level: 1 },
     { disease_id: 3, disease_name: '骨折', diseases_priority: 1, patience: 20, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'], unlock_level: 1 },
-    { disease_id: 4, disease_name: '肠胃炎', diseases_priority: 2, patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'], unlock_level: 2 },
-    { disease_id: 5, disease_name: '胸闷', diseases_priority: 2, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'], unlock_level: 2 },
-    { disease_id: 6, disease_name: '严重过敏', diseases_priority: 1, patience: 30, emerge_treat_time: 3000, auto_treat_time: 10000, treat_need: ['adrenaline', 'injection'], unlock_level: 3 },
-    { disease_id: 7, disease_name: '扭伤', diseases_priority: 2, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 3 },
-    { disease_id: 8, disease_name: '感冒', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['thermometer', 'antibiotic', 'injection'], unlock_level: 4 },
+    { disease_id: 4, disease_name: '感冒', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['thermometer', 'antibiotic', 'injection'], unlock_level: 2 },
+    { disease_id: 5, disease_name: '严重过敏', diseases_priority: 1, patience: 20, emerge_treat_time: 3000, auto_treat_time: 10000, treat_need: ['adrenaline', 'injection'], unlock_level: 2 },
+    { disease_id: 6, disease_name: '肠胃炎', diseases_priority: 2, patience: 25, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'], unlock_level: 3 },
+    { disease_id: 7, disease_name: '异物卡喉', diseases_priority: 1, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'], unlock_level: 3 },
+    { disease_id: 8, disease_name: '烫伤', diseases_priority: 2, patience: 25, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 4 },
     { disease_id: 9, disease_name: '中风', diseases_priority: 1, patience: 20, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['aed', 'adrenaline', 'injection'], unlock_level: 4 }
   ],
 
@@ -80,18 +80,18 @@ export const GameConfig = {
     { id: 4, name: '4号', rageLevel: 1, disease_id: 3 },   // 骨折
     { id: 5, name: '5号', rageLevel: 1, disease_id: 2 },   // 外伤出血
     { id: 6, name: '6号', rageLevel: 1, disease_id: 1 },   // 发烧
-    { id: 7, name: '7号', rageLevel: 1, disease_id: 7 },   // 扭伤
-    { id: 8, name: '8号', rageLevel: 4, disease_id: 8 },   // 感冒
-    { id: 9, name: '9号', rageLevel: 1, disease_id: 3 },   // 中风
-    { id: 10, name: '10号', rageLevel: 1, disease_id: 1 }, // 发烧
-    { id: 11, name: '11号', rageLevel: 4, disease_id: 2 }, // 头痛
-    { id: 12, name: '12号', rageLevel: 3, disease_id: 3 }, // 骨折
-    { id: 13, name: '13号', rageLevel: 2, disease_id: 4 }, // 腹痛
-    { id: 14, name: '14号', rageLevel: 4, disease_id: 5 }, // 胸闷
-    { id: 15, name: '15号', rageLevel: 1, disease_id: 6 }, // 过敏
-    { id: 16, name: '16号', rageLevel: 3, disease_id: 7 }, // 扭伤
-    { id: 17, name: '17号', rageLevel: 2, disease_id: 8 }, // 感冒
-    { id: 18, name: '18号', rageLevel: 1, disease_id: 6 }  // 中风
+    { id: 7, name: '7号', rageLevel: 1, disease_id: 4 },   // 感冒
+    { id: 8, name: '8号', rageLevel: 4, disease_id: 5 },   // 严重过敏
+    { id: 9, name: '9号', rageLevel: 1, disease_id: 4 },   // 感冒
+    { id: 10, name: '10号', rageLevel: 1, disease_id: 5 }, //严重过敏
+    { id: 11, name: '11号', rageLevel: 4, disease_id: 4 }, // 感冒
+    { id: 12, name: '12号', rageLevel: 3, disease_id: 6 }, //肠胃炎
+    { id: 13, name: '13号', rageLevel: 2, disease_id: 6 }, //肠胃炎
+    { id: 14, name: '14号', rageLevel: 4, disease_id: 5 },
+    { id: 15, name: '15号', rageLevel: 1, disease_id: 6 }, 
+    { id: 16, name: '16号', rageLevel: 3, disease_id: 7 }, 
+    { id: 17, name: '17号', rageLevel: 2, disease_id: 8 }, 
+    { id: 18, name: '18号', rageLevel: 1, disease_id: 6 } 
   ],
 
   // ==================== 暴走配置 ====================

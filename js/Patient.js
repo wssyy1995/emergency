@@ -74,6 +74,32 @@ const PatientImageCache = {
       this.loadBoomImage()
     }
     return this.boomImage
+  },
+  
+  // 安抚图标
+  comfortImage: null,
+  
+  // 加载安抚图标
+  loadComfortImage() {
+    if (this.comfortImage) return this.comfortImage
+    
+    const img = wx.createImage()
+    img.onload = () => {
+      this.comfortImage = img
+    }
+    img.onerror = () => {
+      console.warn('Failed to load comfort image')
+    }
+    img.src = 'images/comfort.png'
+    return img
+  },
+  
+  // 获取安抚图标
+  getComfortImage() {
+    if (!this.comfortImage) {
+      this.loadComfortImage()
+    }
+    return this.comfortImage
   }
 }
 
@@ -174,6 +200,7 @@ export default class Patient {
     this.normalImage = PatientImageCache.getNormalImage(this.patientType)
     this.angryImage = PatientImageCache.getAngryImage(this.patientType)
     this.boomImage = PatientImageCache.getBoomImage()
+    this.comfortImage = PatientImageCache.getComfortImage()
   }
 
   // 根据病情名称获取图标
@@ -293,7 +320,7 @@ export default class Patient {
         }
       }
     } else {
-      this.bounceOffset = Math.sin(this.animationTime / 500) * -1
+      this.bounceOffset = 0  // 去掉待机时的上下摆动
     }
     
     if (this.isCured) {
@@ -482,11 +509,9 @@ export default class Patient {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
         fillRoundRect(ctx, barX, barY, barWidth, barHeight, radius)
         
-        // 耐心值进度条颜色：>50%绿色，30%-50%橙色，<30%红色，暂停状态粉色
+        // 耐心值进度条颜色：>50%绿色，30%-50%橙色，<30%红色
         let barColor
-        if (this.patiencePaused) {
-          barColor = '#FF9FF3' // 粉色（安抚暂停状态）
-        } else if (patiencePercent > 0.5) {
+        if (patiencePercent > 0.5) {
           barColor = '#2ECC71' // 绿色
         } else if (patiencePercent > 0.3) {
           barColor = '#F39C12' // 橙色
@@ -499,10 +524,12 @@ export default class Patient {
           fillRoundRect(ctx, barX, barY, progressWidth, barHeight, radius)
         }
       } else if (this.ivTreatmentComplete) {
-        // 【非紧急疾病】治疗完成：显示 cured.png 图标
-        const iconSize = 36 * scale  // 增大图标大小
+        // 【非紧急疾病】治疗完成：显示 cured.png 图标（带上下跳动动画）
+        const iconSize = 45 * scale  // 图标大小
+        // 上下跳动动画：周期约0.8秒，跳动幅度 3px
+        const bounceOffset = Math.sin(this.animationTime / 160) * 3 * scale
         if (curedImage && curedImage.width > 0) {
-          ctx.drawImage(curedImage, centerX - iconSize/2, barY - iconSize/2 + 5 * scale, iconSize, iconSize)
+          ctx.drawImage(curedImage, centerX - iconSize/2, barY - iconSize/2 + 1.5 * scale + bounceOffset, iconSize, iconSize)
         } else {
           // 回退：绿色圆圈 + 对勾
           ctx.fillStyle = '#27AE60'
@@ -555,10 +582,18 @@ export default class Patient {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
       fillRoundRect(ctx, barX, barY, barWidth, barHeight, radius)
       
+      // 安抚状态：在耐心条上方显示安抚图标
+      if (this.patiencePaused && this.comfortImage && this.comfortImage.width > 0) {
+        const comfortSize = 20 * scale
+        const comfortX = centerX - comfortSize / 2
+        const comfortY = barY - comfortSize - 4 * scale
+        ctx.drawImage(this.comfortImage, comfortX, comfortY, comfortSize, comfortSize)
+      }
+      
       // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色，暂停状态粉色
       let barColor
       if (this.patiencePaused) {
-        barColor = '#FF9FF3' // 粉色（安抚暂停状态）
+        barColor = '#F5B2AE' // 粉色（安抚暂停状态）
       } else if (patiencePercent > 0.5) {
         barColor = '#2ECC71' // 绿色
       } else if (patiencePercent > 0.3) {
