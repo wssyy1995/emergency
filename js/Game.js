@@ -290,13 +290,33 @@ export default class Game {
     })
   }
 
+  // 添加浮动荣誉点变化（用于安抚按钮的 -10 效果）
+  addFloatingHonorChange(x, y, value) {
+    this.floatingTexts.push({
+      type: 'honorChange',
+      value,
+      x,
+      y,
+      opacity: 1,
+      offsetY: 0,
+      life: 2000 // 2秒动画（更慢）
+    })
+  }
+
   // 更新浮动文字
   updateFloatingTexts(deltaTime) {
     for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
       const ft = this.floatingTexts[i]
       ft.life -= deltaTime
-      ft.offsetY -= 0.05 * deltaTime // 向上飘
-      ft.opacity = ft.life / 1000
+      
+      // 荣誉点变化动效飘得更慢
+      if (ft.type === 'honorChange') {
+        ft.offsetY -= 0.02 * deltaTime // 更慢的上升速度
+        ft.opacity = ft.life / 2000
+      } else {
+        ft.offsetY -= 0.05 * deltaTime // 普通速度
+        ft.opacity = ft.life / 1000
+      }
       
       if (ft.life <= 0) {
         this.floatingTexts.splice(i, 1)
@@ -457,9 +477,11 @@ export default class Game {
     const spawnFirstCount = GameConfig.patient.spawnFirstCount
     const spawnFirstInterval = GameConfig.patient.spawnFirstInterval
     
+    const levelConfigStart = getLevelConfig(this.currentLevel)
+    const totalPatientsStart = levelConfigStart.patients.length
+    
     const spawnFirstPatients = () => {
-      const maxPatients = getLevelConfig(this.currentLevel).maxPatients
-      if (initialSpawnCount < spawnFirstCount && this.spawnedPatientsCount < maxPatients && this.isRunning) {
+      if (initialSpawnCount < spawnFirstCount && this.spawnedPatientsCount < totalPatientsStart && this.isRunning) {
         const success = this.spawnPatientFromLeft()
         if (success) {
           initialSpawnCount++
@@ -479,7 +501,8 @@ export default class Game {
   
   // 生成剩余的病人（随机间隔）
   spawnRemainingPatients() {
-    const maxPatients = getLevelConfig(this.currentLevel).maxPatients
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const totalPatients = levelConfig.patients.length
     const randomMin = GameConfig.patient.spawnRandomMin
     const randomMax = GameConfig.patient.spawnRandomMax
     
@@ -488,14 +511,14 @@ export default class Game {
       
       // 检查是否还有病人名额，且站立排队区未满
       const queueCount = this.waitingArea.getReceptionQueuePatients().length
-      if (this.spawnedPatientsCount < maxPatients && queueCount < 4) {
+      if (this.spawnedPatientsCount < totalPatients && queueCount < 4) {
         const success = this.spawnPatientFromLeft()
         if (success) {
           this.spawnedPatientsCount++
         }
         
         // 检查是否完成本关卡
-        if (this.spawnedPatientsCount >= maxPatients && !this.levelComplete) {
+        if (this.spawnedPatientsCount >= totalPatients && !this.levelComplete) {
           this.levelComplete = true
           this.checkLevelComplete()
           return
@@ -504,7 +527,7 @@ export default class Game {
         // 随机间隔生成下一个
         const randomDelay = randomMin + Math.random() * (randomMax - randomMin)
         this.spawnTimer = setTimeout(spawnNext, randomDelay)
-      } else if (this.spawnedPatientsCount < maxPatients) {
+      } else if (this.spawnedPatientsCount < totalPatients) {
         // 排队人数已满或等候区满了，稍后再检查
         this.spawnTimer = setTimeout(spawnNext, 1000)
       }
@@ -587,9 +610,10 @@ export default class Game {
         
         // 【修改】输液椅上病人耐心处理
         // 如果疾病priority为1（紧急），耐心值继续减少；否则暂停减少
+        // 如果处于安抚暂停状态，耐心值也不减少
         const isEmergencyPriority = seat.patient.disease && seat.patient.disease.diseases_priority === 1
-        if (isEmergencyPriority) {
-          // 紧急疾病：耐心值继续减少
+        if (isEmergencyPriority && !seat.patient.patiencePaused) {
+          // 紧急疾病：耐心值继续减少（非暂停状态）
           seat.patient.patience -= deltaTime / 1000
           // 检查耐心是否归零
           if (seat.patient.patience <= 0 && !seat.patient.isLeaving && !seat.patient.tomatoThrown) {
@@ -624,9 +648,11 @@ export default class Game {
       }
     })
     
-    // 处理等候区病人耐心（排队区病人耐心都会减少）
+    // 处理等候区病人耐心（排队区病人耐心都会减少，除非处于安抚暂停状态）
     this.waitingArea.patients.forEach(patient => {
-      patient.patience -= deltaTime / 1000
+      if (!patient.patiencePaused) {
+        patient.patience -= deltaTime / 1000
+      }
       // 耐心归零且未开始离开/暴走流程
       if (patient.patience <= 0 && !patient.isLeaving && !patient.tomatoThrown && !patient.isRaging) {
         patient.isAngry = true
@@ -687,7 +713,8 @@ export default class Game {
       }
       this.waitingArea.removePatient(patient)
       // 检查是否完成关卡（当所有病人都已生成且都被处理）
-      const totalPatients = getLevelConfig(this.currentLevel).maxPatients
+      const levelConfig = getLevelConfig(this.currentLevel)
+      const totalPatients = levelConfig.patients.length
       if (this.spawnedPatientsCount >= totalPatients) {
         this.levelComplete = true
         this.checkLevelComplete()
@@ -745,6 +772,8 @@ export default class Game {
     // 设置游戏结束弹窗状态
     this.gameOverModal = {
       visible: true,
+      isAnimating: true,
+      animationTime: 0,
       reason: reason,
       buttons: [
         { text: '重新开始', x: 0, y: 0, width: 120, height: 40, color: '#27AE60', action: 'restart' },
@@ -835,26 +864,25 @@ export default class Game {
     this.spawnPatientFromLeft()
   }
 
-  // 初始化当前关卡的病人池（确保不重复）
+  // 初始化当前关卡的病人池（从levelConfig.patients获取）
   initCurrentLevelPatientPool() {
-    const maxPatients = getLevelConfig(this.currentLevel).maxPatients
-    const allPatients = [...GameConfig.patientDetails]
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const patientIds = levelConfig.patients || []
     
-    // 如果病人详情数量不够，复制一份再打乱
-    let pool = []
-    while (pool.length < maxPatients) {
-      // Fisher-Yates 洗牌算法打乱顺序
-      const shuffled = [...allPatients].sort(() => Math.random() - 0.5)
-      pool.push(...shuffled)
-    }
+    // 根据ID列表从patientDetails中找到对应的病人配置
+    this.currentLevelPatientPool = patientIds.map((patientId, index) => {
+      const patientDetail = GameConfig.patientDetails.find(p => p.id === patientId)
+      if (!patientDetail) {
+        console.warn(`未找到病人配置: ID ${patientId}`)
+        return null
+      }
+      return {
+        ...patientDetail,
+        instanceId: index + 1  // 给每个实例分配唯一ID
+      }
+    }).filter(p => p !== null)  // 过滤掉未找到的病人
     
-    // 截取所需数量，并添加唯一实例ID
-    this.currentLevelPatientPool = pool.slice(0, maxPatients).map((detail, index) => ({
-      ...detail,
-      instanceId: index + 1  // 给每个实例分配唯一ID
-    }))
-    
-    console.log(`关卡${this.currentLevel + 1}病人池已初始化，共${this.currentLevelPatientPool.length}个病人`)
+    console.log(`关卡${this.currentLevel + 1}病人池已初始化，共${this.currentLevelPatientPool.length}个病人`, this.currentLevelPatientPool.map(p => p.name))
   }
 
   // 从当前关卡病人池中获取下一个病人（按顺序取出）
@@ -923,10 +951,9 @@ export default class Game {
     
     // 绘制各个区域（新风格）
     this.waitingArea.render(this.ctx)
-    this.bedArea.render(this.ctx)
+    this.bedArea.render(this.ctx, this.curedImage)
     this.equipmentRoom.render(this.ctx)
     
-    // 【已移除】治疗区底部托盘和按钮已移到器材室
     
     // 渲染医生身体
     this.doctors.forEach(doctor => doctor.render(this.ctx))
@@ -1132,6 +1159,23 @@ export default class Game {
         ctx.shadowBlur = 0
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 0
+      } else if (ft.type === 'honorChange') {
+        // 绘制荣誉点变化（安抚按钮的 -10 效果）
+        const centerX = ft.x
+        const centerY = ft.y + ft.offsetY
+        
+        // 绘制荣誉点图标
+        const iconSize = 18
+        if (this.honorImage && this.honorImage.width > 0) {
+          ctx.drawImage(this.honorImage, centerX - 40, centerY - iconSize/2, iconSize, iconSize)
+        }
+        
+        // 绘制变化值（红色，带负号）
+        ctx.fillStyle = '#E74C3C'  // 红色表示减少
+        ctx.font = 'bold 20px "PingFang SC", sans-serif'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(`${ft.value}`, centerX - 20, centerY)
       } else {
         // 绘制文字
         ctx.fillStyle = ft.color
@@ -1209,8 +1253,12 @@ export default class Game {
     )
     
     // ===== 悬浮标题标签（移到外层内部，避免被挤出）=====
+    // 等候区：显示本关进度（已生成/总数）
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const totalPatientsCount = levelConfig.patients.length
+    const waitingText = `等候区 ${this.spawnedPatientsCount}/${totalPatientsCount}`
     this.renderFloatingBadge(ctx, this.waitingArea.trayX + this.waitingArea.trayWidth / 2, 
-                             this.waitingArea.trayY + 16, '等候区', 
+                             this.waitingArea.trayY + 16, waitingText, 
                              UI_COLORS.waiting.badgeBg, UI_COLORS.waiting.badgeBorder)
     
     this.renderFloatingBadge(ctx, this.bedArea.trayX + this.bedArea.trayWidth / 2, 
@@ -1282,11 +1330,11 @@ export default class Game {
 
   renderPatients() {
     this.waitingArea.patients.forEach(patient => {
-      patient.render(this.ctx)
+      patient.render(this.ctx, false, this.curedImage)
     })
     
     if (this.selectedPatient) {
-      this.selectedPatient.render(this.ctx, true)
+      this.selectedPatient.render(this.ctx, true, this.curedImage)
     }
     
   }
@@ -1896,9 +1944,12 @@ export default class Game {
   showSeatSelectionModal(patient) {
     const hasEmptyIVSeat = this.bedArea.findEmptyIVSeat() !== null
     const hasEmptyBed = this.bedArea.findEmptyBed() !== null
+    const hasEnoughHonor = this.score >= 10  // 检查荣誉点是否足够10点
     
     this.seatSelectionModal = {
       visible: true,
+      isAnimating: true,
+      animationTime: 0,
       patient: patient,
       buttons: [
         { 
@@ -1919,8 +1970,9 @@ export default class Game {
           type: 'normal', 
           label: '安抚', 
           color: '#FF9FF3', 
-          enabled: true,  // 普通按钮始终可用
-          isNormal: true  // 标记为普通按钮
+          enabled: hasEnoughHonor,  // 荣誉点足够10点才可用
+          isNormal: true,  // 标记为普通按钮
+          disabledReason: hasEnoughHonor ? '' : '荣誉点不足'  // 禁用原因
         }
       ]
     }
@@ -1943,12 +1995,17 @@ export default class Game {
         this.vibrate()
         
         if (!btn.enabled) {
-          // 该类型椅子已满
-          wx.showToast({
-            title: `${btn.label}已满`,
-            icon: 'none',
-            duration: 1000
-          })
+          // 如果是安抚按钮且禁用（荣誉点不足）
+          if (btn.isNormal && btn.disabledReason === '荣誉点不足') {
+            this.showHonorTip(btn.renderX + btn.renderWidth / 2, btn.renderY)
+          } else {
+            // 该类型椅子已满
+            wx.showToast({
+              title: `${btn.label}已满`,
+              icon: 'none',
+              duration: 1000
+            })
+          }
           return true
         }
         
@@ -1959,7 +2016,12 @@ export default class Game {
           // 输液：前往治疗区的输液治疗椅坐下
           this.sendPatientToIVSeat(modal.patient)
         } else if (btn.isNormal) {
-          // 普通：什么都不做，但是显示耐心条
+          // 安抚：消耗荣誉点10点，耐心值暂停减少5秒
+          this.score -= 10
+          // 显示荣誉点减少动效
+          this.addFloatingHonorChange(modal.patient.x, modal.patient.y - 50, -10)
+          // 设置病人耐心暂停状态
+          modal.patient.startPatiencePause(5000)  // 暂停5秒
           modal.patient.showPatienceBar = true
         }
         
@@ -2000,6 +2062,14 @@ export default class Game {
     modal.y = modalY
     modal.width = modalWidth
     modal.height = modalHeight
+    
+    // ===== 入场动画计算 =====
+    const { scale, opacity } = this.calculateModalAnimation(modal)
+    
+    ctx.save()
+    
+    // 应用动画变换
+    this.applyModalTransform(ctx, modalX, modalY, modalWidth, modalHeight, scale)
     
     // ===== 1. 主卡片：奶白色底 + 粉色边框 =====
     ctx.fillStyle = '#FDF9F6'  // 奶白色
@@ -2121,12 +2191,95 @@ export default class Game {
       ctx.font = 'bold 11px "PingFang SC", "Microsoft YaHei", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      const labelText = btn.enabled ? btn.label : '满'
+      // 根据禁用原因显示不同文字
+      let labelText
+      if (btn.enabled) {
+        labelText = btn.label
+      } else if (btn.isNormal) {
+        labelText = '安抚'  // 安抚按钮即使禁用了也显示安抚
+      } else {
+        labelText = '满'
+      }
       ctx.fillText(labelText, btnX + btnWidth / 2, btnY + btnHeight / 2 + (btn.enabled ? 1 : 2))
     })
     
     // 绘制按钮提示（如果有）
     this.renderButtonTooltip()
+    
+    // 绘制荣誉点不足提示（如果有）
+    this.renderHonorTip(ctx)
+    
+    // 恢复变换（结束动画）
+    ctx.restore()
+  }
+
+  // 显示荣誉点不足提示
+  showHonorTip(x, y) {
+    this.honorTip = {
+      x: x,
+      y: y,
+      visible: true,
+      startTime: Date.now()
+    }
+    // 1.5秒后自动隐藏
+    setTimeout(() => {
+      if (this.honorTip && Date.now() - this.honorTip.startTime >= 1400) {
+        this.honorTip = null
+      }
+    }, 1500)
+  }
+
+  // 绘制荣誉点不足提示（带箭头的轻量白色提示条）
+  renderHonorTip(ctx) {
+    if (!this.honorTip || !this.honorTip.visible) return
+    
+    const elapsed = Date.now() - this.honorTip.startTime
+    const duration = 1500
+    const progress = Math.min(elapsed / duration, 1)
+    
+    // 淡入淡出效果
+    let opacity = 1
+    if (progress < 0.2) {
+      opacity = progress / 0.2  // 淡入
+    } else if (progress > 0.7) {
+      opacity = 1 - (progress - 0.7) / 0.3  // 淡出
+    }
+    
+    const tipX = this.honorTip.x
+    const tipY = this.honorTip.y - 45  // 提示条在按钮上方
+    const tipWidth = 80
+    const tipHeight = 28
+    
+    ctx.save()
+    ctx.globalAlpha = opacity
+    
+    // 绘制提示条背景（圆角矩形）
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)'
+    ctx.shadowBlur = 8
+    ctx.shadowOffsetY = 2
+    fillRoundRect(ctx, tipX - tipWidth / 2, tipY, tipWidth, tipHeight, 6)
+    ctx.shadowColor = 'transparent'
+    
+    // 绘制箭头（向下指向按钮）
+    const arrowSize = 6
+    const arrowY = tipY + tipHeight  // 箭头在提示条下方
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+    ctx.beginPath()
+    ctx.moveTo(tipX, arrowY + arrowSize)  // 箭头顶点向下
+    ctx.lineTo(tipX - arrowSize, arrowY)  // 左上
+    ctx.lineTo(tipX + arrowSize, arrowY)  // 右上
+    ctx.closePath()
+    ctx.fill()
+    
+    // 绘制文字
+    ctx.fillStyle = '#666666'
+    ctx.font = '12px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('荣誉点不足', tipX, tipY + tipHeight / 2)
+    
+    ctx.restore()
   }
 
   reset() {
@@ -2193,6 +2346,8 @@ export default class Game {
     // 设置游戏结束弹窗状态
     this.gameOverModal = {
       visible: true,
+      isAnimating: true,
+      animationTime: 0,
       buttons: [
         { text: '重新开始', x: 0, y: 0, width: 120, height: 40, color: '#27AE60', action: 'restart' },
         { text: '原地复活', x: 0, y: 0, width: 120, height: 40, color: '#999999', action: 'revive', disabled: true }
@@ -2219,7 +2374,8 @@ export default class Game {
         return
       }
       
-      const totalPatients = getLevelConfig(this.currentLevel).maxPatients
+      const levelConfig = getLevelConfig(this.currentLevel)
+      const totalPatients = levelConfig.patients.length
       const occupiedBeds = this.bedArea.getOccupiedBeds().length
       const waitingPatients = this.waitingArea.patients.length
       
@@ -2259,6 +2415,8 @@ export default class Game {
     // 显示自定义确认弹窗
     this.levelCompleteModal = {
       visible: true,
+      isAnimating: true,
+      animationTime: 0,
       title: '本关目标达成',
       content: '迎接下一波病人吧！',
       buttonText: '继续'
@@ -2539,6 +2697,8 @@ export default class Game {
     
     this.gameWinModal = {
       visible: true,
+      isAnimating: true,
+      animationTime: 0,
       title: '🎉 恭喜通关！',
       buttonText: '重新开始'
     }
@@ -2595,6 +2755,14 @@ export default class Game {
     const modalHeight = 160
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // ===== 入场动画计算 =====
+    const { scale, opacity } = this.calculateModalAnimation(this.gameOverModal)
+    
+    ctx.save()
+    
+    // 应用动画变换
+    this.applyModalTransform(ctx, modalX, modalY, modalWidth, modalHeight, scale)
     
     // 【已移除】半透明背景遮罩（屏幕不需要蒙层）
     // ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
@@ -2653,6 +2821,9 @@ export default class Game {
       ctx.textBaseline = 'middle'
       ctx.fillText(btn.text, btn.x + btn.width / 2, btn.y + btn.height / 2)
     })
+    
+    // 恢复变换（结束动画）
+    ctx.restore()
   }
   
   // 绘制关卡完成弹窗
@@ -2668,9 +2839,17 @@ export default class Game {
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
     
+    // ===== 入场动画计算 =====
+    const { scale, opacity } = this.calculateModalAnimation(this.levelCompleteModal)
+    
     // 半透明背景遮罩
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * opacity})`
     ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    ctx.save()
+    
+    // 应用动画变换
+    this.applyModalTransform(ctx, modalX, modalY, modalWidth, modalHeight, scale)
     
     // 弹窗背景
     ctx.fillStyle = '#FFF'
@@ -2704,6 +2883,9 @@ export default class Game {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.levelCompleteModal.buttonText, modalX + modalWidth / 2, btnY + btnHeight / 2)
+    
+    // 恢复变换（结束动画）
+    ctx.restore()
   }
   
   // 绘制游戏胜利弹窗
@@ -2720,9 +2902,17 @@ export default class Game {
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
     
+    // ===== 入场动画计算 =====
+    const { scale, opacity } = this.calculateModalAnimation(this.gameWinModal)
+    
     // 半透明背景遮罩
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * opacity})`
     ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    ctx.save()
+    
+    // 应用动画变换
+    this.applyModalTransform(ctx, modalX, modalY, modalWidth, modalHeight, scale)
     
     // 弹窗背景
     ctx.fillStyle = '#FFF'
@@ -2763,6 +2953,9 @@ export default class Game {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.gameWinModal.buttonText, modalX + modalWidth / 2, btnY + btnHeight / 2)
+    
+    // 恢复变换（结束动画）
+    ctx.restore()
   }
   
   // 绘制轻量提示（下一关通知）
@@ -2944,7 +3137,9 @@ export default class Game {
     this.diseaseListModal = {
       visible: true,
       currentPage: 0,  // 当前页码
-      itemsPerPage: 4  // 每页显示条数（会根据高度动态计算）
+      itemsPerPage: 4, // 每页显示条数（会根据高度动态计算）
+      animationTime: 0, // 动画时间（毫秒）
+      isAnimating: true // 是否正在播放入场动画
     }
   }
 
@@ -2953,7 +3148,28 @@ export default class Game {
     if (!this.diseaseListModal || !this.diseaseListModal.visible) return
     
     const ctx = this.ctx
-    const diseases = GameConfig.diseases
+    const currentLevelNum = (this.currentLevel || 0) + 1
+    
+    // 对疾病列表进行排序：已解锁的在前（按优先级：紧急>普通>轻微），未解锁的在后
+    const sortedDiseases = [...GameConfig.diseases].sort((a, b) => {
+      const aIsUnlocked = currentLevelNum >= (a.unlock_level || 1)
+      const bIsUnlocked = currentLevelNum >= (b.unlock_level || 1)
+      
+      // 已解锁的排在前面
+      if (aIsUnlocked && !bIsUnlocked) return -1
+      if (!aIsUnlocked && bIsUnlocked) return 1
+      
+      // 都已解锁：按优先级排序（紧急(1) > 普通(2) > 轻微(3)）
+      if (aIsUnlocked && bIsUnlocked) {
+        return (a.diseases_priority || 2) - (b.diseases_priority || 2)
+      }
+      
+      // 都未解锁：按 unlock_level 升序
+      return (a.unlock_level || 1) - (b.unlock_level || 1)
+    })
+    
+    // ===== 入场动画计算（使用通用方法）=====
+    const { scale, opacity } = this.calculateModalAnimation(this.diseaseListModal)
     
     // ===== 分页计算 =====
     const modalWidth = 240
@@ -2967,13 +3183,13 @@ export default class Game {
     const itemsPerPage = 4
     
     // 总页数
-    const totalPages = Math.ceil(diseases.length / itemsPerPage)
+    const totalPages = Math.ceil(sortedDiseases.length / itemsPerPage)
     const currentPage = this.diseaseListModal.currentPage || 0
     
     // 当前页显示的疾病
     const startIndex = currentPage * itemsPerPage
-    const endIndex = Math.min(startIndex + itemsPerPage, diseases.length)
-    const pageDiseases = diseases.slice(startIndex, endIndex)
+    const endIndex = Math.min(startIndex + itemsPerPage, sortedDiseases.length)
+    const pageDiseases = sortedDiseases.slice(startIndex, endIndex)
     
     // 实际弹窗高度（根据内容动态计算）
     const contentHeight = pageDiseases.length * (rowHeight + rowSpacing)
@@ -2983,7 +3199,7 @@ export default class Game {
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
     
-    // 保存弹窗位置用于点击检测
+    // 保存弹窗位置用于点击检测（保存原始未缩放的位置）
     this.diseaseListModal.x = modalX
     this.diseaseListModal.y = modalY
     this.diseaseListModal.width = modalWidth
@@ -2991,9 +3207,18 @@ export default class Game {
     this.diseaseListModal.itemsPerPage = itemsPerPage
     this.diseaseListModal.totalPages = totalPages
     
-    // 绘制半透明背景遮罩
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
+    // 绘制半透明背景遮罩（带淡入效果）
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.3 * opacity})`
     ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    // ===== 应用果冻动画变换 =====
+    ctx.save()
+    // 以弹窗中心为基准进行缩放
+    const centerX = modalX + modalWidth / 2
+    const centerY = modalY + modalHeight / 2
+    ctx.translate(centerX, centerY)
+    ctx.scale(scale, scale)
+    ctx.translate(-centerX, -centerY)
     
     // ===== 1. 绘制外层白色大卡片（带弥散阴影）=====
     ctx.save()
@@ -3039,6 +3264,9 @@ export default class Game {
     pageDiseases.forEach((disease, index) => {
       const rowY = startY + index * (rowHeight + rowSpacing)
       
+      // 检查该疾病是否需要显示"待解锁"
+      const isUnlocked = currentLevelNum >= (disease.unlock_level || 1)
+      
       // 3.1 绘制单行底色（极浅的蓝灰底色）
       ctx.fillStyle = '#F4F8FB'
       fillRoundRect(ctx, modalX + 15, rowY, modalWidth - 30, rowHeight, 12)
@@ -3057,30 +3285,45 @@ export default class Game {
         ctx.fillText(disease.condition ? disease.condition.icon : '🏥', modalX + 30, rowY + rowHeight / 2)
       }
       
-      // 3.3 绘制疾病名称
-      ctx.fillStyle = '#333333'
-      ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(disease.disease_name, modalX + 65, rowY + rowHeight / 2)
-      
-      // 3.4 绘制右侧分类胶囊徽章
-      const priorityConfig = this.getPriorityConfig(disease.diseases_priority)
-      const pillX = modalX + modalWidth - 90
-      const pillY = rowY + 4
-      const pillW = 55
-      const pillH = 28
-      this.drawPillBadge(ctx, priorityConfig.label, priorityConfig.color, priorityConfig.shadow, pillX, pillY)
-      
-      // 保存胶囊位置和提示信息（用于点击检测）
-      this.diseaseListModal.pillBadges.push({
-        x: pillX,
-        y: pillY,
-        width: pillW,
-        height: pillH,
-        priority: disease.diseases_priority,
-        label: priorityConfig.label
-      })
+      // 3.3 已解锁疾病：显示名称和分诊类别
+      if (isUnlocked) {
+        // 绘制疾病名称
+        ctx.fillStyle = '#333333'
+        ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(disease.disease_name, modalX + 65, rowY + rowHeight / 2)
+        
+        // 绘制右侧分类胶囊徽章
+        const priorityConfig = this.getPriorityConfig(disease.diseases_priority)
+        const pillX = modalX + modalWidth - 90
+        const pillY = rowY + 4
+        const pillW = 55
+        const pillH = 28
+        this.drawPillBadge(ctx, priorityConfig.label, priorityConfig.color, priorityConfig.shadow, pillX, pillY)
+        
+        // 保存胶囊位置和提示信息（用于点击检测）
+        this.diseaseListModal.pillBadges.push({
+          x: pillX,
+          y: pillY,
+          width: pillW,
+          height: pillH,
+          priority: disease.diseases_priority,
+          label: priorityConfig.label
+        })
+      } else {
+        // 3.4 锁定疾病：绘制半透明白色蒙层和"待解锁"文字
+        // 绘制半透明白色蒙层（更深的遮罩）
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+        fillRoundRect(ctx, modalX + 15, rowY, modalWidth - 30, rowHeight, 12)
+        
+        // 绘制"待解锁"文字
+        ctx.fillStyle = '#999999'
+        ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('待解锁', modalX + modalWidth / 2, rowY + rowHeight / 2)
+      }
     })
     
     // ===== 4. 绘制底部分页文字按钮 =====
@@ -3109,7 +3352,7 @@ export default class Game {
     
     // 右下角：下一页/知道了
     const isLastPage = currentPage >= totalPages - 1
-    const nextText = isLastPage ? '知道了' : '下一页'
+    const nextText = isLastPage ? '' : '下一页'
     const textWidth = ctx.measureText(nextText).width
     
     ctx.fillStyle = isLastPage ? '#999999' : '#38BDF8'
@@ -3126,6 +3369,9 @@ export default class Game {
     
     // 绘制胶囊提示（如果有）
     this.renderPillTooltip(ctx)
+    
+    // 恢复变换（结束果冻动画）
+    ctx.restore()
   }
   
   // 绘制胶囊轻量提示（带箭头）
@@ -3434,6 +3680,66 @@ export default class Game {
       const textY = tooltipY + paddingY + lineHeight / 2 + index * lineHeight
       ctx.fillText(line, tooltipX + tooltipWidth / 2, textY)
     })
+  }
+
+  // ========== 通用弹窗动画方法 ==========
+  
+  // 计算弹窗入场动画（柔和回弹效果）
+  // modal: 弹窗状态对象，需要包含 isAnimating 和 animationTime
+  // 返回: { scale, opacity }
+  calculateModalAnimation(modal) {
+    if (!modal) return { scale: 1, opacity: 1 }
+    
+    const ANIMATION_DURATION = 350 // 动画持续时间（毫秒）
+    
+    // 初始化动画状态
+    if (modal.isAnimating === undefined) {
+      modal.isAnimating = true
+      modal.animationTime = 0
+    }
+    
+    if (modal.isAnimating) {
+      // 更新动画时间（假设约60fps，每帧16ms）
+      modal.animationTime = (modal.animationTime || 0) + 16
+      const progress = Math.min(modal.animationTime / ANIMATION_DURATION, 1)
+      
+      // 柔和的回弹缓动函数（ease-out back）
+      const easeOutBack = (t) => {
+        const c1 = 1.2 // 弹性系数（1.0=无弹性，越大越弹，1.2较柔和）
+        const c3 = c1 + 1
+        return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
+      }
+      
+      // 应用弹性缩放（从 0.9 开始，轻微回弹）
+      const scaleValue = easeOutBack(progress)
+      const scale = 0.9 + 0.1 * scaleValue // 缩放在 0.9~1.02 之间
+      const opacity = progress
+      
+      // 动画结束
+      if (progress >= 1) {
+        modal.isAnimating = false
+        return { scale: 1, opacity: 1 }
+      }
+      
+      return { scale, opacity }
+    }
+    
+    return { scale: 1, opacity: 1 }
+  }
+  
+  // 应用弹窗动画变换（在ctx.save()之后调用）
+  // ctx: canvas上下文
+  // modalX, modalY, modalWidth, modalHeight: 弹窗位置和尺寸
+  // scale: 动画缩放值
+  applyModalTransform(ctx, modalX, modalY, modalWidth, modalHeight, scale) {
+    if (scale === 1) return
+    
+    // 以弹窗中心为基准进行缩放
+    const centerX = modalX + modalWidth / 2
+    const centerY = modalY + modalHeight / 2
+    ctx.translate(centerX, centerY)
+    ctx.scale(scale, scale)
+    ctx.translate(-centerX, -centerY)
   }
 
 }

@@ -163,6 +163,10 @@ export default class Patient {
     this.rageTimeRemaining = 0      // 暴走剩余时间（毫秒）
     this.rageStartTime = 0          // 暴走开始时间
     
+    // 安抚相关状态（耐心暂停减少）
+    this.patiencePaused = false     // 耐心值是否暂停减少
+    this.patiencePauseTime = 0      // 暂停剩余时间（毫秒）
+    
     // 病人图片编号（使用 patientDetail.id，1-14 号循环）
     this.patientType = patientDetail ? ((patientDetail.id - 1) % 14) + 1 : ((id - 1) % 14) + 1
     
@@ -204,6 +208,15 @@ export default class Patient {
 
   update(deltaTime) {
     this.animationTime += deltaTime
+    
+    // 安抚状态更新（耐心暂停减少）
+    if (this.patiencePaused) {
+      this.patiencePauseTime -= deltaTime
+      if (this.patiencePauseTime <= 0) {
+        this.patiencePaused = false
+        this.patiencePauseTime = 0
+      }
+    }
     
     // 暴走状态更新
     if (this.isRaging && this.rageTargetDoctor) {
@@ -406,7 +419,18 @@ export default class Patient {
     this.endRage()
   }
 
-  render(ctx, isDragging = false) {
+  // 开始耐心暂停（安抚按钮效果）
+  startPatiencePause(durationMs) {
+    this.patiencePaused = true
+    this.patiencePauseTime = durationMs
+  }
+
+  // 检查耐心是否暂停
+  isPatiencePaused() {
+    return this.patiencePaused
+  }
+
+  render(ctx, isDragging = false, curedImage = null) {
     ctx.save()
     
     const centerX = this.x + this.width / 2
@@ -458,9 +482,11 @@ export default class Patient {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
         fillRoundRect(ctx, barX, barY, barWidth, barHeight, radius)
         
-        // 耐心值进度条颜色：>50%绿色，30%-50%橙色，<30%红色
+        // 耐心值进度条颜色：>50%绿色，30%-50%橙色，<30%红色，暂停状态粉色
         let barColor
-        if (patiencePercent > 0.5) {
+        if (this.patiencePaused) {
+          barColor = '#FF9FF3' // 粉色（安抚暂停状态）
+        } else if (patiencePercent > 0.5) {
           barColor = '#2ECC71' // 绿色
         } else if (patiencePercent > 0.3) {
           barColor = '#F39C12' // 橙色
@@ -473,24 +499,25 @@ export default class Patient {
           fillRoundRect(ctx, barX, barY, progressWidth, barHeight, radius)
         }
       } else if (this.ivTreatmentComplete) {
-        // 【非紧急疾病】治疗完成：显示"完成"图标（绿色圆圈 + ✓）
-        const iconSize = 14 * scale
-        
-        // 绿色圆圈背景
-        ctx.fillStyle = '#27AE60'
-        ctx.beginPath()
-        ctx.arc(centerX, barY + 5 * scale, iconSize, 0, Math.PI * 2)
-        ctx.fill()
-        
-        // 白色对勾
-        ctx.strokeStyle = '#FFF'
-        ctx.lineWidth = 2 * scale
-        ctx.lineCap = 'round'
-        ctx.beginPath()
-        ctx.moveTo(centerX - 4 * scale, barY + 5 * scale)
-        ctx.lineTo(centerX - 1 * scale, barY + 8 * scale)
-        ctx.lineTo(centerX + 5 * scale, barY + 2 * scale)
-        ctx.stroke()
+        // 【非紧急疾病】治疗完成：显示 cured.png 图标
+        const iconSize = 36 * scale  // 增大图标大小
+        if (curedImage && curedImage.width > 0) {
+          ctx.drawImage(curedImage, centerX - iconSize/2, barY - iconSize/2 + 5 * scale, iconSize, iconSize)
+        } else {
+          // 回退：绿色圆圈 + 对勾
+          ctx.fillStyle = '#27AE60'
+          ctx.beginPath()
+          ctx.arc(centerX, barY + 5 * scale, 14 * scale, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.strokeStyle = '#FFF'
+          ctx.lineWidth = 2 * scale
+          ctx.lineCap = 'round'
+          ctx.beginPath()
+          ctx.moveTo(centerX - 4 * scale, barY + 5 * scale)
+          ctx.lineTo(centerX - 1 * scale, barY + 8 * scale)
+          ctx.lineTo(centerX + 5 * scale, barY + 2 * scale)
+          ctx.stroke()
+        }
       } else {
         // 【非紧急疾病】治疗中：显示蓝色圆角进度条
         const barWidth = 40 * scale
@@ -528,9 +555,11 @@ export default class Patient {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
       fillRoundRect(ctx, barX, barY, barWidth, barHeight, radius)
       
-      // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色
+      // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色，暂停状态粉色
       let barColor
-      if (patiencePercent > 0.5) {
+      if (this.patiencePaused) {
+        barColor = '#FF9FF3' // 粉色（安抚暂停状态）
+      } else if (patiencePercent > 0.5) {
         barColor = '#2ECC71' // 绿色
       } else if (patiencePercent > 0.3) {
         barColor = '#F39C12' // 橙色

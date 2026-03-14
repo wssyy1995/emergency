@@ -69,7 +69,7 @@ export default class EquipmentRoom {
     this.renderClearButton(ctx)
   }
   
-  // 绘制器材区发送按钮（深蓝果冻发光风格）
+  // 绘制器材区发送按钮
   renderSendButton(ctx) {
     // 按钮位置：器材室底部偏左
     const btnWidth = this.width * 0.28
@@ -81,86 +81,45 @@ export default class EquipmentRoom {
     // 是否有选中的物品
     const hasSelected = this.selectedItems.size > 0
     
-    // 按钮按下动效 - Q弹回弹效果
-    const btnScale = this.equipmentSendBtnPressed ? 0.92 : 1
-    const btnOffsetY = this.equipmentSendBtnPressed ? 2 : 0
-    const scaleOffsetX = (btnWidth * (1 - btnScale)) / 2
-    const scaleOffsetY = (btnHeight * (1 - btnScale)) / 2
-    const drawX = btnX + scaleOffsetX
-    const drawY = btnY + scaleOffsetY + btnOffsetY
-    const drawW = btnWidth * btnScale
-    const drawH = btnHeight * btnScale
-    const radius = drawH / 2  // 大圆角，Q版精髓
-    
-    // 绘制底盘发光弥散阴影
-    if (hasSelected && !this.equipmentSendBtnPressed) {
-      ctx.save()
-      ctx.shadowColor = 'rgba(56, 189, 248, 0.4)'
-      ctx.shadowBlur = 12
-      ctx.shadowOffsetY = 6
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.2)'
-      fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
-      ctx.restore()
+    // 按钮样式配置（参考ui.txt）
+    const style = {
+      topColor: '#38BDF8',      // 顶层主色（天蓝色）
+      bottomColor: '#0284C7',   // 底层厚度色（深蓝色）
+      textColor: '#FFFFFF',     // 文字颜色（白色）
+      thickness: 4,             // 3D厚度
+      disabledTopColor: '#E2E8F0',     // 禁用时顶层色
+      disabledBottomColor: '#CBD5E1',  // 禁用时底层色
+      disabledTextColor: '#64748B'     // 禁用时文字色
     }
     
-    // 绘制渐变背景（天蓝色果冻）
-    const gradient = ctx.createLinearGradient(drawX, drawY, drawX, drawY + drawH)
-    if (hasSelected) {
-      if (this.equipmentSendBtnPressed) {
-        // 按下时颜色变深
-        gradient.addColorStop(0, '#38BDF8')
-        gradient.addColorStop(1, '#0EA5E9')
-      } else {
-        // 正常状态：天蓝色渐变
-        gradient.addColorStop(0, '#7DD3FC')
-        gradient.addColorStop(1, '#38BDF8')
-      }
-    } else {
-      // 未选中状态：浅灰色
-      gradient.addColorStop(0, '#E5E7EB')
-      gradient.addColorStop(1, '#D1D5DB')
-    }
-    ctx.fillStyle = gradient
-    fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+    // 根据状态选择颜色
+    const isEnabled = hasSelected
+    const topColor = isEnabled ? style.topColor : style.disabledTopColor
+    const bottomColor = isEnabled ? style.bottomColor : style.disabledBottomColor
+    const textColor = isEnabled ? style.textColor : style.disabledTextColor
     
-    // 绘制顶部高光（内发光效果）- 使用fillRoundRect裁剪
-    ctx.save()
-    ctx.beginPath()
-    roundRect(ctx, drawX + 2, drawY + 2, drawW - 4, drawH / 2 - 2, radius - 2)
-    ctx.clip()
-    const highlightGradient = ctx.createLinearGradient(drawX, drawY, drawX, drawY + drawH / 2)
-    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)')
-    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-    ctx.fillStyle = highlightGradient
-    ctx.fillRect(drawX, drawY, drawW, drawH / 2)
-    ctx.restore()
+    // 按钮按下动效
+    const btnPressed = this.equipmentSendBtnPressed
+    const pressOffsetY = btnPressed ? style.thickness : 0
+    const radius = btnHeight / 2
     
-    // 绘制底部暗角厚度
-    ctx.save()
-    ctx.beginPath()
-    roundRect(ctx, drawX + 2, drawY + drawH / 2, drawW - 4, drawH / 2 - 2, radius - 2)
-    ctx.clip()
-    const shadowGradient = ctx.createLinearGradient(drawX, drawY + drawH / 2, drawX, drawY + drawH)
-    shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0)')
-    shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)')
-    ctx.fillStyle = shadowGradient
-    ctx.fillRect(drawX, drawY + drawH / 2, drawW, drawH / 2)
-    ctx.restore()
+    // 1. 绘制底层阴影/厚度（固定位置）
+    ctx.fillStyle = bottomColor
+    fillRoundRect(ctx, btnX, btnY + style.thickness, btnWidth, btnHeight, radius)
     
-    // 绘制粗白边框（果冻表皮反光）
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
-    ctx.lineWidth = 2
-    strokeRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+    // 2. 绘制顶层（会随按下状态移动）
+    ctx.fillStyle = topColor
+    fillRoundRect(ctx, btnX, btnY + pressOffsetY, btnWidth, btnHeight, radius)
     
-    // 按钮文字
-    ctx.fillStyle = '#FFFFFF'
+    // 3. 绘制文字（跟着顶层一起移动）
+    ctx.fillStyle = textColor
     ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    const btnText = hasSelected ? `发送 (${this.selectedItems.size})` : '发送'
-    ctx.fillText(btnText, drawX + drawW / 2, drawY + drawH / 2 + 1)
+    const btnText = isEnabled ? `发送 (${this.selectedItems.size})` : '发送'
+    ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2 + pressOffsetY)
     
-    // 记录按钮点击区域（使用原始大小，不受按下动效影响）
+    // 记录按钮点击区域（使用原始大小）
     this.equipmentSendBtnBounds = {
       x: btnX,
       y: btnY,
@@ -169,7 +128,7 @@ export default class EquipmentRoom {
     }
   }
   
-  // 绘制器材区清空按钮（深海幽暗通透风格）
+  // 绘制器材区清空按钮（参考ui.txt设计 - 低存在感防误触风格）
   renderClearButton(ctx) {
     // 按钮位置：器材室底部偏右（发送按钮右侧）
     const btnWidth = this.width * 0.28
@@ -182,69 +141,44 @@ export default class EquipmentRoom {
     // 是否有选中的物品
     const hasSelected = this.selectedItems.size > 0
     
-    // 按钮按下动效 - Q弹回弹效果
-    const btnScale = this.equipmentClearBtnPressed ? 0.92 : 1
-    const btnOffsetY = this.equipmentClearBtnPressed ? 2 : 0
-    const scaleOffsetX = (btnWidth * (1 - btnScale)) / 2
-    const scaleOffsetY = (btnHeight * (1 - btnScale)) / 2
-    const drawX = btnX + scaleOffsetX
-    const drawY = btnY + scaleOffsetY + btnOffsetY
-    const drawW = btnWidth * btnScale
-    const drawH = btnHeight * btnScale
-    const radius = drawH / 2  // 大圆角，Q版精髓
-    
-    // 绘制底盘弥散阴影
-    if (hasSelected && !this.equipmentClearBtnPressed) {
-      ctx.save()
-      ctx.shadowColor = 'rgba(56, 189, 248, 0.25)'
-      ctx.shadowBlur = 10
-      ctx.shadowOffsetY = 4
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.15)'
-      fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
-      ctx.restore()
+    // 按钮样式配置（参考ui.txt - 低存在感防误触风格）
+    const style = {
+      topColor: '#E2E8F0',      // 顶层主色（浅灰色）
+      bottomColor: '#CBD5E1',   // 底层厚度色（深灰色）
+      textColor: '#64748B',     // 文字颜色（灰色）
+      thickness: 4,             // 3D厚度
+      disabledTopColor: '#F1F5F9',     // 禁用时顶层色（更浅灰）
+      disabledBottomColor: '#E2E8F0',  // 禁用时底层色
+      disabledTextColor: '#94A3B8'     // 禁用时文字色（更浅）
     }
     
-    // 绘制背景（天蓝色透明）
-    if (hasSelected) {
-      if (this.equipmentClearBtnPressed) {
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.35)'
-      } else {
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.25)'
-      }
-    } else {
-      ctx.fillStyle = 'rgba(209, 213, 219, 0.4)'
-    }
-    fillRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+    // 根据状态选择颜色
+    const isEnabled = hasSelected
+    const topColor = isEnabled ? style.topColor : style.disabledTopColor
+    const bottomColor = isEnabled ? style.bottomColor : style.disabledBottomColor
+    const textColor = isEnabled ? style.textColor : style.disabledTextColor
     
-    // 绘制内部高光
-    ctx.save()
-    ctx.beginPath()
-    roundRect(ctx, drawX + 2, drawY + 2, drawW - 4, drawH / 2 - 2, radius - 2)
-    ctx.clip()
-    const highlightGradient = ctx.createLinearGradient(drawX, drawY, drawX, drawY + drawH / 2)
-    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)')
-    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-    ctx.fillStyle = highlightGradient
-    ctx.fillRect(drawX, drawY, drawW, drawH / 2)
-    ctx.restore()
+    // 按钮按下动效
+    const btnPressed = this.equipmentClearBtnPressed
+    const pressOffsetY = btnPressed ? style.thickness : 0
+    const radius = btnHeight / 2
     
-    // 绘制粗白边框（果冻表皮反光）
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
-    ctx.lineWidth = 2
-    strokeRoundRect(ctx, drawX, drawY, drawW, drawH, radius)
+    // 1. 绘制底层阴影/厚度（固定位置）
+    ctx.fillStyle = bottomColor
+    fillRoundRect(ctx, btnX, btnY + style.thickness, btnWidth, btnHeight, radius)
     
-    // 按钮文字（天蓝色）
-    if (hasSelected) {
-      ctx.fillStyle = '#0284C7'
-    } else {
-      ctx.fillStyle = '#9CA3AF'
-    }
+    // 2. 绘制顶层（会随按下状态移动）
+    ctx.fillStyle = topColor
+    fillRoundRect(ctx, btnX, btnY + pressOffsetY, btnWidth, btnHeight, radius)
+    
+    // 3. 绘制文字（跟着顶层一起移动）
+    ctx.fillStyle = textColor
     ctx.font = 'bold 13px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('清空', drawX + drawW / 2, drawY + drawH / 2 + 1)
+    ctx.fillText('清空', btnX + btnWidth / 2, btnY + btnHeight / 2 + pressOffsetY)
     
-    // 记录按钮点击区域（使用原始大小，不受按下动效影响）
+    // 记录按钮点击区域（使用原始大小）
     this.equipmentClearBtnBounds = {
       x: btnX,
       y: btnY,
@@ -324,8 +258,8 @@ export default class EquipmentRoom {
     // 根据实际抽屉高度计算柜体高度
     const cabinetHeight = drawerMargin + drawerCount * (drawerHeight + drawerMargin)
     
-    // 柜体背景（无边框）
-    ctx.fillStyle = '#E8F8F5'
+    // 柜体背景（无边框）- 和药品柜使用相同的颜色
+    ctx.fillStyle = '#FFF8DC'
     ctx.fillRect(cabinetX, cabinetY, cabinetWidth, cabinetHeight)
     
     for (let i = 0; i < drawerCount; i++) {
@@ -362,12 +296,12 @@ export default class EquipmentRoom {
   renderDrawer(ctx, x, y, width, height, item, index, isSelected = false) {
     // 马卡龙黄色卡片风格
     if (isSelected) {
-      // 选中状态：浅黄色背景 + 橙色边框
-      ctx.fillStyle = '#FFF8E7'
+      // 选中状态：浅蓝色背景 + 蓝色边框
+      ctx.fillStyle = '#E0F2FE'
       fillRoundRect(ctx, x, y, width, height, 8)
       
-      // 高亮边框
-      ctx.strokeStyle = '#F0C050'
+      // 高亮边框（蓝色，与发送按钮一致）
+      ctx.strokeStyle = '#38BDF8'
       ctx.lineWidth = 2.5
       strokeRoundRect(ctx, x, y, width, height, 8)
     } else {
@@ -429,8 +363,8 @@ export default class EquipmentRoom {
       const checkX = x + checkSize * 0.5
       const checkY = y + checkSize * 0.5
       
-      // 橙黄色圆形背景
-      ctx.fillStyle = '#F0C050'
+      // 蓝色圆形背景（与发送按钮一致）
+      ctx.fillStyle = '#38BDF8'
       ctx.beginPath()
       ctx.arc(checkX, checkY, checkSize * 0.6, 0, Math.PI * 2)
       ctx.fill()
@@ -523,18 +457,5 @@ export default class EquipmentRoom {
     this.selectedItems.clear()
   }
 
-  // 【废弃】旧的发送按钮检测（治疗区托盘用）
-  isClickOnSendButton(x, y) {
-    return false
-  }
-
-  // 【废弃】重置按钮检测
-  isClickOnResetButton(x, y) {
-    return false
-  }
-
-  // 【废弃】托盘检测
-  isClickOnTray(x, y) {
-    return false
-  }
+  
 }

@@ -387,32 +387,44 @@ export default class Doctor {
     if (this.state === 'treating' && requiredItems.length > 0) {
       const itemCount = requiredItems.length
       const itemSize = 36 * scale
-      const padding = 8 * scale
-      const gap = 6 * scale
+      const padding = 10 * scale
+      const gap = 8 * scale
       const bubbleWidth = itemCount * itemSize + (itemCount - 1) * gap + padding * 2
       const bubbleHeight = itemSize + padding * 2
       
       ctx.save()
-      ctx.translate(this.x, this.y - 70 * scale)
       
-      const bubbleColor = '#27AE60'
+      // 呼吸动效：3秒周期，缩放 1.0 ~ 1.05
+      const breathScale = 1 + Math.sin(this.animationTime / 3000 * Math.PI * 2) * 0.03
+      ctx.translate(this.x, this.y - 75 * scale)
+      ctx.scale(breathScale, breathScale)
       
+      // 柔和阴影
+      ctx.shadowColor = 'rgba(34, 166, 89, 0.25)'
+      ctx.shadowBlur = 24 * scale
+      ctx.shadowOffsetY = 8 * scale
+      
+      // 白色背景气泡（圆角更大，类似 rounded-3xl）
       ctx.fillStyle = '#FFF'
-      fillRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 12)
-      ctx.strokeStyle = bubbleColor
-      ctx.lineWidth = 4
-      strokeRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 12)
+      fillRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 16 * scale)
       
-      ctx.fillStyle = bubbleColor
+      // 重置阴影
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetY = 0
+      
+      // 气泡尾巴（白色，向下指）
+      const tailWidth = 14 * scale
+      const tailHeight = 10 * scale
+      ctx.fillStyle = '#FFF'
       ctx.beginPath()
-      ctx.moveTo(-12, bubbleHeight/2)
-      ctx.lineTo(0, bubbleHeight/2 + 12)
-      ctx.lineTo(12, bubbleHeight/2)
+      ctx.moveTo(-tailWidth/2, bubbleHeight/2 - 1)  // 左下
+      ctx.lineTo(tailWidth/2, bubbleHeight/2 - 1)   // 右下
+      ctx.lineTo(0, bubbleHeight/2 + tailHeight)    // 顶点向下
+      ctx.closePath()
       ctx.fill()
-      ctx.strokeStyle = bubbleColor
-      ctx.lineWidth = 2
-      ctx.stroke()
       
+      // 绘制物品图标
       const startIconX = -(itemCount * itemSize + (itemCount - 1) * gap) / 2 + itemSize / 2
       requiredItems.forEach((item, index) => {
         const iconX = startIconX + index * (itemSize + gap)

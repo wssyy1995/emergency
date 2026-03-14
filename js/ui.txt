@@ -1,157 +1,214 @@
-这张图的设计非常清爽，典型的**“弥散阴影+圆角卡片（Soft UI / 拟物化卡片）”**风格。
 
-你明确提到想用 **Canvas** 在微信开发者工具里做出来。
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Game Buttons</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #F0F5FA;
+            font-family: sans-serif;
+        }
+        canvas {
+            background-color: #ffffff;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            cursor: default; /* 我们将在 JS 中动态控制鼠标样式 */
+        }
+    </style>
+</head>
+<body>
 
-> **💡 友情提示：**
-> 如果这个页面**不需要生成海报保存到相册**，强烈建议直接用 `WXML + WXSS` 来写！用 Flex 布局写这个页面只需要 10 分钟，而且自带滚动条、支持点击事件。
-> 但如果你是为了**生成图片保存分享**，或者是在**游戏引擎（如小游戏）**中渲染，那就必须用 Canvas。
+<canvas id="gameCanvas" width="500" height="300"></canvas>
 
-下面我为你提供**使用微信小程序最新 Canvas 2D API** 绘制这个表格的完整代码。
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-### 核心难点解析
-在 Canvas 中画这个图，最大的挑战是：
-1. **画带阴影的圆角矩形**（Canvas 原生没有直接画带阴影圆角矩形的简易 API，需要组合路径）。
-2. **绘制胶囊形按钮**（半圆+矩形+半圆）。
+    // 按钮类定义
+    class CanvasButton {
+        constructor(x, y, width, height, text, style) {
+            this.x = x;
+            this.y = y;
+            this.w = width;
+            this.h = height;
+            this.text = text;
+            
+            // 样式配置
+            this.style = style;
+            
+            // 状态
+            this.isHovered = false;
+            this.isPressed = false;
+        }
 
----
+        // 碰撞检测（点是否在矩形内）
+        isHit(mouseX, mouseY) {
+            return mouseX >= this.x && mouseX <= this.x + this.w &&
+                   mouseY >= this.y && mouseY <= this.y + this.h;
+        }
 
-### 1. WXML (页面结构)
-首先在页面放置一个开启 `type="2d"` 的 canvas 节点。
-```html
-<view class="container">
-  <canvas type="2d" id="triageCanvas" style="width: 350px; height: 500px;"></canvas>
-</view>
-```
+        draw(ctx) {
+            const radius = 16; // 圆角半径
+            // 根据是否按下，计算顶层的 Y 轴偏移量 (模拟按下效果)
+            const pressOffsetY = this.isPressed ? this.style.thickness : 0;
+            
+            // 1. 绘制底层阴影/厚度 (固定的)
+            ctx.fillStyle = this.style.bottomColor;
+            ctx.beginPath();
+            ctx.roundRect(this.x, this.y + this.style.thickness, this.w, this.h, radius);
+            ctx.fill();
 
-### 2. JS (核心绘制逻辑)
-在页面的 JS 文件中，获取 Canvas 节点并按层级绘制：背景 -> 外层卡片 -> 表头 -> 循环绘制列表行。
+            // 2. 绘制顶层 (会随按下状态移动)
+            // 如果处于 hover 状态且未按下，颜色稍微变亮一点（这里用一个简单的蒙版模拟）
+            ctx.fillStyle = this.style.topColor;
+            ctx.beginPath();
+            ctx.roundRect(this.x, this.y + pressOffsetY, this.w, this.h, radius);
+            ctx.fill();
 
-```javascript
-Page({
-  onReady() {
-    this.drawCanvas();
-  },
+            // Hover 时的白色高光叠加
+            if (this.isHovered && !this.isPressed) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.fill();
+            }
 
-  drawCanvas() {
-    const query = wx.createSelectorQuery();
-    query.select('#triageCanvas')
-      .fields({ node: true, size: true })
-      .exec((res) => {
-        const canvas = res[0].node;
-        const ctx = canvas.getContext('2d');
-        
-        // 适配高分屏，防止模糊
-        const dpr = wx.getSystemInfoSync().pixelRatio;
-        canvas.width = res[0].width * dpr;
-        canvas.height = res[0].height * dpr;
-        ctx.scale(dpr, dpr);
-
-        // 数据源
-        const listData = [
-          { name: '发热', type: '紧急', color: '#F6B94A', shadow: 'rgba(246,185,74,0.4)' },
-          { name: '胸痛', type: '濒危', color: '#E45555', shadow: 'rgba(228,85,85,0.4)' },
-          { name: '腹痛', type: '危重', color: '#EFA057', shadow: 'rgba(239,160,87,0.4)' },
-          { name: '头痛', type: '次紧急', color: '#68C488', shadow: 'rgba(104,196,136,0.4)' }
-        ];
-
-        // 1. 绘制大背景 (极浅的蓝色)
-        ctx.fillStyle = '#EAF2F9';
-        ctx.fillRect(0, 0, 350, 500);
-
-        // 2. 绘制外层白色大卡片 (带弥散阴影)
-        this.drawRoundRect(ctx, 15, 20, 320, 460, 20, '#FFFFFF', 'rgba(175, 199, 227, 0.5)', 15);
-
-        // 3. 绘制表头文字
-        ctx.fillStyle = '#333333';
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText('护士站分诊指南', 50, 60);
-
-        ctx.fillStyle = '#666666';
-        ctx.font = '14px sans-serif';
-        ctx.fillText('疾病名称', 180, 90);
-        ctx.fillText('分诊分类', 255, 90);
-
-        // 4. 循环绘制列表数据
-        let startY = 110;
-        listData.forEach((item, index) => {
-          // 4.1 绘制单行的底色 (极浅的蓝灰底色)
-          this.drawRoundRect(ctx, 30, startY, 290, 46, 12, '#F4F8FB', null, 0);
-
-          // 4.2 绘制疾病名称
-          ctx.fillStyle = '#333333';
-          ctx.font = '16px sans-serif';
-          ctx.fillText(item.name, 90, startY + 28); // 图标占位，文字靠后
-
-          // 4.3 绘制右侧的分类胶囊按钮
-          this.drawPillBadge(ctx, item.type, item.color, item.shadow, 245, startY + 8);
-
-          // 每次下移 60px
-          startY += 60;
-        });
-      });
-  },
-
-  /**
-   * 封装：绘制带阴影的圆角矩形
-   * @param ctx 画布上下文
-   * @param x, y, w, h 坐标与宽高
-   * @param r 圆角半径
-   * @param fillColor 填充颜色
-   * @param shadowColor 阴影颜色
-   * @param shadowBlur 阴影模糊度
-   */
-  drawRoundRect(ctx, x, y, w, h, r, fillColor, shadowColor, shadowBlur) {
-    ctx.save();
-    ctx.beginPath();
-    // 绘制圆角路径
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-
-    // 设置阴影
-    if (shadowColor) {
-      ctx.shadowColor = shadowColor;
-      ctx.shadowBlur = shadowBlur;
-      ctx.shadowOffsetY = 4; // 阴影向下偏移
+            // 3. 绘制文字
+            ctx.fillStyle = this.style.textColor;
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // 文字位置跟着顶层一起移动
+            ctx.fillText(this.text, this.x + this.w / 2, this.y + this.h / 2 + pressOffsetY);
+            
+            // 如果是描边风格的按钮（清空按钮）
+            if (this.style.isStroke) {
+                ctx.strokeStyle = this.style.topColor;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
     }
 
-    ctx.fillStyle = fillColor;
-    ctx.fill();
-    ctx.restore(); // 恢复之前无阴影的状态
-  },
+    // --- 实例化按钮 ---
+    // 发送按钮：你喜欢的天蓝色 Q版立体风格
+    const btnSend = new CanvasButton(280, 120, 140, 48, "发 送", {
+        topColor: '#38BDF8',       // 顶层主色
+        bottomColor: '#0284C7',    // 底层厚度色
+        textColor: '#FFFFFF',      // 文字颜色
+        thickness: 6,              // 3D厚度 (按下时移动的距离)
+        isStroke: false
+    });
 
-  /**
-   * 封装：绘制胶囊徽章按钮
-   */
-  drawPillBadge(ctx, text, color, shadowColor, x, y) {
-    const w = 70;
-    const h = 30;
-    const r = 15; // 胶囊圆角刚好是高度的一半
-    
-    // 画底色和阴影
-    this.drawRoundRect(ctx, x, y, w, h, r, color, shadowColor, 8);
+    // 清空按钮：灰色低存在感，防误触风格
+    const btnClear = new CanvasButton(80, 120, 120, 48, "清 空", {
+        topColor: '#E2E8F0',       // 顶层主色 (浅灰)
+        bottomColor: '#CBD5E1',    // 底层厚度色 (深灰)
+        textColor: '#64748B',      // 文字颜色
+        thickness: 6,
+        isStroke: false
+    });
 
-    // 画白色居中文字
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, x + w / 2, y + h / 2 + 1); // +1 微调垂直居中
-    
-    // 恢复文字对齐方式，以免影响下一次绘制
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-  }
-});
-```
+    const buttons = [btnClear, btnSend];
 
-### Canvas 绘制要点解析：
-1. **`ctx.save()` 与 `ctx.restore()`**：这在画阴影时非常重要！因为阴影是全局属性，如果你在画底板的时候设置了阴影，不 `restore` 的话，后面画的文字也会带上丑陋的阴影。
-2. **高清屏模糊问题**：代码中使用了 `pixelRatio`（设备像素比）对画布进行了放大和 `scale` 缩放，这是解决小程序 Canvas 绘制文字发虚、图片模糊的标准做法。
-3. **圆角路径算法**：小程序较老的接口不支持直接画圆角矩形，这里封装了 `drawRoundRect`，利用 `ctx.arcTo` 来平滑过渡 4 个角。
-4. **胶囊按钮**：胶囊按钮本质就是一个**圆角半径等于高度一半**的圆角矩形，传入相应的背景色和投影颜色即可。
+    // --- 渲染循环 ---
+    function render() {
+        // 清空画布
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 画个简单的背景装饰
+        ctx.fillStyle = '#F8FAFC';
+        ctx.beginPath();
+        ctx.roundRect(40, 40, 420, 220, 20);
+        ctx.fill();
+        ctx.strokeStyle = '#E2E8F0';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-*(注：左侧的卡通 Icon 因为需要加载外部图片，如果需要加上，可以使用 `canvas.createImage()` 加载完成后通过 `ctx.drawImage(img, x, y, w, h)` 绘制在 `x: 40, y: startY + 6` 的位置即可。)*
+        ctx.fillStyle = '#94A3B8';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Canvas 交互演示区', canvas.width / 2, 80);
+
+        // 绘制所有按钮
+        buttons.forEach(btn => btn.draw(ctx));
+    }
+
+    // --- 事件监听 (核心逻辑) ---
+    // 获取鼠标在 Canvas 中的相对坐标
+    function getMousePos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: evt.clientX - rect.left,
+            y: evt.clientY - rect.top
+        };
+    }
+
+    // 鼠标移动事件：处理 Hover 状态和鼠标指针样式
+    canvas.addEventListener('mousemove', (e) => {
+        const pos = getMousePos(e);
+        let cursorStyle = 'default';
+
+        buttons.forEach(btn => {
+            if (btn.isHit(pos.x, pos.y)) {
+                btn.isHovered = true;
+                cursorStyle = 'pointer'; // 变成小手
+            } else {
+                btn.isHovered = false;
+                btn.isPressed = false; // 移出按钮区域时重置按压状态
+            }
+        });
+
+        canvas.style.cursor = cursorStyle;
+        render(); // 状态改变，重新绘制
+    });
+
+    // 鼠标按下事件：处理 Pressed 状态
+    canvas.addEventListener('mousedown', (e) => {
+        const pos = getMousePos(e);
+        buttons.forEach(btn => {
+            if (btn.isHit(pos.x, pos.y)) {
+                btn.isPressed = true;
+            }
+        });
+        render();
+    });
+
+    // 鼠标抬起事件：触发点击逻辑并恢复状态
+    canvas.addEventListener('mouseup', (e) => {
+        const pos = getMousePos(e);
+        buttons.forEach(btn => {
+            if (btn.isPressed && btn.isHit(pos.x, pos.y)) {
+                // 这里触发按钮的点击事件
+                if(btn.text === '发 送') {
+                    alert('你点击了【发送】按钮！触发 Canvas 发送逻辑。');
+                } else {
+                    alert('你点击了【清空】按钮！');
+                }
+            }
+            btn.isPressed = false;
+        });
+        render();
+    });
+
+    // 鼠标离开画布区域，重置所有状态
+    canvas.addEventListener('mouseleave', () => {
+        buttons.forEach(btn => {
+            btn.isHovered = false;
+            btn.isPressed = false;
+        });
+        canvas.style.cursor = 'default';
+        render();
+    });
+
+    // 初始渲染
+    render();
+
+</script>
+</body>
+</html>

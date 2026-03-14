@@ -5,28 +5,28 @@ export const GameConfig = {
   levels: [
     { 
       id: 1,                    // 第1关
-      maxPatients: 10,          // 总病人数
-      timeLimit: 400,            // 倒计时（秒）
+      timeLimit: 200,           // 倒计时（秒）
       cureTarget: 5,            // 治愈人数目标
-      doctorItemCount: 1        // 医生请求物品数量
+      doctorItemCount: 1,       // 医生请求物品数量
+      patients: [1, 2, 3, 4, 5, 6]  // 本关出现的病人ID列表
     },
     { 
       id: 2,                    // 第2关
-      maxPatients: 12,          // 总病人数
-      timeLimit: 90,            // 倒计时（秒）
-      cureTarget: 8,            // 治愈人数目标
-      doctorItemCount: 2        // 医生请求物品数量
+      timeLimit: 180,            // 倒计时（秒）
+      cureTarget: 5,            // 治愈人数目标
+      doctorItemCount: 2,       // 医生请求物品数量
+      patients: [1, 2, 3, 4, 5, 6, 7, 8]  // 本关出现的病人ID列表
     },
     { 
       id: 3,                    // 第3关
-      maxPatients: 12,          // 总病人数
       timeLimit: 120,           // 倒计时（秒）
       cureTarget: 10,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
         probability: 0.5         // 50%概率请求max个，否则请求min个
-      }
+      },
+      patients: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]  // 本关出现的病人ID列表
     }
   ],
 
@@ -34,21 +34,21 @@ export const GameConfig = {
   // 每种病情对应的耐心值（秒）、急救治疗时间（毫秒）、自动治疗时间（毫秒）和所需物品
   // diseases_priority: 1=紧急, 2=普通, 3=轻微
   diseases: [
-    { disease_id: 1, disease_name: '发烧', diseases_priority: 2, patience: 20, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic'] },
-    { disease_id: 2, disease_name: '外伤出血', diseases_priority: 3, patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'] },
-    { disease_id: 3, disease_name: '骨折', diseases_priority: 1, patience: 30, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'] },
-    { disease_id: 4, disease_name: '肠胃炎', diseases_priority: 2, patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'] },
-    { disease_id: 5, disease_name: '胸闷', diseases_priority: 2, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'] },
-    { disease_id: 6, disease_name: '严重过敏', diseases_priority: 1, patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['adrenaline', 'injection'] },
-    { disease_id: 7, disease_name: '扭伤', diseases_priority: 2, patience: 30, emerge_treat_time: 2500, auto_treat_time: 5000, treat_need: ['tape', 'painkiller'] },
-    { disease_id: 8, disease_name: '感冒', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 4000, treat_need: ['thermometer', 'antibiotic', 'injection'] },
-    { disease_id: 9, disease_name: '中风', diseases_priority: 1, patience: 15, emerge_treat_time: 6000, auto_treat_time: 12000, treat_need: ['aed', 'adrenaline', 'injection'] }
+    { disease_id: 1, disease_name: '发烧', diseases_priority: 2, patience: 30, emerge_treat_time: 3000, auto_treat_time: 9000, treat_need: ['thermometer', 'antibiotic'], unlock_level: 1 },
+    { disease_id: 2, disease_name: '外伤出血', diseases_priority: 3, patience: 40, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'], unlock_level: 1 },
+    { disease_id: 3, disease_name: '骨折', diseases_priority: 1, patience: 20, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'], unlock_level: 1 },
+    { disease_id: 4, disease_name: '肠胃炎', diseases_priority: 2, patience: 30, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'], unlock_level: 2 },
+    { disease_id: 5, disease_name: '胸闷', diseases_priority: 2, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'], unlock_level: 2 },
+    { disease_id: 6, disease_name: '严重过敏', diseases_priority: 1, patience: 30, emerge_treat_time: 3000, auto_treat_time: 10000, treat_need: ['adrenaline', 'injection'], unlock_level: 3 },
+    { disease_id: 7, disease_name: '扭伤', diseases_priority: 2, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 3 },
+    { disease_id: 8, disease_name: '感冒', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['thermometer', 'antibiotic', 'injection'], unlock_level: 4 },
+    { disease_id: 9, disease_name: '中风', diseases_priority: 1, patience: 20, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['aed', 'adrenaline', 'injection'], unlock_level: 4 }
   ],
 
   // ==================== 病人配置 ====================
   patient: {
-    spawnFirstCount: 6,         // 前N个病人进场固定间隔
-    spawnFirstInterval: 2000,   // 前N个病人进场的间隔（毫秒）
+    spawnFirstCount: 4,         // 前N个病人进场固定间隔
+    spawnFirstInterval: 3000,   // 前N个病人进场的间隔（毫秒）
     spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
     spawnRandomMax: 5000       // 随机间隔最大值（毫秒）
   },
@@ -75,11 +75,11 @@ export const GameConfig = {
   // 每个病人的独立配置，用于外观、身份和固定疾病
   patientDetails: [
     { id: 1, name: '1号', rageLevel: 1, disease_id: 1 },   // 发烧
-    { id: 2, name: '2号', rageLevel: 1, disease_id: 2 },   // 头痛
+    { id: 2, name: '2号', rageLevel: 1, disease_id: 2 },   // 外伤出血
     { id: 3, name: '3号', rageLevel: 1, disease_id: 3 },   // 骨折
-    { id: 4, name: '4号', rageLevel: 1, disease_id: 4 },   // 腹痛
-    { id: 5, name: '5号', rageLevel: 1, disease_id: 5 },   // 胸闷
-    { id: 6, name: '6号', rageLevel: 1, disease_id: 6 },   // 过敏
+    { id: 4, name: '4号', rageLevel: 1, disease_id: 3 },   // 骨折
+    { id: 5, name: '5号', rageLevel: 1, disease_id: 2 },   // 外伤出血
+    { id: 6, name: '6号', rageLevel: 1, disease_id: 1 },   // 发烧
     { id: 7, name: '7号', rageLevel: 1, disease_id: 7 },   // 扭伤
     { id: 8, name: '8号', rageLevel: 4, disease_id: 8 },   // 感冒
     { id: 9, name: '9号', rageLevel: 1, disease_id: 3 },   // 中风
@@ -109,8 +109,6 @@ export const GameConfig = {
       icon: '💊',
       imagePath: 'images/antibiotic.png',
       color: '#FF6B6B',
-      description: '用于治疗细菌感染',
-      effect: '抗菌消炎',
       price: 50,
       unlockLevel: 1
     },
@@ -120,8 +118,6 @@ export const GameConfig = {
       icon: '💉',
       imagePath: 'images/painkiller.png',
       color: '#4ECDC4',
-      description: '快速缓解疼痛症状',
-      effect: '镇痛',
       price: 30,
       unlockLevel: 1
     },
@@ -131,8 +127,6 @@ export const GameConfig = {
       icon: '💓',
       imagePath: 'images/adrenaline.png',
       color: '#FFE66D',
-      description: '急救时使用，恢复生命体征',
-      effect: '急救复苏',
       price: 100,
       unlockLevel: 2
     },
@@ -142,8 +136,6 @@ export const GameConfig = {
       icon: '🧪',
       imagePath: 'images/injection.png',
       color: '#95E1D3',
-      description: '补充水分和电解质',
-      effect: '补液',
       price: 20,
       unlockLevel: 1
     }
@@ -157,8 +149,6 @@ export const GameConfig = {
       icon: '⚡',
       imagePath: 'images/aed.png',
       color: '#F38181',
-      description: '自动体外除颤器，用于心脏骤停急救',
-      effect: '除颤急救',
       price: 200,
       unlockLevel: 2,
       durability: 10
@@ -169,8 +159,6 @@ export const GameConfig = {
       icon: '🩹',
       imagePath: 'images/tape.png',
       color: '#AA96DA',
-      description: '用于包扎伤口',
-      effect: '止血包扎',
       price: 15,
       unlockLevel: 1,
       durability: 20
@@ -181,8 +169,6 @@ export const GameConfig = {
       icon: '✂️',
       imagePath: 'images/scissors.png',
       color: '#FCBAD3',
-      description: '外科手术用具',
-      effect: '切割',
       price: 80,
       unlockLevel: 2,
       durability: 50
@@ -193,8 +179,6 @@ export const GameConfig = {
       icon: '🌡️',
       imagePath: 'images/thermometer.png',
       color: '#FFFFD2',
-      description: '测量体温',
-      effect: '体温检测',
       price: 25,
       unlockLevel: 1,
       durability: 100
@@ -259,7 +243,7 @@ export function checkPatientRage(patientDetail) {
   return Math.random() < probability
 }
 
-// 根据疾病名称获取急救治疗时间（毫秒）
+// 根据疾病名称获取急救治疗时间（毫秒）- 医生治疗病床使用
 export function getTreatTimeByDisease(diseaseName) {
   const disease = GameConfig.diseases.find(d => d.disease_name === diseaseName)
   return disease ? disease.emerge_treat_time : 3000 // 默认3秒

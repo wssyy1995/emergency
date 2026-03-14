@@ -93,7 +93,7 @@ class Bed {
            y >= this.y && y <= this.y + this.height
   }
 
-  render(ctx) {
+  render(ctx, curedImage = null) {
     if (this.bedImage && this.bedImage.width > 0) {
       // 2号床(id=1)水平翻转
       if (this.id === 1) {
@@ -143,7 +143,7 @@ class Bed {
       this.patient.x = this.x + (this.width - this.patient.width) * offset.x
       this.patient.y = this.y + this.height * offset.y
       
-      this.patient.render(ctx)
+      this.patient.render(ctx, false, curedImage)
       
       this.patient.x = originalX
       this.patient.y = originalY
@@ -192,7 +192,7 @@ class IVSeat {
            y >= this.y && y <= this.y + this.height
   }
 
-  render(ctx) {
+  render(ctx, curedImage = null) {
     const currentImage = this.patient ? this.seatOccupiedImage : this.seatFreeImage
     
     if (currentImage && currentImage.width > 0) {
@@ -214,7 +214,7 @@ class IVSeat {
       this.patient.x = this.x + (this.width - this.patient.width) / 2
       this.patient.y = this.y + this.height * 0.62
       
-      this.patient.render(ctx)
+      this.patient.render(ctx, false, curedImage)
       
       this.patient.x = originalX
       this.patient.y = originalY
@@ -308,11 +308,11 @@ export default class BedArea {
     this.ivSeats.forEach(seat => seat.clear())
   }
 
-  render(ctx) {
+  render(ctx, curedImage = null) {
     // 绘制病床（上半部分2/3区域）
-    this.beds.forEach(bed => bed.render(ctx))
+    this.beds.forEach(bed => bed.render(ctx, curedImage))
     
     // 绘制输液椅（底部1/3区域，无背景）
-    this.ivSeats.forEach(seat => seat.render(ctx))
+    this.ivSeats.forEach(seat => seat.render(ctx, curedImage))
   }
 }
