@@ -26,6 +26,18 @@ export default class Nurse {
     this.lightbulbImage = null
     this.isNewPlayer = false
     
+    // 逐字显示文字
+    this.welcomeText = '早上好呀！我是护士长小美，给第一天上班的你准备了一份"工作秘籍"，快来看看！'
+    this.textDisplayProgress = 0  // 当前显示到的字符位置
+    this.textDisplayTimer = 0     // 文字显示计时器
+    this.textDisplayInterval = 100 // 每个字间隔（毫秒），更慢
+    
+    // 准备提示气泡
+    this.readyText = '准备咯，病人即将到来！'
+    this.showReadyBubble = false   // 是否显示准备气泡
+    this.readyBubbleTimer = 0      // 准备气泡计时器
+    this.readyBubbleDuration = 3000 // 准备气泡显示时长（3秒）
+    
     this.loadImage()
   }
 
@@ -64,6 +76,11 @@ export default class Nurse {
   // 设置新玩家模式
   setNewPlayerMode(isNewPlayer) {
     this.isNewPlayer = isNewPlayer
+    if (isNewPlayer) {
+      // 重置文字显示进度
+      this.textDisplayProgress = 0
+      this.textDisplayTimer = 0
+    }
   }
 
   setScale(areaWidth) {
@@ -75,12 +92,39 @@ export default class Nurse {
 
   update(deltaTime) {
     this.animationTime += deltaTime
+    
+    // 【新玩家指引】更新逐字显示进度
+    if (this.isNewPlayer) {
+      this.textDisplayTimer += deltaTime
+      if (this.textDisplayTimer >= this.textDisplayInterval) {
+        this.textDisplayTimer = 0
+        if (this.textDisplayProgress < this.welcomeText.length) {
+          this.textDisplayProgress++
+        }
+      }
+    }
+    
+    // 【准备气泡】计时器更新
+    if (this.showReadyBubble) {
+      this.readyBubbleTimer += deltaTime
+      if (this.readyBubbleTimer >= this.readyBubbleDuration) {
+        this.showReadyBubble = false
+        this.readyBubbleTimer = 0
+      }
+    }
+    
     // 只有启用动画时才计算跳动效果
     if (this.animationEnabled) {
       this.bounceOffset = Math.sin(this.animationTime / 500) * -2 * this.scale
     } else {
       this.bounceOffset = 0
     }
+  }
+  
+  // 显示准备气泡（新玩家指引第二步）
+  showReadyHint() {
+    this.showReadyBubble = true
+    this.readyBubbleTimer = 0
   }
   
   // 启用动画（第一个病人生成后调用）
@@ -92,11 +136,6 @@ export default class Nurse {
     ctx.save()
     ctx.translate(this.x, this.y + this.bounceOffset)
     ctx.scale(this.facing * this.scale, this.scale)
-    
-    // 【新玩家指引】呼吸圈效果
-    if (this.isNewPlayer) {
-      this.renderBreathRing(ctx)
-    }
     
     // 根据是否新玩家选择图片
     const currentImage = (this.isNewPlayer && this.nurseHelloImage && this.nurseHelloImage.width > 0) 
@@ -113,48 +152,242 @@ export default class Nurse {
       ctx.drawImage(currentImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
     }
     
-    // 新玩家模式：在护士头旁边绘制灯泡图标（在护士坐标系内绘制）
-    if (this.isNewPlayer && this.lightbulbImage && this.lightbulbImage.width > 0) {
-      const bulbSize = 45  // 固定大小，不受 scale 影响
-      // 护士头大约在 y = -45 的位置（护士高度100，中心在0，头在上半部分）
-      const bulbX = 45  // 头的右侧
-      const bulbY = -55  // 头的上方
+    ctx.restore()
+    
+    // 【新玩家指引】在护士头部左侧绘制呼吸气泡
+    if (this.showReadyBubble) {
+      // 显示准备气泡（第二步）
+      this.renderReadyBubble(ctx)
+    } else if (this.isNewPlayer) {
+      // 显示欢迎气泡（第一步）
+      this.renderWelcomeBubble(ctx)
+    }
+  }
+  
+  // 【新玩家指引】渲染欢迎气泡（头部左侧，带呼吸效果）
+  renderWelcomeBubble(ctx) {
+    // 呼吸动画周期 4 秒（更缓慢）
+    const breathCycle = 4000
+    const progress = (this.animationTime % breathCycle) / breathCycle
+    // 呼吸强度 (0.97 -> 1.03 -> 0.97) - 幅度更小更柔和
+    const breathScale = 0.97 + Math.sin(progress * Math.PI * 2) * 0.02
+    
+    // 获取当前应显示的文案（逐字显示）
+    const text = this.welcomeText.substring(0, this.textDisplayProgress)
+    
+    // 气泡位置（护士头部左侧）
+    const bubbleX = this.x/2 - 80 * this.scale
+    const bubbleY = this.y - 110 * this.scale
+    
+    // 气泡尺寸
+    const padding = 12 * this.scale
+    const maxWidth = 200 * this.scale
+    const lineHeight = 18 * this.scale
+    const cornerRadius = 12 * this.scale
+    const triangleSize = 10 * this.scale
+    
+    ctx.save()
+    
+    // 应用呼吸缩放（以气泡中心为原点）
+    const centerX = bubbleX + maxWidth / 2
+    const centerY = bubbleY + 60 * this.scale
+    ctx.translate(centerX, centerY)
+    ctx.scale(breathScale, breathScale)
+    ctx.translate(-centerX, -centerY)
+    
+    // 分行计算文字
+    ctx.font = `bold ${13 * this.scale}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    const words = text.split('')
+    const lines = []
+    let currentLine = ''
+    
+    for (let i = 0; i < words.length; i++) {
+      const testLine = currentLine + words[i]
+      const metrics = ctx.measureText(testLine)
+      if (metrics.width > maxWidth - padding * 2 && currentLine !== '') {
+        lines.push(currentLine)
+        currentLine = words[i]
+      } else {
+        currentLine = testLine
+      }
+    }
+    lines.push(currentLine)
+    
+    // 计算气泡高度
+    const bubbleWidth = maxWidth
+    const bubbleHeight = lines.length * lineHeight + padding * 2 + triangleSize
+    
+    // 绘制气泡背景（更柔和的阴影）
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'
+    ctx.shadowBlur = 20 * this.scale
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 4 * this.scale
+    
+    // 气泡主体（圆角矩形）- 使用奶油色背景更柔和
+    ctx.fillStyle = '#FFFCF5'
+    ctx.beginPath()
+    ctx.moveTo(bubbleX + cornerRadius, bubbleY)
+    ctx.lineTo(bubbleX + bubbleWidth - cornerRadius, bubbleY)
+    ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY, bubbleX + bubbleWidth, bubbleY + cornerRadius)
+    ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - cornerRadius - triangleSize)
+    ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - triangleSize, bubbleX + bubbleWidth - cornerRadius, bubbleY + bubbleHeight - triangleSize)
+    ctx.lineTo(bubbleX + bubbleWidth - 25 * this.scale, bubbleY + bubbleHeight - triangleSize)
+    // 小三角（指向护士头部）- 使用贝塞尔曲线更圆润
+    ctx.quadraticCurveTo(
+      bubbleX + bubbleWidth - 20 * this.scale, 
+      bubbleY + bubbleHeight - triangleSize * 0.5,
+      bubbleX + bubbleWidth - 20 * this.scale, 
+      bubbleY + bubbleHeight
+    )
+    ctx.quadraticCurveTo(
+      bubbleX + bubbleWidth - 20 * this.scale, 
+      bubbleY + bubbleHeight - triangleSize * 0.5,
+      bubbleX + bubbleWidth - 35 * this.scale, 
+      bubbleY + bubbleHeight - triangleSize
+    )
+    ctx.lineTo(bubbleX + cornerRadius, bubbleY + bubbleHeight - triangleSize)
+    ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleHeight - triangleSize, bubbleX, bubbleY + bubbleHeight - cornerRadius - triangleSize)
+    ctx.lineTo(bubbleX, bubbleY + cornerRadius)
+    ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + cornerRadius, bubbleY)
+    ctx.closePath()
+    ctx.fill()
+    
+    // 绘制柔和的内阴影边框效果（更粗）
+    ctx.shadowColor = 'transparent'
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'
+    ctx.lineWidth = 5 * this.scale
+    ctx.stroke()
+    
+    // 绘制内部高光（更柔和的感觉）
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
+    ctx.lineWidth = 1 * this.scale
+    const highlightPath = new Path2D()
+    highlightPath.moveTo(bubbleX + cornerRadius + 2, bubbleY + 1)
+    highlightPath.lineTo(bubbleX + bubbleWidth - cornerRadius - 2, bubbleY + 1)
+    ctx.stroke(highlightPath)
+    
+    // 绘制文字
+    ctx.fillStyle = '#5D4E37'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    
+    for (let i = 0; i < lines.length; i++) {
+      const lineY = bubbleY + padding + i * lineHeight
+      ctx.fillText(lines[i], bubbleX + padding, lineY)
+    }
+    
+    // 逐字显示未完成时，绘制闪烁光标
+    if (this.textDisplayProgress < this.welcomeText.length) {
+      const blinkAlpha = Math.sin(this.animationTime / 200) * 0.5 + 0.5
+      ctx.fillStyle = `rgba(255, 105, 180, ${blinkAlpha})`
       
-      // 添加上下浮动动画
-      const bulbBounce = Math.sin(this.animationTime / 300) * 4
+      // 计算光标位置（最后一行末尾）
+      const lastLineIndex = lines.length - 1
+      const lastLineY = bubbleY + padding + lastLineIndex * lineHeight
+      const lastLineWidth = ctx.measureText(lines[lastLineIndex]).width
+      const cursorX = bubbleX + padding + lastLineWidth + 2
+      const cursorY = lastLineY
+      const cursorHeight = 14 * this.scale
       
-      ctx.drawImage(this.lightbulbImage, bulbX - bulbSize / 2, bulbY - bulbSize / 2 + bulbBounce, bulbSize, bulbSize)
+      ctx.fillRect(cursorX, cursorY, 2 * this.scale, cursorHeight)
     }
     
     ctx.restore()
   }
   
-  // 【新玩家指引】渲染聚光灯效果（四周暗，中间亮）
-  renderSpotlight(ctx) {
-    // 获取屏幕尺寸（使用护士位置周围的大范围）
-    const screenWidth = ctx.canvas.width / (ctx.getTransform().a || 1)
-    const screenHeight = ctx.canvas.height / (ctx.getTransform().d || 1)
+  // 【新玩家指引】渲染准备气泡（第二步，样式完全同欢迎气泡）
+  renderReadyBubble(ctx) {
+    // 呼吸动画周期 4 秒（同欢迎气泡）
+    const breathCycle = 4000
+    const progress = (this.animationTime % breathCycle) / breathCycle
+    // 呼吸强度 (0.97 -> 1.03 -> 0.97)
+    const breathScale = 0.97 + Math.sin(progress * Math.PI * 2) * 0.03
     
-    // 聚光灯中心在护士位置
-    const centerX = this.x
-    const centerY = this.y
-    const spotlightRadius = 30 * this.scale  // 高亮区域半径
+    // 气泡文案
+    const text = this.readyText
+    
+    // 气泡位置（护士头部左侧，同欢迎气泡）
+    const bubbleX = this.x - 120 * this.scale
+    const bubbleY = this.y - 80 * this.scale
+    
+    // 气泡尺寸（同欢迎气泡）
+    const padding = 12 * this.scale
+    const maxWidth = 200 * this.scale
+    const lineHeight = 18 * this.scale
+    const cornerRadius = 12 * this.scale
+    const triangleSize = 10 * this.scale
     
     ctx.save()
     
-    // 创建径向渐变：中心透明，边缘半透明黑色
-    const gradient = ctx.createRadialGradient(
-      centerX, centerY, spotlightRadius * 0.5,  // 内圈（完全透明）
-      centerX, centerY, spotlightRadius * 3      // 外圈（半透明黑色）
-    )
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)')           // 中心完全透明
-    gradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.05)')      // 轻微暗化（降低）
-    gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.15)')      // 中等暗化（降低）
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.25)')        // 边缘较暗（降低）
+    // 应用呼吸缩放（同欢迎气泡）
+    const centerX = bubbleX + maxWidth / 2
+    const centerY = bubbleY + 60 * this.scale
+    ctx.translate(centerX, centerY)
+    ctx.scale(breathScale, breathScale)
+    ctx.translate(-centerX, -centerY)
     
-    // 绘制覆盖全屏的遮罩
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, screenWidth, screenHeight)
+    // 计算文字（单行）
+    ctx.font = `bold ${13 * this.scale}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    const textWidth = ctx.measureText(text).width
+    const bubbleWidth = Math.max(textWidth + padding * 2, maxWidth * 0.8)
+    const bubbleHeight = lineHeight + padding * 2 + triangleSize
+    
+    // 绘制气泡背景（同欢迎气泡）
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'
+    ctx.shadowBlur = 20 * this.scale
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 4 * this.scale
+    
+    // 气泡主体（圆角矩形）- 使用奶油色背景（同欢迎气泡）
+    ctx.fillStyle = '#FFFCF5'
+    ctx.beginPath()
+    ctx.moveTo(bubbleX + cornerRadius, bubbleY)
+    ctx.lineTo(bubbleX + bubbleWidth - cornerRadius, bubbleY)
+    ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY, bubbleX + bubbleWidth, bubbleY + cornerRadius)
+    ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - cornerRadius - triangleSize)
+    ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - triangleSize, bubbleX + bubbleWidth - cornerRadius, bubbleY + bubbleHeight - triangleSize)
+    ctx.lineTo(bubbleX + bubbleWidth - 25 * this.scale, bubbleY + bubbleHeight - triangleSize)
+    // 小三角（指向护士头部）
+    ctx.quadraticCurveTo(
+      bubbleX + bubbleWidth - 20 * this.scale, 
+      bubbleY + bubbleHeight - triangleSize * 0.5,
+      bubbleX + bubbleWidth - 20 * this.scale, 
+      bubbleY + bubbleHeight
+    )
+    ctx.quadraticCurveTo(
+      bubbleX + bubbleWidth - 20 * this.scale, 
+      bubbleY + bubbleHeight - triangleSize * 0.5,
+      bubbleX + bubbleWidth - 35 * this.scale, 
+      bubbleY + bubbleHeight - triangleSize
+    )
+    ctx.lineTo(bubbleX + cornerRadius, bubbleY + bubbleHeight - triangleSize)
+    ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleHeight - triangleSize, bubbleX, bubbleY + bubbleHeight - cornerRadius - triangleSize)
+    ctx.lineTo(bubbleX, bubbleY + cornerRadius)
+    ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + cornerRadius, bubbleY)
+    ctx.closePath()
+    ctx.fill()
+    
+    // 绘制边框（同欢迎气泡）
+    ctx.shadowColor = 'transparent'
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'
+    ctx.lineWidth = 3 * this.scale
+    ctx.stroke()
+    
+    // 绘制内部高光（同欢迎气泡）
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
+    ctx.lineWidth = 1 * this.scale
+    const highlightPath = new Path2D()
+    highlightPath.moveTo(bubbleX + cornerRadius + 2, bubbleY + 1)
+    highlightPath.lineTo(bubbleX + bubbleWidth - cornerRadius - 2, bubbleY + 1)
+    ctx.stroke(highlightPath)
+    
+    // 绘制文字（同欢迎气泡颜色）
+    ctx.fillStyle = '#5D4E37'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const textX = bubbleX + bubbleWidth / 2
+    const textY = bubbleY + padding + lineHeight / 2
+    ctx.fillText(text, textX, textY)
     
     ctx.restore()
   }

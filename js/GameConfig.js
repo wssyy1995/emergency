@@ -80,7 +80,7 @@ export const GameConfig = {
   // ==================== 病人配置 ====================
   patient: {
     spawnFirstCount: 4,         // 前N个病人进场固定间隔
-    spawnFirstInterval: 3000,   // 前N个病人进场的间隔（毫秒）
+    spawnFirstInterval: 3500,   // 前N个病人进场的间隔（毫秒）
     spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
     spawnRandomMax: 5000       // 随机间隔最大值（毫秒）
   },
