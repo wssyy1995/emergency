@@ -21,10 +21,41 @@ export function getNewPlayerStatus() {
 // 保存新玩家状态到本地缓存
 export function saveNewPlayerStatus(isNewPlayer) {
   try {
-    wx.setStorageSync(STORAGE_KEY, { is_new_player: isNewPlayer })
+    const data = wx.getStorageSync(STORAGE_KEY) || {}
+    data.is_new_player = isNewPlayer
+    wx.setStorageSync(STORAGE_KEY, data)
     console.log('[本地缓存] 保存新玩家状态:', isNewPlayer)
   } catch (e) {
     console.warn('[本地缓存] 保存失败:', e)
+  }
+}
+
+// 从本地缓存读取关卡提示状态（第2关及以后）
+export function getLevelHintStatus(levelIndex) {
+  try {
+    const data = wx.getStorageSync(STORAGE_KEY)
+    if (data && data.levelHints && data.levelHints[levelIndex] !== undefined) {
+      return data.levelHints[levelIndex]
+    }
+  } catch (e) {
+    console.warn('[本地缓存] 读取关卡提示失败:', e)
+  }
+  // 默认返回 false（未点击过，需要显示）
+  return false
+}
+
+// 保存关卡提示状态到本地缓存
+export function saveLevelHintStatus(levelIndex, hasClicked) {
+  try {
+    const data = wx.getStorageSync(STORAGE_KEY) || {}
+    if (!data.levelHints) {
+      data.levelHints = {}
+    }
+    data.levelHints[levelIndex] = hasClicked
+    wx.setStorageSync(STORAGE_KEY, data)
+    console.log(`[本地缓存] 保存第${levelIndex + 1}关提示状态:`, hasClicked)
+  } catch (e) {
+    console.warn('[本地缓存] 保存关卡提示失败:', e)
   }
 }
 

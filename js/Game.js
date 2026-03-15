@@ -6,7 +6,7 @@ import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
-import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus } from './GameConfig.js'
+import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus, getLevelHintStatus, saveLevelHintStatus } from './GameConfig.js'
 
 // ==================== 马卡龙 UI 颜色配置（可自行调整）====================
 const UI_COLORS = {
@@ -457,6 +457,14 @@ export default class Game {
     } else {
       // 非第一关，关闭新玩家模式
       this.waitingArea.setNewPlayerMode(false)
+      
+      // 【关卡提示】第2关及以后，显示灯泡提示（如果本关未点击过）
+      if (this.currentLevel >= 1) {
+        const hasClicked = getLevelHintStatus(this.currentLevel)
+        const showHint = !hasClicked
+        this.waitingArea.nurse.setLevelHint(showHint)
+        console.log(`[关卡提示] 第${this.currentLevel + 1}关灯泡状态: ${showHint ? '显示' : '已关闭'}`)
+      }
     }
     
     // 初始化倒计时
@@ -1016,9 +1024,9 @@ export default class Game {
     const nurse = this.waitingArea.nurse
     
     // 聚光灯中心在护士位置
-    const centerX = nurse.x-30
+    const centerX = nurse.x-20
     const centerY = nurse.y
-    const spotlightRadius = 200 * nurse.scale  // 高亮区域半径
+    const spotlightRadius = 180 * nurse.scale  // 高亮区域半径
     
     ctx.save()
     
@@ -1758,6 +1766,13 @@ export default class Game {
         if (GameConfig.is_new_player) {
           console.log('[新玩家指引] 护士被点击，恢复正常图片，显示分诊指南')
           this.waitingArea.setNewPlayerMode(false)
+        }
+        
+        // 【关卡提示】第2关及以后，点击护士关闭灯泡提示
+        if (this.currentLevel >= 1 && this.waitingArea.nurse.showLevelHint) {
+          saveLevelHintStatus(this.currentLevel, true)
+          this.waitingArea.nurse.setLevelHint(false)
+          console.log(`[关卡提示] 第${this.currentLevel + 1}关灯泡已关闭`)
         }
         
         // 显示疾病清单弹窗
@@ -2938,7 +2953,6 @@ export default class Game {
     if (!this.levelCompleteModal || !this.levelCompleteModal.visible) {
       return
     }
-    console.log('渲染关卡完成弹窗')
     
     const ctx = this.ctx
     const modalWidth = 280
@@ -3257,16 +3271,22 @@ export default class Game {
     const ctx = this.ctx
     const currentLevelNum = (this.currentLevel || 0) + 1
     
-    // 对疾病列表进行排序：已解锁的在前（按优先级：紧急>普通>轻微），未解锁的在后
+    // 对疾病列表进行排序：新解锁的优先 > 按优先级排序（紧急>普通>轻微）> 未解锁的
     const sortedDiseases = [...GameConfig.diseases].sort((a, b) => {
       const aIsUnlocked = currentLevelNum >= (a.unlock_level || 1)
       const bIsUnlocked = currentLevelNum >= (b.unlock_level || 1)
+      const aIsNewUnlock = a.unlock_level === currentLevelNum
+      const bIsNewUnlock = b.unlock_level === currentLevelNum
       
-      // 已解锁的排在前面
+      // 新解锁的（unlock_level == currentLevelNum）排在最前面
+      if (aIsNewUnlock && !bIsNewUnlock) return -1
+      if (!aIsNewUnlock && bIsNewUnlock) return 1
+      
+      // 已解锁的排在未解锁前面
       if (aIsUnlocked && !bIsUnlocked) return -1
       if (!aIsUnlocked && bIsUnlocked) return 1
       
-      // 都已解锁：按优先级排序（紧急(1) > 普通(2) > 轻微(3)）
+      // 都已解锁或都是新解锁：按优先级排序（紧急(1) > 普通(2) > 轻微(3)）
       if (aIsUnlocked && bIsUnlocked) {
         return (a.diseases_priority || 2) - (b.diseases_priority || 2)
       }
@@ -3394,7 +3414,37 @@ export default class Game {
       
       // 3.3 已解锁疾病：显示名称和分诊类别
       if (isUnlocked) {
-        // 绘制疾病名称
+        // 判断是否为本关新解锁的疾病（且只在第2关及以后显示）
+        const isNewUnlock = disease.unlock_level === currentLevelNum && currentLevelNum >= 2
+        
+        // 绘制【new】标签（如果是新解锁的）- 左上角倾斜，只有文字
+        if (isNewUnlock) {
+          ctx.save()
+          // 设置位置为左上角
+          const newTagX = modalX + 18
+          const newTagY = rowY + 2
+          
+          // 移动画布原点到标签位置并旋转
+          ctx.translate(newTagX, newTagY)
+          ctx.rotate(-Math.PI / 12)  // 向左倾斜15度
+          
+          // 绘制红色文字（8px，带白色阴影增加可读性）
+          ctx.fillStyle = '#FF4444'
+          ctx.font = 'bold 8px "PingFang SC", sans-serif'
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'top'
+          
+          // 添加白色描边阴影
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.8)'
+          ctx.shadowBlur = 2
+          ctx.shadowOffsetX = 0
+          ctx.shadowOffsetY = 0
+          
+          ctx.fillText('NEW', 0, 0)
+          ctx.restore()
+        }
+        
+        // 绘制疾病名称（统一位置）
         ctx.fillStyle = '#333333'
         ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif'
         ctx.textAlign = 'left'

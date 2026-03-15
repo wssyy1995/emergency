@@ -27,16 +27,19 @@ export default class Nurse {
     this.isNewPlayer = false
     
     // 逐字显示文字
-    this.welcomeText = '早上好呀！我是护士长小美，给第一天上班的你准备了一份"工作秘籍"，快来看看！'
+    this.welcomeText = '早上好！我是护士小美，给第一天上班的你准备了一份"工作秘籍"，点我看看！'
     this.textDisplayProgress = 0  // 当前显示到的字符位置
     this.textDisplayTimer = 0     // 文字显示计时器
     this.textDisplayInterval = 100 // 每个字间隔（毫秒），更慢
     
     // 准备提示气泡
-    this.readyText = '准备咯，病人即将到来！'
+    this.readyText = '请准备，病人马上到来！'
     this.showReadyBubble = false   // 是否显示准备气泡
     this.readyBubbleTimer = 0      // 准备气泡计时器
     this.readyBubbleDuration = 3000 // 准备气泡显示时长（3秒）
+    
+    // 【关卡提示】第2关及以后的灯泡提示
+    this.showLevelHint = false
     
     this.loadImage()
   }
@@ -81,6 +84,11 @@ export default class Nurse {
       this.textDisplayProgress = 0
       this.textDisplayTimer = 0
     }
+  }
+  
+  // 【关卡提示】设置是否显示灯泡提示（第2关及以后）
+  setLevelHint(showHint) {
+    this.showLevelHint = showHint
   }
 
   setScale(areaWidth) {
@@ -162,29 +170,41 @@ export default class Nurse {
       // 显示欢迎气泡（第一步）
       this.renderWelcomeBubble(ctx)
     }
+    
+    // 【关卡提示】第2关及以后，在头部右侧显示灯泡
+    if (this.showLevelHint && this.lightbulbImage && this.lightbulbImage.width > 0) {
+      const bulbSize = 32 * this.scale
+      const bulbX = this.x + 35 * this.scale  // 头部右侧
+      const bulbY = this.y - 45 * this.scale  // 头部上方
+      
+      // 添加上下浮动动画
+      const bulbBounce = Math.sin(this.animationTime / 300) * 4
+      
+      ctx.drawImage(this.lightbulbImage, bulbX - bulbSize / 2, bulbY - bulbSize / 2 + bulbBounce, bulbSize, bulbSize)
+    }
   }
   
   // 【新玩家指引】渲染欢迎气泡（头部左侧，带呼吸效果）
   renderWelcomeBubble(ctx) {
-    // 呼吸动画周期 4 秒（更缓慢）
-    const breathCycle = 4000
+    // 呼吸动画周期 5 秒（更缓慢）
+    const breathCycle = 5000
     const progress = (this.animationTime % breathCycle) / breathCycle
     // 呼吸强度 (0.97 -> 1.03 -> 0.97) - 幅度更小更柔和
-    const breathScale = 0.97 + Math.sin(progress * Math.PI * 2) * 0.02
+    const breathScale = 0.98 + Math.sin(progress * Math.PI * 2) * 0.02
     
     // 获取当前应显示的文案（逐字显示）
     const text = this.welcomeText.substring(0, this.textDisplayProgress)
     
-    // 气泡位置（护士头部左侧）
-    const bubbleX = this.x/2 - 80 * this.scale
+    // 欢迎气泡位置（护士头部左侧）
+    const bubbleX = this.x/2 - 90 * this.scale
     const bubbleY = this.y - 110 * this.scale
     
-    // 气泡尺寸
-    const padding = 12 * this.scale
+    // 欢迎气泡气泡尺寸
+    const padding = 10 * this.scale
     const maxWidth = 200 * this.scale
-    const lineHeight = 18 * this.scale
-    const cornerRadius = 12 * this.scale
-    const triangleSize = 10 * this.scale
+    const lineHeight = 20 * this.scale
+    const cornerRadius = 16 * this.scale
+    const triangleSize = 8 * this.scale
     
     ctx.save()
     
@@ -196,7 +216,7 @@ export default class Nurse {
     ctx.translate(-centerX, -centerY)
     
     // 分行计算文字
-    ctx.font = `bold ${13 * this.scale}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.font = `bold ${14 * this.scale}px "PingFang SC", "Microsoft YaHei", sans-serif`
     const words = text.split('')
     const lines = []
     let currentLine = ''
@@ -252,10 +272,10 @@ export default class Nurse {
     ctx.closePath()
     ctx.fill()
     
-    // 绘制柔和的内阴影边框效果（更粗）
+    // 绘制边框
     ctx.shadowColor = 'transparent'
-    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'
-    ctx.lineWidth = 5 * this.scale
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'  // 浅粉色
+    ctx.lineWidth = 6 * this.scale  // 粗度保持
     ctx.stroke()
     
     // 绘制内部高光（更柔和的感觉）
@@ -297,25 +317,25 @@ export default class Nurse {
   
   // 【新玩家指引】渲染准备气泡（第二步，样式完全同欢迎气泡）
   renderReadyBubble(ctx) {
-    // 呼吸动画周期 4 秒（同欢迎气泡）
-    const breathCycle = 4000
+    // 呼吸动画周期 5 秒（同欢迎气泡）
+    const breathCycle = 5000
     const progress = (this.animationTime % breathCycle) / breathCycle
     // 呼吸强度 (0.97 -> 1.03 -> 0.97)
-    const breathScale = 0.97 + Math.sin(progress * Math.PI * 2) * 0.03
+    const breathScale = 0.98 + Math.sin(progress * Math.PI * 2) * 0.01
     
-    // 气泡文案
+    // 准备气泡文案
     const text = this.readyText
     
-    // 气泡位置（护士头部左侧，同欢迎气泡）
-    const bubbleX = this.x - 120 * this.scale
+    // 准备气泡位置（护士头部左侧，同欢迎气泡）
+    const bubbleX = this.x - 190 * this.scale
     const bubbleY = this.y - 80 * this.scale
     
-    // 气泡尺寸（同欢迎气泡）
+    // 准备气泡尺寸（同欢迎气泡）
     const padding = 12 * this.scale
     const maxWidth = 200 * this.scale
     const lineHeight = 18 * this.scale
     const cornerRadius = 12 * this.scale
-    const triangleSize = 10 * this.scale
+    const triangleSize = 14 * this.scale
     
     ctx.save()
     
@@ -327,7 +347,7 @@ export default class Nurse {
     ctx.translate(-centerX, -centerY)
     
     // 计算文字（单行）
-    ctx.font = `bold ${13 * this.scale}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.font = `bold ${14 * this.scale}px "PingFang SC", "Microsoft YaHei", sans-serif`
     const textWidth = ctx.measureText(text).width
     const bubbleWidth = Math.max(textWidth + padding * 2, maxWidth * 0.8)
     const bubbleHeight = lineHeight + padding * 2 + triangleSize
@@ -367,10 +387,10 @@ export default class Nurse {
     ctx.closePath()
     ctx.fill()
     
-    // 绘制边框（同欢迎气泡）
+    // 绘制边框
     ctx.shadowColor = 'transparent'
-    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'
-    ctx.lineWidth = 3 * this.scale
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.4)'  // 浅粉色
+    ctx.lineWidth = 6 * this.scale  // 粗度保持
     ctx.stroke()
     
     // 绘制内部高光（同欢迎气泡）

@@ -107,21 +107,6 @@ class Bed {
       }
     }
     
-    // 床位号
-    ctx.fillStyle = '#FFF'
-    ctx.beginPath()
-    ctx.arc(this.x + this.width / 2, this.y - this.height * 0.03, this.width * 0.08, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.strokeStyle = '#81D4C1'
-    ctx.lineWidth = Math.max(1, this.width * 0.01)
-    ctx.stroke()
-    
-    ctx.fillStyle = '#27AE60'
-    ctx.font = `bold ${Math.max(8, this.width * 0.1)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(`${this.id + 1}`, this.x + this.width / 2, this.y - this.height * 0.03)
-    
     if (this.patient && !this.patient.isCured) {
       const originalX = this.patient.x
       const originalY = this.patient.y
@@ -203,7 +188,6 @@ class IVSeat {
       
       ctx.drawImage(currentImage, this.x + (this.width - drawWidth) / 2, this.y + (this.height - drawHeight) / 2, drawWidth, drawHeight)
     }
-    
     
     // 绘制坐着的病人
     if (this.patient) {
@@ -312,7 +296,104 @@ export default class BedArea {
     // 绘制病床（上半部分2/3区域）
     this.beds.forEach(bed => bed.render(ctx, curedImage))
     
+    // 计算"急救间"标签位置和尺寸（先计算，用于确定虚线位置）
+    const bedLabelPadding = 4
+    const bedLabelFontSize = 10
+    ctx.font = `bold ${bedLabelFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    const bedLabelText = '急救间'
+    const bedLabelWidth = ctx.measureText(bedLabelText).width + bedLabelPadding * 2
+    const bedLabelHeight = bedLabelFontSize + bedLabelPadding * 2
+    const bedLabelX = this.x + this.width / 2 - bedLabelWidth / 2  // 居中
+    const bedLabelY = this.y + 20
+    
+    // 【急救间】下方一根白色虚线（先绘制，作为背景层）
+    ctx.save()
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 2
+    ctx.setLineDash([6, 4])  // 虚线模式：6px实线，4px空白
+    ctx.beginPath()
+    const bedLineY = bedLabelY + bedLabelHeight - 8
+    ctx.moveTo(this.x, bedLineY)  // 从左侧边缘开始
+    ctx.lineTo(this.x + this.width, bedLineY)  // 到右侧边缘
+    ctx.stroke()
+    ctx.restore()
+    
+    // 绘制"急救间"区域标签（后绘制，覆盖在虚线上方）
+    ctx.save()
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.7)'  // 红色（对应紧急）
+    
+    // 标签背景（圆角矩形）
+    ctx.beginPath()
+    const r1 = 8
+    ctx.moveTo(bedLabelX + r1, bedLabelY)
+    ctx.lineTo(bedLabelX + bedLabelWidth - r1, bedLabelY)
+    ctx.quadraticCurveTo(bedLabelX + bedLabelWidth, bedLabelY, bedLabelX + bedLabelWidth, bedLabelY + r1)
+    ctx.lineTo(bedLabelX + bedLabelWidth, bedLabelY + bedLabelHeight - r1)
+    ctx.quadraticCurveTo(bedLabelX + bedLabelWidth, bedLabelY + bedLabelHeight, bedLabelX + bedLabelWidth - r1, bedLabelY + bedLabelHeight)
+    ctx.lineTo(bedLabelX + r1, bedLabelY + bedLabelHeight)
+    ctx.quadraticCurveTo(bedLabelX, bedLabelY + bedLabelHeight, bedLabelX, bedLabelY + bedLabelHeight - r1)
+    ctx.lineTo(bedLabelX, bedLabelY + r1)
+    ctx.quadraticCurveTo(bedLabelX, bedLabelY, bedLabelX + r1, bedLabelY)
+    ctx.closePath()
+    ctx.fill()
+    
+    // 标签文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(bedLabelText, bedLabelX + bedLabelWidth / 2, bedLabelY + bedLabelHeight / 2)
+    ctx.restore()
+    
     // 绘制输液椅（底部1/3区域，无背景）
     this.ivSeats.forEach(seat => seat.render(ctx, curedImage))
+    
+    // 计算"治疗椅"标签位置和尺寸（先计算，用于确定虚线位置）
+    const ivLabelPadding = 4
+    const ivLabelFontSize = 10
+    ctx.font = `bold ${ivLabelFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    const ivLabelText = '治疗椅'
+    const ivLabelWidth = ctx.measureText(ivLabelText).width + ivLabelPadding * 2
+    const ivLabelHeight = ivLabelFontSize + ivLabelPadding * 2
+    // 输液椅区域大约在 y + height * 0.75 的位置
+    const ivLabelX = this.x + this.width / 2 - ivLabelWidth / 2  // 居中
+    const ivLabelY = this.y + this.height * 0.63
+    
+    // 【治疗椅】下方一根白色虚线（先绘制，作为背景层）
+    ctx.save()
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([6, 4])  // 虚线模式：6px实线，4px空白
+    ctx.beginPath()
+    const ivLineY = ivLabelY + ivLabelHeight - 8
+    ctx.moveTo(this.x, ivLineY)  // 从左侧边缘开始
+    ctx.lineTo(this.x + this.width, ivLineY)  // 到右侧边缘
+    ctx.stroke()
+    ctx.restore()
+    
+    // 绘制"治疗椅"区域标签（后绘制，覆盖在虚线上方）
+    ctx.save()
+    ctx.fillStyle = 'rgba(52, 152, 219, 0.7)'  // 蓝色（对应普通），透明度降低
+    
+    // 标签背景（圆角矩形）
+    ctx.beginPath()
+    const r2 = 8
+    ctx.moveTo(ivLabelX + r2, ivLabelY)
+    ctx.lineTo(ivLabelX + ivLabelWidth - r2, ivLabelY)
+    ctx.quadraticCurveTo(ivLabelX + ivLabelWidth, ivLabelY, ivLabelX + ivLabelWidth, ivLabelY + r2)
+    ctx.lineTo(ivLabelX + ivLabelWidth, ivLabelY + ivLabelHeight - r2)
+    ctx.quadraticCurveTo(ivLabelX + ivLabelWidth, ivLabelY + ivLabelHeight, ivLabelX + ivLabelWidth - r2, ivLabelY + ivLabelHeight)
+    ctx.lineTo(ivLabelX + r2, ivLabelY + ivLabelHeight)
+    ctx.quadraticCurveTo(ivLabelX, ivLabelY + ivLabelHeight, ivLabelX, ivLabelY + ivLabelHeight - r2)
+    ctx.lineTo(ivLabelX, ivLabelY + r2)
+    ctx.quadraticCurveTo(ivLabelX, ivLabelY, ivLabelX + r2, ivLabelY)
+    ctx.closePath()
+    ctx.fill()
+    
+    // 标签文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(ivLabelText, ivLabelX + ivLabelWidth / 2, ivLabelY + ivLabelHeight / 2)
+    ctx.restore()
   }
 }
