@@ -524,27 +524,22 @@ export default class Patient {
           fillRoundRect(ctx, barX, barY, progressWidth, barHeight, radius)
         }
       } else if (this.ivTreatmentComplete) {
-        // 【非紧急疾病】治疗完成：显示 cured.png 图标（带上下跳动动画）
-        const iconSize = 38 * scale  // 图标大小
+        // 【非紧急疾病】治疗完成：显示绿色圆圈 + 对勾（带上下跳动动画）
         // 上下跳动动画：周期约0.8秒，跳动幅度 3px
         const bounceOffset = Math.sin(this.animationTime / 160) * 3 * scale
-        if (curedImage && curedImage.width > 0) {
-          ctx.drawImage(curedImage, centerX - iconSize/2, barY - iconSize/2 + 1.4 * scale + bounceOffset, iconSize, iconSize)
-        } else {
-          // 回退：绿色圆圈 + 对勾
-          ctx.fillStyle = '#27AE60'
-          ctx.beginPath()
-          ctx.arc(centerX, barY + 5 * scale, 14 * scale, 0, Math.PI * 2)
-          ctx.fill()
-          ctx.strokeStyle = '#FFF'
-          ctx.lineWidth = 2 * scale
-          ctx.lineCap = 'round'
-          ctx.beginPath()
-          ctx.moveTo(centerX - 4 * scale, barY + 5 * scale)
-          ctx.lineTo(centerX - 1 * scale, barY + 8 * scale)
-          ctx.lineTo(centerX + 5 * scale, barY + 2 * scale)
-          ctx.stroke()
-        }
+        // 绿色圆圈 + 对勾
+        ctx.fillStyle = '#27AE60'
+        ctx.beginPath()
+        ctx.arc(centerX, barY + 5 * scale + bounceOffset, 14 * scale, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#FFF'
+        ctx.lineWidth = 2 * scale
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(centerX - 4 * scale, barY + 5 * scale + bounceOffset)
+        ctx.lineTo(centerX - 1 * scale, barY + 8 * scale + bounceOffset)
+        ctx.lineTo(centerX + 5 * scale, barY + 2 * scale + bounceOffset)
+        ctx.stroke()
       } else {
         // 【非紧急疾病】治疗中：显示蓝色圆角进度条
         const barWidth = 40 * scale

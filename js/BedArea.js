@@ -254,7 +254,7 @@ export default class BedArea {
 
   initIVSeats() {
     // 输液治疗椅子区域：高度为治疗区的三分之一，横排4张椅子
-    const seatWidth = this.width * 0.21
+    const seatWidth = this.width * 0.16
     const seatHeight = this.height * 0.2  // 高度增加适应区域
     const gapX = (this.width - seatWidth * 4) / 5
     

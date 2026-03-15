@@ -1,7 +1,24 @@
 {
   "description": "急症室模拟器小游戏",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "value": ".venv",
+        "type": "folder"
+      },
+      {
+        "value": "images_backup",
+        "type": "folder"
+      },
+      {
+        "value": "compress_images.py",
+        "type": "file"
+      },
+      {
+        "value": "compress_images_v2.py",
+        "type": "file"
+      }
+    ],
     "include": []
   },
   "setting": {

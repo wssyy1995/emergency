@@ -45,6 +45,12 @@ export default class WaitingArea {
   loadImages() {
     this.nurseDeskImage = WaitingAreaImageCache.getImage('nurseDesk', 'images/nurse_desk.png')
     this.plantImage = WaitingAreaImageCache.getImage('plant', 'images/plant.png')
+    this.bookshelfImage = WaitingAreaImageCache.getImage('bookshelf', 'images/bookshelf.png')
+  }
+  
+  // 设置新玩家模式
+  setNewPlayerMode(isNewPlayer) {
+    this.nurse.setNewPlayerMode(isNewPlayer)
   }
 
   initStandingQueue() {
@@ -215,17 +221,31 @@ export default class WaitingArea {
       ctx.fill()
     }
     
-    // 绘制植物
+    // 绘制植物（在护士台左边）
     if (this.plantImage && this.plantImage.width > 0) {
-      const plantWidth = 45
-      const plantHeight = 65
-      const plantOffsetX = -140
-      const plantOffsetY = -35
+      const plantWidth = 40
+      const plantHeight = 60
+      const plantOffsetX = -125
+      const plantOffsetY = -30
       
       const plantX = centerX - deskWidth / 2 - plantWidth / 2 - plantOffsetX
       const plantY = deskY + deskHeight - plantHeight + plantOffsetY
       
       ctx.drawImage(this.plantImage, plantX, plantY, plantWidth, plantHeight)
+    }
+    
+    // 绘制书架（在护士台右边，和植物同一Y位置）
+    if (this.bookshelfImage && this.bookshelfImage.width > 0) {
+      const bookshelfWidth = 35
+      const bookshelfHeight = 50
+      // 植物Y坐标 = deskY + deskHeight - plantHeight + plantOffsetY
+      // 简化后：deskY + deskHeight - 65 - 35 = deskY + deskHeight - 100
+      const plantY = deskY + deskHeight - 83
+      const bookshelfY = plantY
+      // 放在护士台右边，与植物对称
+      const bookshelfX = centerX - deskWidth / 2 -20
+      
+      ctx.drawImage(this.bookshelfImage, bookshelfX, bookshelfY, bookshelfWidth, bookshelfHeight)
     }
   }
 

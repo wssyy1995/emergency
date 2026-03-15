@@ -6,7 +6,7 @@ import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
-import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById } from './GameConfig.js'
+import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus } from './GameConfig.js'
 
 // ==================== 马卡龙 UI 颜色配置（可自行调整）====================
 const UI_COLORS = {
@@ -447,6 +447,18 @@ export default class Game {
     this.levelComplete = false
     this.curedCount = 0
     
+    // 【新玩家指引】第一关检查是否为新玩家（优先从本地缓存读取）
+    if (this.currentLevel === 0) {
+      // 从本地缓存读取，没有缓存则使用 GameConfig 默认值
+      const isNewPlayer = getNewPlayerStatus()
+      GameConfig.is_new_player = isNewPlayer
+      this.waitingArea.setNewPlayerMode(isNewPlayer)
+      console.log(`[新玩家指引] 当前模式: ${isNewPlayer ? '新玩家' : '正常流程'}`)
+    } else {
+      // 非第一关，关闭新玩家模式
+      this.waitingArea.setNewPlayerMode(false)
+    }
+    
     // 初始化倒计时
     const levelConfig = getLevelConfig(this.currentLevel)
     this.timeRemaining = levelConfig.timeLimit || 60
@@ -469,12 +481,17 @@ export default class Game {
     // 清除之前的定时器
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
     if (this.spawnTimer) clearTimeout(this.spawnTimer)
-    // 【已移除】自动分配定时器已禁用
-    // if (this.bedAssignmentTimer) clearInterval(this.bedAssignmentTimer)
     
-    // 【已移除】不再自动分配病人到病床，玩家需要手动操作
-    // this.bedAssignmentTimer = setInterval(...)
-    
+    // 【新玩家指引】如果不是新玩家，立即开始生成病人
+    if (!GameConfig.is_new_player) {
+      this.startPatientSpawning()
+    } else {
+      console.log('[新玩家指引] 等待点击护士后开始生成病人')
+    }
+  }
+  
+  // 开始生成病人（提取为独立方法）
+  startPatientSpawning() {
     // 前N个病人，使用固定间隔
     let initialSpawnCount = 0
     const spawnFirstCount = GameConfig.patient.spawnFirstCount
@@ -489,6 +506,10 @@ export default class Game {
         if (success) {
           initialSpawnCount++
           this.spawnedPatientsCount++
+          // 【动画控制】第一个病人生成后，启用医生和护士的动画
+          if (this.spawnedPatientsCount === 1) {
+            this.enableCharacterAnimations()
+          }
         }
         // 无论成功与否，都继续尝试生成（直到达到spawnFirstCount或无法生成）
         this.initialSpawnTimer = setTimeout(spawnFirstPatients, spawnFirstInterval)
@@ -622,15 +643,15 @@ export default class Game {
           if (seat.patient.patience <= 0 && !seat.patient.isLeaving && !seat.patient.tomatoThrown) {
             seat.patient.isAngry = true
             seat.patient.startLeaving(this.screenHeight)
-            // 从输液椅移除
-            setTimeout(() => {
-              if (seat.patient && seat.patient.shouldRemove) {
-                seat.clear()
-              }
-            }, 1000)
           }
         }
         // 非紧急疾病：耐心值保持不变（暂停减少）
+        
+        // 【修复】检查紧急病人是否已经离开屏幕，清理座位
+        if (seat.patient.isLeaving && seat.patient.shouldRemove) {
+          seat.clear()
+          return
+        }
         
         // 输液治疗进度更新
         if (!seat.patient.ivTreatmentComplete) {
@@ -967,6 +988,11 @@ export default class Game {
     // 渲染医生气泡（在最上层，不被病人遮挡）
     this.doctors.forEach(doctor => doctor.renderBubble(this.ctx))
     
+    // 【新玩家指引】聚光灯效果（在所有元素之后绘制，只影响背景）
+    if (GameConfig.is_new_player && this.currentLevel === 0) {
+      this.renderNewPlayerSpotlight()
+    }
+    
     this.renderUI()
     this.renderFloatingTexts()
     this.renderGameOverModal()
@@ -982,6 +1008,35 @@ export default class Game {
     // this.renderDebugLogs()
     
     this.ctx.restore()
+  }
+  
+  // 【新玩家指引】渲染聚光灯效果（只遮罩背景，不影响游戏元素）
+  renderNewPlayerSpotlight() {
+    const ctx = this.ctx
+    const nurse = this.waitingArea.nurse
+    
+    // 聚光灯中心在护士位置
+    const centerX = nurse.x
+    const centerY = nurse.y
+    const spotlightRadius = 100 * nurse.scale  // 高亮区域半径
+    
+    ctx.save()
+    
+    // 创建径向渐变：中心透明，边缘半透明黑色
+    const gradient = ctx.createRadialGradient(
+      centerX, centerY, spotlightRadius * 0.5,  // 内圈（完全透明）
+      centerX, centerY, spotlightRadius * 4     // 外圈（更大的扩散范围）
+    )
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)')           // 中心完全透明
+    gradient.addColorStop(0.2, 'rgba(0, 0, 0, 0.02)')      // 极轻微暗化
+    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.08)')      // 轻微暗化
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)')         // 边缘暗化（更淡）
+    
+    // 绘制覆盖全屏的遮罩
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    ctx.restore()
   }
   
   // 绘制调试日志（在屏幕左上角）
@@ -1437,7 +1492,8 @@ export default class Game {
     ctx.fillStyle = '#FFF'
     ctx.fillText(honorText, honorX + 35, titleY)
     
-    // 调试加号按钮（在荣誉点左边）
+    // 【暂时隐藏】调试加号按钮（在荣誉点左边）
+    /* 【暂时隐藏】调试加号按钮（在荣誉点左边）
     const debugBtnSize = 20
     const debugBtnX = honorX - 30
     const debugBtnY = titleY - 10
@@ -1468,6 +1524,7 @@ export default class Game {
       width: debugBtnSize,
       height: debugBtnSize
     }
+    */
     
     // 音量开关按钮（圆形果冻风格）
     const volumeX = this.mapX + this.mapWidth - 45
@@ -1594,7 +1651,7 @@ export default class Game {
         }
       }
       
-      // 检查是否点击调试荣誉点按钮
+      /* 【暂时隐藏】检查是否点击调试荣誉点按钮
       if (this.debugHonorBtnBounds &&
           x >= this.debugHonorBtnBounds.x && x <= this.debugHonorBtnBounds.x + this.debugHonorBtnBounds.width &&
           y >= this.debugHonorBtnBounds.y && y <= this.debugHonorBtnBounds.y + this.debugHonorBtnBounds.height) {
@@ -1602,6 +1659,7 @@ export default class Game {
         console.log('调试：荣誉点 +100，当前：', this.score)
         return
       }
+      */
       
       // 检查是否点击音量开关按钮
       if (this.volumeBtnBounds &&
@@ -1692,9 +1750,16 @@ export default class Game {
       
       // 检查是否点击护士（显示疾病清单）
       if (this.waitingArea.nurse.contains(x, y)) {
-        console.log('[点击检测] 点击护士，显示疾病清单')
+        console.log('[点击检测] 点击护士')
         // 点击时震动（仅真机）
         this.vibrate()
+        
+        // 【新玩家指引】如果是新玩家，立即恢复正常护士图片（移除灯泡）
+        if (GameConfig.is_new_player) {
+          console.log('[新玩家指引] 护士被点击，恢复正常图片，显示分诊指南')
+          this.waitingArea.setNewPlayerMode(false)
+        }
+        
         // 显示疾病清单弹窗
         this.showDiseaseListModal()
         return
@@ -3515,6 +3580,30 @@ export default class Game {
     ctx.fillText(text, x + w / 2, y + h / 2 + 1)
   }
 
+  // 启用医生和护士的动画（第一个病人生成后调用）
+  enableCharacterAnimations() {
+    console.log('[动画控制] 第一个病人生成，启用角色动画')
+    // 启用护士动画
+    this.waitingArea.nurse.enableAnimation()
+    // 启用所有医生动画
+    this.doctors.forEach(doctor => doctor.enableAnimation())
+  }
+
+  // 【新玩家指引】分诊指南关闭后处理
+  handleNewPlayerGuideComplete() {
+    // 如果还是新玩家模式（未开始生成病人），立即开始
+    if (GameConfig.is_new_player) {
+      console.log('[新玩家指引] 分诊指南已关闭，立即开始生成病人')
+      // 更新为新玩家状态为 false
+      GameConfig.is_new_player = false
+      // 保存到本地缓存（下次游戏不再显示新玩家指引）
+      saveNewPlayerStatus(false)
+      // 立即开始生成病人
+      this.startPatientSpawning()
+    }
+    // 如果 is_new_player 已经是 false，不做任何处理
+  }
+
   // 处理疾病清单弹窗的点击
   handleDiseaseListTouch(x, y) {
     if (!this.diseaseListModal || !this.diseaseListModal.visible) return false
@@ -3526,6 +3615,8 @@ export default class Game {
     // 点击弹窗外部关闭弹窗
     if (x < modal.x || x > modal.x + modal.width || y < modal.y || y > modal.y + modal.height) {
       this.diseaseListModal = null
+      // 【新玩家指引】如果是新玩家模式下关闭弹窗，开始游戏
+      this.handleNewPlayerGuideComplete()
       return true
     }
     
@@ -3553,6 +3644,8 @@ export default class Game {
       } else {
         // 最后一页，关闭弹窗
         this.diseaseListModal = null
+        // 【新玩家指引】如果是新玩家模式下关闭弹窗，开始游戏
+        this.handleNewPlayerGuideComplete()
       }
       return true
     }

@@ -75,6 +75,9 @@ export default class Doctor {
     this.bounceOffset = 0
     this.facing = 1
     
+    // 动画控制：第一个病人生成前暂停动画
+    this.animationEnabled = false
+    
     this.treatAnimation = 0
     this.blinkTimer = 0
     this.isBlinking = false
@@ -126,7 +129,10 @@ export default class Doctor {
   update(deltaTime, bedArea) {
     this.animationTime += deltaTime
     
-    if (this.isLocked) {
+    // 只有启用动画时才计算跳动效果
+    if (!this.animationEnabled) {
+      this.bounceOffset = 0
+    } else if (this.isLocked) {
       this.bounceOffset = Math.sin(this.animationTime / 300) * -1.5
       return
     }
@@ -144,7 +150,9 @@ export default class Doctor {
       case 'idle':
         this.idleTime += deltaTime
         // 待机时缓慢上下跃动（跟护士一样）
-        this.bounceOffset = Math.sin(this.animationTime / 500) * -2
+        if (this.animationEnabled) {
+          this.bounceOffset = Math.sin(this.animationTime / 500) * -2
+        }
         
         const occupiedBeds = bedArea.getOccupiedBeds()
         const needsTreatment = occupiedBeds.find(bed => 
@@ -160,7 +168,9 @@ export default class Doctor {
         break
         
       case 'moving':
-        this.bounceOffset = Math.abs(Math.sin(this.animationTime / 120)) * -4
+        if (this.animationEnabled) {
+          this.bounceOffset = Math.abs(Math.sin(this.animationTime / 120)) * -4
+        }
         
         if (this.targetBed && (!this.targetBed.patient || this.targetBed.patient.isCured)) {
           this.targetBed.assignedDoctor = null
@@ -275,6 +285,11 @@ export default class Doctor {
   getRequiredItemId() {
     const item = this.getRequiredItem()
     return item ? item.id : null
+  }
+  
+  // 启用动画（第一个病人生成后调用）
+  enableAnimation() {
+    this.animationEnabled = true
   }
   
   lockByPatient(patient) {

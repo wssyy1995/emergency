@@ -1,6 +1,38 @@
 // 游戏配置文件 - 修改这里的数值可以调整游戏难度和玩法
 
+// 本地缓存键名
+const STORAGE_KEY = 'emergency_game_data'
+
+// 从本地缓存读取新玩家状态（如果没有则返回默认值）
+export function getNewPlayerStatus() {
+  try {
+    const data = wx.getStorageSync(STORAGE_KEY)
+    if (data && data.is_new_player !== undefined) {
+      console.log('[本地缓存] 读取新玩家状态:', data.is_new_player)
+      return data.is_new_player
+    }
+  } catch (e) {
+    console.warn('[本地缓存] 读取失败:', e)
+  }
+  // 默认值为 true（新玩家）
+  return true
+}
+
+// 保存新玩家状态到本地缓存
+export function saveNewPlayerStatus(isNewPlayer) {
+  try {
+    wx.setStorageSync(STORAGE_KEY, { is_new_player: isNewPlayer })
+    console.log('[本地缓存] 保存新玩家状态:', isNewPlayer)
+  } catch (e) {
+    console.warn('[本地缓存] 保存失败:', e)
+  }
+}
+
 export const GameConfig = {
+  // ==================== 新玩家指引配置 ====================
+  // 注意：is_new_player 会优先从本地缓存读取，没有缓存时才使用此默认值
+  is_new_player: true,  // 是否为新玩家（true: 显示新人指引，false: 正常流程）
+  
   // ==================== 关卡配置 ====================
   levels: [
     { 
@@ -40,7 +72,7 @@ export const GameConfig = {
     { disease_id: 4, disease_name: '感冒', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['thermometer', 'antibiotic', 'injection'], unlock_level: 2 },
     { disease_id: 5, disease_name: '严重过敏', diseases_priority: 1, patience: 20, emerge_treat_time: 3000, auto_treat_time: 10000, treat_need: ['adrenaline', 'injection'], unlock_level: 2 },
     { disease_id: 6, disease_name: '肠胃炎', diseases_priority: 2, patience: 25, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'], unlock_level: 3 },
-    { disease_id: 7, disease_name: '异物卡喉', diseases_priority: 1, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'], unlock_level: 2 },
+    { disease_id: 7, disease_name: '异物卡喉', diseases_priority: 1, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'], unlock_level: 4 },
     { disease_id: 8, disease_name: '烫伤', diseases_priority: 2, patience: 25, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 4 },
     { disease_id: 9, disease_name: '中风', diseases_priority: 1, patience: 20, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['aed', 'adrenaline', 'injection'], unlock_level: 4 }
   ],
