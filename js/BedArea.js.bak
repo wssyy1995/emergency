@@ -265,8 +265,8 @@ export default class BedArea {
     const gapX = (this.width - bedWidth * 2) / 3
     
     const startX = this.x + gapX
-    // 调整起始位置，让病床在急救间区域内垂直居中（往下8px+3px）
-    const startY = this.y + this.height * 0.28 - bedHeight / 2 + 8 + 3
+    // 调整起始位置，让病床在急救间区域内垂直居中（往下8px）
+    const startY = this.y + this.height * 0.28 - bedHeight / 2 + 8
     
     for (let i = 0; i < 2; i++) {
       const bedX = startX + i * (bedWidth + gapX)
@@ -330,6 +330,36 @@ export default class BedArea {
   }
 
   render(ctx, curedImage = null) {
+    // 先绘制医生脚下的墙角踢脚线效果（带立体感，加宽到边缘）
+    const lineY = this.y + this.height * 0.5
+    const paddingX = 3  // 左右边距减少到3px
+    const lineWidth = this.width - paddingX * 2  // 宽度几乎填满
+    
+    ctx.save()
+    
+    // 1. 底部阴影（增加厚度感）
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'
+    ctx.fillRect(this.x + paddingX, lineY + 3, lineWidth, 3)
+    
+    // 2. 踢脚线主体（渐变效果）
+    const gradient = ctx.createLinearGradient(0, lineY - 4, 0, lineY + 3)
+    gradient.addColorStop(0, '#E8E8E8')    // 顶部高光
+    gradient.addColorStop(0.4, '#BDC3C7')  // 中间本色
+    gradient.addColorStop(1, '#95A5A6')    // 底部暗色
+    
+    ctx.fillStyle = gradient
+    ctx.fillRect(this.x + paddingX, lineY - 4, lineWidth, 7)
+    
+    // 3. 顶部细高光线条（几乎到边缘）
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(this.x + paddingX, lineY - 4)
+    ctx.lineTo(this.x + this.width - paddingX, lineY - 4)
+    ctx.stroke()
+    
+    ctx.restore()
+    
     // 绘制病床（上半部分2/3区域）
     this.beds.forEach(bed => bed.render(ctx, curedImage))
     
@@ -338,9 +368,9 @@ export default class BedArea {
       const bed1 = this.beds[0]
       const bed2 = this.beds[1]
       
-      // 计算桌子位置：两张病床之间的中间位置（往下3px）
+      // 计算桌子位置：两张病床之间的中间位置
       const deskX = bed1.x + bed1.width + (bed2.x - (bed1.x + bed1.width)) / 2
-      const deskY = bed1.y + bed1.height * 0.23 + 3
+      const deskY = bed1.y + bed1.height * 0.23
       
       // 桌子大小
       const deskWidth = 70

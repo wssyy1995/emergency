@@ -163,6 +163,10 @@ export default class Game {
     this.gameWinModal = null
     this.levelToast = null
     
+    // 调试弹窗状态
+    this.debugModal = null
+    this.titleBounds = null  // 标题点击区域
+    
     // 椅子选择弹窗状态
     this.seatSelectionModal = null
     
@@ -234,6 +238,17 @@ export default class Game {
       // 尝试小写 png 和大写 PNG
       diseaseImg.src = `images/disease_${i}.png`
     }
+    
+    // 加载治疗区托盘背景图
+    this.bedAreaBgImage = null
+    const bedBgImg = wx.createImage()
+    bedBgImg.onload = () => {
+      this.bedAreaBgImage = bedBgImg
+    }
+    bedBgImg.onerror = () => {
+      console.warn('Failed to load bed area background: images/bed_area_bg.png')
+    }
+    bedBgImg.src = 'images/bed_area_bg.png'
   }
 
   // 添加浮动文字
@@ -331,9 +346,9 @@ export default class Game {
     // 顶部状态栏高度
     const headerHeight = 48
     // 底部留白
-    const bottomMargin = 8
+    const bottomMargin = 6
     // 顶部状态栏与三个区域之间的间距
-    const topPadding = 10
+    const topPadding = 8
     
     // 托盘 padding（外层边框宽度）- 增大以显示明显边框
     const trayPadding = 10
@@ -1294,18 +1309,20 @@ export default class Game {
       this.waitingArea.trayWidth, this.waitingArea.trayHeight,
       UI_COLORS.waiting.outer,
       UI_COLORS.waiting.inner,
-      29,          // 圆角
-      9    // padding（托盘外层和内层边距）
+      30,          // 圆角
+      6    // padding（托盘外层和内层边距）
     )
     
-    // ===== 治疗区：双层托盘效果 =====
+    // ===== 治疗区：双层托盘效果（支持背景图，往下30px）=====
     this.renderTray(ctx, 
       this.bedArea.trayX, this.bedArea.trayY, 
       this.bedArea.trayWidth, this.bedArea.trayHeight,
       UI_COLORS.treatment.outer,
       UI_COLORS.treatment.inner,
-      29,          // 圆角
-      9           // padding
+      30,          // 圆角
+      6,           // padding
+      this.bedAreaBgImage,  // 背景图（如果有）
+      15           // 背景图Y轴偏移：往下
     )
     
     // ===== 器材室：双层托盘效果 =====
@@ -1314,8 +1331,8 @@ export default class Game {
       this.equipmentRoom.trayWidth, this.equipmentRoom.trayHeight,
       UI_COLORS.equipment.outer,
       UI_COLORS.equipment.inner,
-      29,          // 圆角
-      9           // padding
+      30,          // 圆角
+      6           // padding
     )
     
     // ===== 悬浮标题标签（移到外层内部，避免被挤出）=====
@@ -1327,17 +1344,18 @@ export default class Game {
                              this.waitingArea.trayY + 16, waitingText, 
                              UI_COLORS.waiting.badgeBg, UI_COLORS.waiting.badgeBorder)
     
-    this.renderFloatingBadge(ctx, this.bedArea.trayX + this.bedArea.trayWidth / 2, 
-                             this.bedArea.trayY + 16, '治疗区', 
-                             UI_COLORS.treatment.badgeBg, UI_COLORS.treatment.badgeBorder)
+    // 治疗区托盘标题（暂时隐藏）
+    // this.renderFloatingBadge(ctx, this.bedArea.trayX + this.bedArea.trayWidth / 2, 
+    //                          this.bedArea.trayY + 16, '治疗区', 
+    //                          UI_COLORS.treatment.badgeBg, UI_COLORS.treatment.badgeBorder)
     
     this.renderFloatingBadge(ctx, this.equipmentRoom.trayX + this.equipmentRoom.trayWidth / 2, 
                              this.equipmentRoom.trayY + 16, '器材室', 
                              UI_COLORS.equipment.badgeBg, UI_COLORS.equipment.badgeBorder)
   }
   
-  // 绘制双层托盘（外层深色 + 内层浅色 + 内阴影）
-  renderTray(ctx, x, y, width, height, outerColor, innerColor, radius, padding) {
+  // 绘制双层托盘（外层深色 + 内层浅色/图片 + 内阴影）
+  renderTray(ctx, x, y, width, height, outerColor, innerColor, radius, padding, backgroundImage = null, bgOffsetY = 0) {
     // 托盘投影阴影（在背景上）
     ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
     fillRoundRect(ctx, x + 3, y + 4, width, height, radius)
@@ -1347,15 +1365,46 @@ export default class Game {
     fillRoundRect(ctx, x, y, width, height, radius)
         
     // 内层：浅色舞台（减去 padding，向下偏移 2px）
-    const innerX = x +padding
+    const innerX = x + padding
     const innerY = y + padding 
     const innerWidth = width - padding * 2
-    const innerHeight = height - padding *2
+    const innerHeight = height - padding * 2
     const innerRadius = Math.max(10, radius - padding / 2)
     
-    // 内层底色
-    ctx.fillStyle = innerColor
-    fillRoundRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius)
+    // 内层：如果有背景图片则绘制图片，否则填充颜色
+    if (backgroundImage && backgroundImage.width > 0) {
+      // 使用 clip 裁剪圆角区域，然后绘制图片
+      ctx.save()
+      ctx.beginPath()
+      roundRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius)
+      ctx.clip()
+      
+      // 计算图片缩放，保持比例铺满内层区域
+      const imgRatio = backgroundImage.width / backgroundImage.height
+      const areaRatio = innerWidth / innerHeight
+      let drawWidth, drawHeight, drawX, drawY
+      
+      if (imgRatio > areaRatio) {
+        // 图片更宽，以高度为基准缩放
+        drawHeight = innerHeight
+        drawWidth = drawHeight * imgRatio
+        drawX = innerX + (innerWidth - drawWidth) / 2
+        drawY = innerY + bgOffsetY  // 应用Y轴偏移
+      } else {
+        // 图片更高，以宽度为基准缩放
+        drawWidth = innerWidth
+        drawHeight = drawWidth / imgRatio
+        drawX = innerX
+        drawY = innerY + (innerHeight - drawHeight) / 2 + bgOffsetY  // 应用Y轴偏移
+      }
+      
+      ctx.drawImage(backgroundImage, drawX, drawY, drawWidth, drawHeight)
+      ctx.restore()
+    } else {
+      // 内层底色
+      ctx.fillStyle = innerColor
+      fillRoundRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius)
+    }
  
     // 内层底部微阴影（增加厚度感）
     const bottomGradient = ctx.createLinearGradient(innerX, innerY + innerHeight - 10, innerX, innerY + innerHeight)
@@ -1410,12 +1459,28 @@ export default class Game {
     const headerHeight = 45
     const titleY = this.mapY + headerHeight / 2
     
-    // 标题
+    // 标题（可点击打开调试弹窗）
     ctx.fillStyle = '#FFF'
     ctx.font = `${Math.max(16, this.screenWidth * 0.025)}px cursive, sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('🏥 急诊室模拟器', this.mapX + 15, titleY)
+    const titleText = '🏥 急诊室模拟器'
+    const titleX = this.mapX + 15
+    ctx.fillText(titleText, titleX, titleY)
+    
+    // 保存标题点击区域（用于打开调试弹窗）
+    const titleMetrics = ctx.measureText(titleText)
+    this.titleBounds = {
+      x: titleX - 5,
+      y: titleY - 15,
+      width: titleMetrics.width + 10,
+      height: 30
+    }
+    
+    // 绘制调试弹窗
+    if (this.debugModal && this.debugModal.visible) {
+      this.renderDebugModal(ctx)
+    }
     
     // ===== 三个胶囊以倒计时胶囊为中心显示 =====
     const levelConfig = getLevelConfig(this.currentLevel)
@@ -1572,7 +1637,6 @@ export default class Game {
       height: volumeSize
     }
     
-    // 【已移除】区域标题现在显示在 renderMacaronBackground 的悬浮标签中
   }
 
   // 渲染区域图标
@@ -1676,6 +1740,42 @@ export default class Game {
         this.isMuted = !this.isMuted
         audioManager.toggleMute()
         console.log(this.isMuted ? '已静音' : '已取消静音')
+        return
+      }
+      
+      // 处理调试弹窗点击
+      if (this.debugModal && this.debugModal.visible) {
+        // 检查是否点击关闭按钮
+        if (this.debugModal.closeBtn &&
+            x >= this.debugModal.closeBtn.x && x <= this.debugModal.closeBtn.x + this.debugModal.closeBtn.width &&
+            y >= this.debugModal.closeBtn.y && y <= this.debugModal.closeBtn.y + this.debugModal.closeBtn.height) {
+          this.debugModal.visible = false
+          return
+        }
+        
+        // 检查是否点击调试按钮
+        if (this.debugModal.buttons) {
+          for (const btn of this.debugModal.buttons) {
+            if (x >= btn.x && x <= btn.x + btn.width &&
+                y >= btn.y && y <= btn.y + btn.height) {
+              btn.action()
+              console.log('[调试] 执行:', btn.id)
+              return
+            }
+          }
+        }
+        
+        // 点击弹窗外部关闭
+        this.debugModal.visible = false
+        return
+      }
+      
+      // 检查是否点击标题打开调试弹窗
+      if (this.titleBounds &&
+          x >= this.titleBounds.x && x <= this.titleBounds.x + this.titleBounds.width &&
+          y >= this.titleBounds.y && y <= this.titleBounds.y + this.titleBounds.height) {
+        this.debugModal = { visible: true }
+        console.log('[调试] 打开调试面板')
         return
       }
       
@@ -3077,6 +3177,96 @@ export default class Game {
     
     // 恢复变换（结束动画）
     ctx.restore()
+  }
+  
+  // 绘制调试弹窗
+  renderDebugModal(ctx) {
+    if (!this.debugModal || !this.debugModal.visible) return
+    
+    const modalWidth = 260
+    const modalHeight = 280
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // 半透明背景遮罩
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    // 弹窗背景
+    ctx.fillStyle = '#FFF'
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 12)
+    
+    // 标题
+    ctx.fillStyle = '#333'
+    ctx.font = 'bold 18px "PingFang SC", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText('🔧 调试面板', modalX + modalWidth / 2, modalY + 15)
+    
+    // 关闭按钮
+    const closeBtnSize = 28
+    const closeBtnX = modalX + modalWidth - closeBtnSize - 8
+    const closeBtnY = modalY + 8
+    this.debugModal.closeBtn = { x: closeBtnX, y: closeBtnY, width: closeBtnSize, height: closeBtnSize }
+    
+    ctx.fillStyle = '#E74C3C'
+    ctx.beginPath()
+    ctx.arc(closeBtnX + closeBtnSize/2, closeBtnY + closeBtnSize/2, closeBtnSize/2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#FFF'
+    ctx.font = 'bold 16px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('×', closeBtnX + closeBtnSize/2, closeBtnY + closeBtnSize/2 + 1)
+    
+    // 调试按钮配置
+    const buttons = [
+      { id: 'addTime', text: '+30秒', color: '#3498DB', action: () => { this.timeRemaining += 30 } },
+      { id: 'addCure', text: '+1治愈', color: '#27AE60', action: () => { this.curedCount++ } },
+      { id: 'clearLevel', text: '直接通关', color: '#E74C3C', action: () => { 
+        // 直接显示关卡完成弹窗
+        this.showLevelCompleteModal()
+      } },
+      { id: 'resetGame', text: '重置游戏', color: '#F39C12', action: () => { this.start() } },
+      { id: 'addScore', text: '+100分', color: '#9B59B6', action: () => { this.score += 100 } }
+    ]
+    
+    const btnWidth = 110
+    const btnHeight = 42
+    const btnGapX = 12
+    const btnGapY = 12
+    const startX = modalX + (modalWidth - btnWidth * 2 - btnGapX) / 2
+    const startY = modalY + 55
+    
+    this.debugModal.buttons = []
+    
+    buttons.forEach((btn, index) => {
+      const row = Math.floor(index / 2)
+      const col = index % 2
+      const btnX = startX + col * (btnWidth + btnGapX)
+      const btnY = startY + row * (btnHeight + btnGapY)
+      
+      // 保存按钮位置（增加10px点击padding，让按钮更容易点中）
+      this.debugModal.buttons.push({
+        id: btn.id,
+        x: btnX - 5,
+        y: btnY - 5,
+        width: btnWidth + 10,
+        height: btnHeight + 10,
+        action: btn.action
+      })
+      
+      // 绘制按钮
+      ctx.fillStyle = btn.color
+      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 6)
+      
+      // 按钮文字
+      ctx.fillStyle = '#FFF'
+      ctx.font = 'bold 14px "PingFang SC", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(btn.text, btnX + btnWidth / 2, btnY + btnHeight / 2)
+    })
   }
   
   // 绘制轻量提示（下一关通知）

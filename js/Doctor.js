@@ -53,7 +53,7 @@ export default class Doctor {
     // 医生1在左上，医生2在右下
     if (bedArea) {
       this.x = bedArea.x + bedArea.width * (id === 1 ? 0.25 : 0.75)
-      this.y = bedArea.y + bedArea.height * 0.5
+      this.y = bedArea.y + bedArea.height * 0.5 - 15
     } else {
       this.x = 100
       this.y = 100
@@ -101,7 +101,7 @@ export default class Doctor {
       // 医生1和医生2分别站在中心点的左右两侧，避免重叠
       const offsetX = this.id === 1 ? -30 : 30
       this.targetX = this.bedArea.x + this.bedArea.width / 2 + offsetX
-      this.targetY = this.bedArea.y + this.bedArea.height / 2
+      this.targetY = this.bedArea.y + this.bedArea.height / 2 - 15
       this.state = 'moving'
     }
   }

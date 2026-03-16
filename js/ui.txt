@@ -1,15 +1,127 @@
-/* 新手引导高亮遮罩魔法：利用超大 box-shadow 形成周围暗、中间亮 */
-    .highlight-mask {
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
-      position: relative;
-      z-index: 50;
-      border-radius: 50%; /* 圆形高亮 */
-      animation: pulse-ring 2s infinite;
-    }
 
-    /* 呼吸圈动画 */
-    @keyframes pulse-ring {
-      0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.4), 0 0 0 9999px rgba(0, 0, 0, 0.6); }
-      70% { box-shadow: 0 0 0 15px rgba(255,255,255,0), 0 0 0 9999px rgba(0, 0, 0, 0.6); }
-      100% { box-shadow: 0 0 0 0 rgba(255,255,255,0), 0 0 0 9999px rgba(0, 0, 0, 0.6); }
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas 急救间胶囊标签</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #333;
     }
+    canvas {
+      background-color: #EBF4F6; /* 模拟原图的浅蓝色背景 */
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border-radius: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="400" height="200"></canvas>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // 处理高清屏模糊问题 (DPI 缩放)
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  // 中心坐标
+  const cx = rect.width / 2;
+  const cy = rect.height / 2;
+
+  // 提取的颜色值
+  const COLOR_RED = '#D32222';      // 主题亮红
+  const COLOR_WHITE = '#FFFFFF';    // 纯白
+  const COLOR_DARK_RED = '#821313'; // 文字的深红色描边
+
+  /**
+   * 核心函数：绘制绝对居中的胶囊体 (兼容性极强的弧线画法)
+   * @param {number} x - 中心X
+   * @param {number} y - 中心Y
+   * @param {number} w - 总宽度
+   * @param {number} h - 总高度
+   * @param {string} color - 填充颜色
+   */
+  function drawPill(x, y, w, h, color) {
+    const r = h / 2; // 胶囊的圆角半径是高度的一半
+    ctx.beginPath();
+    // 顶部水平线
+    ctx.moveTo(x - w / 2 + r, y - h / 2);
+    ctx.lineTo(x + w / 2 - r, y - h / 2);
+    // 右侧半圆
+    ctx.arc(x + w / 2 - r, y, r, -Math.PI / 2, Math.PI / 2);
+    // 底部水平线
+    ctx.lineTo(x - w / 2 + r, y + h / 2);
+    // 左侧半圆
+    ctx.arc(x - w / 2 + r, y, r, Math.PI / 2, -Math.PI / 2);
+    ctx.closePath();
+    
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function render() {
+    // 清除画布
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    // ==========================================
+    // 第一步：利用"同心缩小"法绘制多层边框胶囊
+    // ==========================================
+    // 1. 最外层细红边 (宽260, 高94)
+    drawPill(cx, cy, 260, 94, COLOR_RED);
+    
+    // 2. 中间层白边 (宽254, 高88 -> 意味着红边厚度为3px)
+    drawPill(cx, cy, 254, 88, COLOR_WHITE);
+    
+    // 3. 内层红底 (宽242, 高76 -> 意味着白边厚度为6px)
+    drawPill(cx, cy, 242, 76, COLOR_RED);
+
+
+    // ==========================================
+    // 第二步：绘制带厚重描边的文字
+    // ==========================================
+    // 设置字体：越粗越有游戏感
+    ctx.font = "900 48px 'PingFang SC', 'Microsoft YaHei', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // 设置描边拐角为圆角 (lineJoin='round')，这是文字看起来软萌的关键！
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 10; 
+    
+    // 手动排版：为了控制字间距，将每个字单独绘制
+    const chars = ["急", "救", "间"];
+    const spacing = 64; // 字与字之间的中心距离
+    const startX = cx - spacing; // 第一个字的X坐标
+    const textY = cy + 4; // 微调Y轴让视觉绝对居中
+
+    chars.forEach((char, index) => {
+      const charX = startX + index * spacing;
+      
+      // 先画粗粗的深红色外边框
+      ctx.strokeStyle = COLOR_DARK_RED;
+      ctx.strokeText(char, charX, textY);
+      
+      // 再画白色的文字内芯盖在上面
+      ctx.fillStyle = COLOR_WHITE;
+      ctx.fillText(char, charX, textY);
+    });
+  }
+
+  // 执行渲染
+  render();
+
+</script>
+</body>
+</html>
