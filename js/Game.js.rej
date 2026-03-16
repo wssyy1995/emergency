@@ -1,0 +1,66 @@
+@@ -1016,21 +1016,21 @@
+     const nurse = this.waitingArea.nurse
+     
+     // 聚光灯中心在护士位置
+-    const centerX = nurse.x
++    const centerX = nurse.x-30
+     const centerY = nurse.y
+-    const spotlightRadius = 100 * nurse.scale  // 高亮区域半径
++    const spotlightRadius = 200 * nurse.scale  // 高亮区域半径
+     
+     ctx.save()
+     
+     // 创建径向渐变：中心透明，边缘半透明黑色
+     const gradient = ctx.createRadialGradient(
+-      centerX, centerY, spotlightRadius * 0.5,  // 内圈（完全透明）
+-      centerX, centerY, spotlightRadius * 4     // 外圈（更大的扩散范围）
++      centerX, centerY, spotlightRadius * 0.4,  // 内圈（高亮区域更小更集中）
++      centerX, centerY, spotlightRadius * 4  // 外圈（扩散范围）
+     )
+-    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)')           // 中心完全透明
+-    gradient.addColorStop(0.2, 'rgba(0, 0, 0, 0.02)')      // 极轻微暗化
+-    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.08)')      // 轻微暗化
+-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)')         // 边缘暗化（更淡）
++    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)')      // 中心完全透明
++    gradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.25)')    // 保持透明区域
++    gradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.35)')  // 开始变暗
++    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.4)')    // 边缘暗化
+     
+     // 绘制覆盖全屏的遮罩
+     ctx.fillStyle = gradient
+@@ -3591,15 +3591,22 @@
+ 
+   // 【新玩家指引】分诊指南关闭后处理
+   handleNewPlayerGuideComplete() {
+-    // 如果还是新玩家模式（未开始生成病人），立即开始
++    // 如果还是新玩家模式（未开始生成病人）
+     if (GameConfig.is_new_player) {
+-      console.log('[新玩家指引] 分诊指南已关闭，立即开始生成病人')
++      console.log('[新玩家指引] 分诊指南已关闭，显示准备气泡')
+       // 更新为新玩家状态为 false
+       GameConfig.is_new_player = false
+       // 保存到本地缓存（下次游戏不再显示新玩家指引）
+       saveNewPlayerStatus(false)
+-      // 立即开始生成病人
+-      this.startPatientSpawning()
++      
++      // 显示准备气泡
++      this.waitingArea.nurse.showReadyHint()
++      
++      // 3秒后气泡自动消失，并开始生成病人
++      setTimeout(() => {
++        console.log('[新玩家指引] 准备气泡消失，开始生成病人')
++        this.startPatientSpawning()
++      }, 3000)
+     }
+     // 如果 is_new_player 已经是 false，不做任何处理
+   }
+@@ -3689,7 +3696,7 @@
+     let tooltipText = ''
+     if (badge.priority === 1) {
+       // 紧急
+-      tooltipText = '病人需立刻送往急救区，\n无法在治疗椅恢复！'
++      tooltipText = '立刻将病人送往急救间，\n无法在治疗椅恢复！'
+     } else if (badge.priority === 2) {
+       // 普通
+       tooltipText = '病人可在治疗椅上恢复生命'
