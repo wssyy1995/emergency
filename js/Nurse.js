@@ -204,7 +204,7 @@ export default class Nurse {
     const text = this.welcomeText.substring(0, this.textDisplayProgress)
     
     // 气泡位置（护士头部左侧）
-    const bubbleX = this.x - 130 * this.scale
+    const bubbleX = this.x - 200 * this.scale
     const bubbleY = this.y - 90 * this.scale
     const maxWidth = 180 * this.scale
     const padding = 10 * this.scale
@@ -234,7 +234,15 @@ export default class Nurse {
     const bubbleWidth = maxWidth
     const bubbleHeight = lines.length * lineHeight + padding * 2
     
-    // 绘制圆角矩形气泡
+    // 小三角尺寸（放在右下角，指向护士）
+    const triangleSize = 8 * this.scale
+    const triangleOffsetX = bubbleWidth - cornerRadius - triangleSize * 2  // 距离左边距
+    const triangleOffsetY = bubbleHeight - cornerRadius  // 距离顶部
+    
+    const triangleTipX = bubbleX + triangleOffsetX + triangleSize * 1.5  // 尖端向右
+    const triangleTipY = bubbleY + triangleOffsetY + triangleSize       // 尖端向下
+    
+    // 绘制圆角矩形气泡主体
     ctx.fillStyle = '#FFFCF5'
     ctx.shadowColor = 'rgba(0, 0, 0, 0.1)'
     ctx.shadowBlur = 8 * this.scale
@@ -244,10 +252,28 @@ export default class Nurse {
     ctx.fill()
     ctx.shadowColor = 'transparent'
     
-    // 绘制边框
+    // 绘制右下角小三角（指向右下护士）
+    ctx.beginPath()
+    ctx.moveTo(bubbleX + triangleOffsetX, bubbleY + triangleOffsetY - triangleSize)           // 左上
+    ctx.lineTo(bubbleX + triangleOffsetX + triangleSize * 1.5, bubbleY + triangleOffsetY + triangleSize)  // 右下（尖端）
+    ctx.lineTo(bubbleX + triangleOffsetX - triangleSize, bubbleY + triangleOffsetY + triangleSize)        // 左下
+    ctx.closePath()
+    ctx.fillStyle = '#FFFCF5'
+    ctx.fill()
+    
+    // 绘制气泡主体边框
     ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
     ctx.lineWidth = 2 * this.scale
     this._drawRoundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, cornerRadius)
+    ctx.stroke()
+    
+    // 绘制小三角边框（两条边）
+    ctx.beginPath()
+    ctx.moveTo(bubbleX + triangleOffsetX, bubbleY + triangleOffsetY - triangleSize)
+    ctx.lineTo(bubbleX + triangleOffsetX + triangleSize * 1.5, bubbleY + triangleOffsetY + triangleSize)
+    ctx.lineTo(bubbleX + triangleOffsetX - triangleSize, bubbleY + triangleOffsetY + triangleSize)
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
+    ctx.lineWidth = 2 * this.scale
     ctx.stroke()
     
     // 绘制文字
@@ -290,7 +316,12 @@ export default class Nurse {
     const bubbleWidth = textWidth + padding * 2
     const bubbleHeight = lineHeight + padding * 2
     
-    // 绘制气泡背景
+    // 小三角尺寸（放在右下角，指向护士）
+    const triangleSize = 8 * this.scale
+    const triangleOffsetX = bubbleWidth - cornerRadius - triangleSize * 2  // 距离左边距
+    const triangleOffsetY = bubbleHeight - cornerRadius  // 距离顶部
+    
+    // 绘制气泡主体
     ctx.fillStyle = '#FFFCF5'
     ctx.shadowColor = 'rgba(0, 0, 0, 0.1)'
     ctx.shadowBlur = 8 * this.scale
@@ -300,10 +331,28 @@ export default class Nurse {
     ctx.fill()
     ctx.shadowColor = 'transparent'
     
-    // 绘制边框
+    // 绘制右下角小三角（指向右下护士）
+    ctx.beginPath()
+    ctx.moveTo(bubbleX + triangleOffsetX, bubbleY + triangleOffsetY - triangleSize)
+    ctx.lineTo(bubbleX + triangleOffsetX + triangleSize * 1.5, bubbleY + triangleOffsetY + triangleSize)
+    ctx.lineTo(bubbleX + triangleOffsetX - triangleSize, bubbleY + triangleOffsetY + triangleSize)
+    ctx.closePath()
+    ctx.fillStyle = '#FFFCF5'
+    ctx.fill()
+    
+    // 绘制气泡主体边框
     ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
     ctx.lineWidth = 2 * this.scale
     this._drawRoundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, cornerRadius)
+    ctx.stroke()
+    
+    // 绘制小三角边框（两条边）
+    ctx.beginPath()
+    ctx.moveTo(bubbleX + bubbleWidth - cornerRadius - triangleSize * 2, bubbleY + bubbleHeight - cornerRadius - triangleSize)
+    ctx.lineTo(bubbleX + bubbleWidth - cornerRadius - triangleSize * 0.5, bubbleY + bubbleHeight - cornerRadius + triangleSize)
+    ctx.lineTo(bubbleX + bubbleWidth - cornerRadius - triangleSize * 3, bubbleY + bubbleHeight - cornerRadius + triangleSize)
+    ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
+    ctx.lineWidth = 2 * this.scale
     ctx.stroke()
     
     // 绘制文字
