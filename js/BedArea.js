@@ -223,27 +223,12 @@ export default class BedArea {
     this.beds = []
     this.ivSeats = [] // 输液治疗区域的椅子
     
-    // 加载急救间灯图片
-    this.lightImage = null
-    this.loadLightImage()
-    
     // 加载两张病床之间的小桌子图片
     this.toolsDeskImage = null
     this.loadToolsDeskImage()
     
     this.initBeds()
     this.initIVSeats()
-  }
-  
-  loadLightImage() {
-    const img = wx.createImage()
-    img.onload = () => {
-      this.lightImage = img
-    }
-    img.onerror = () => {
-      console.warn('Failed to load light image: images/light.png')
-    }
-    img.src = 'images/light.png'
   }
   
   loadToolsDeskImage() {
@@ -375,30 +360,6 @@ export default class BedArea {
     
     // 绘制【急救间】胶囊
     this.drawPillLabel(ctx, this.x + this.width / 2, emergencyLabelY, '急救间', emergencyColors)
-    
-    // 【急救间】左右灯（暂时隐藏）
-    // if (this.lightImage && this.lightImage.width > 0) {
-    //   const lightSize = 24
-    //   const lightOffset = labelWidth / 2 + lightSize / 2 + 4
-    //   const leftLightX = this.x + this.width / 2 - lightOffset
-    //   const rightLightX = this.x + this.width / 2 + lightOffset
-    //   const lightY = emergencyLabelY
-    //   
-    //   // 光晕
-    //   ctx.save()
-    //   ctx.fillStyle = 'rgba(255, 200, 100, 0.15)'
-    //   ctx.beginPath()
-    //   ctx.arc(leftLightX, lightY - 2, lightSize * 0.8, 0, Math.PI * 2)
-    //   ctx.fill()
-    //   ctx.beginPath()
-    //   ctx.arc(rightLightX, lightY - 2, lightSize * 0.8, 0, Math.PI * 2)
-    //   ctx.fill()
-    //   ctx.restore()
-    //   
-    //   // 左右灯
-    //   ctx.drawImage(this.lightImage, leftLightX - lightSize / 2, lightY - lightSize / 2, lightSize, lightSize)
-    //   ctx.drawImage(this.lightImage, rightLightX - lightSize / 2, lightY - lightSize / 2, lightSize, lightSize)
-    // }
     
     // 【急救间】下方虚线（暂时隐藏）
     // ctx.save()

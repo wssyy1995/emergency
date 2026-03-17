@@ -2342,7 +2342,7 @@ export default class Game {
     
     if (diseaseImage && diseaseImage.width > 0) {
       // 使用疾病图片，限制在圆圈内
-      const imgSize = iconSize * 1.5  // 图片稍大一点点
+      const imgSize = iconSize * 1.7  // 图片稍大一点点
       ctx.drawImage(diseaseImage, 
         modalX + modalWidth / 2 - imgSize / 2, 
         iconY - imgSize / 2, 
@@ -3592,8 +3592,8 @@ export default class Game {
       const diseaseImage = this.diseaseImages && this.diseaseImages[disease.disease_id]
       if (diseaseImage && diseaseImage.width > 0) {
         // 使用疾病图片
-        const iconSize = 30
-        ctx.drawImage(diseaseImage, modalX + 25, rowY + 4, iconSize, iconSize)
+        const iconSize = 35
+        ctx.drawImage(diseaseImage, modalX + 22, rowY + 3, iconSize, iconSize)
       } else {
         // 回退到emoji
         ctx.font = '20px sans-serif'
