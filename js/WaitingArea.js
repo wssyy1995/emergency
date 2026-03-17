@@ -1,5 +1,25 @@
-import { fillRoundRect } from './utils.js'
+import { fillRoundRect, strokeRoundRect } from './utils.js'
 import Nurse from './Nurse.js'
+
+// ==================== 全局等候区图片缓存 ====================
+const WaitingAreaImageCache = {
+  images: {},
+  
+  getImage(key, src) {
+    if (!this.images[key]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.images[key] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load image: ${src}`)
+      }
+      img.src = src
+      this.images[key] = img
+    }
+    return this.images[key]
+  }
+}
 
 export default class WaitingArea {
   constructor(x, y, width, height) {
@@ -9,203 +29,118 @@ export default class WaitingArea {
     this.height = height
     this.patients = []
     
-    // 创建护士（放在护士台后面，只显示上半身）
-    this.nurse = new Nurse(this.x + this.width / 2, this.y + this.height * 0.23)
+    // 创建护士位置（相对于内层舞台）
+    this.nurse = new Nurse(this.x + this.width * 0.55, this.y + this.height * 0.22)
     this.nurse.setScale(this.width)
     
-    this.seats = []
-    this.initSeats()
+    this.standingQueue = []
+    this.initStandingQueue()
     
-    this.queuePositions = []
-    this.initQueuePositions()
-    
-    // 加载椅子图片
-    this.seatFreeImage = null
-    this.seatOccupiedImage = null
-    // 加载护士台图片
+    // 加载图片
     this.nurseDeskImage = null
+    this.plantImage = null
     this.loadImages()
   }
 
   loadImages() {
-    // 加载空闲椅子图片
-    const freeImg = wx.createImage()
-    freeImg.onload = () => {
-      this.seatFreeImage = freeImg
-    }
-    freeImg.onerror = () => {
-      console.warn('Failed to load seat free image: images/seat_free.png')
-    }
-    freeImg.src = 'images/seat_free.png'
-    
-    // 加载占用椅子图片
-    const occupiedImg = wx.createImage()
-    occupiedImg.onload = () => {
-      this.seatOccupiedImage = occupiedImg
-    }
-    occupiedImg.onerror = () => {
-      console.warn('Failed to load seat occupied image: images/seat_occupied.png')
-    }
-    occupiedImg.src = 'images/seat_occupied.png'
-    
-    // 加载护士台图片
-    const nurseDeskImg = wx.createImage()
-    nurseDeskImg.onload = () => {
-      this.nurseDeskImage = nurseDeskImg
-    }
-    nurseDeskImg.onerror = () => {
-      console.warn('Failed to load nurse desk image: images/nurse_desk.png')
-    }
-    nurseDeskImg.src = 'images/nurse_desk.png'
+    this.nurseDeskImage = WaitingAreaImageCache.getImage('nurseDesk', 'images/nurse_desk.png')
+    this.plantImage = WaitingAreaImageCache.getImage('plant', 'images/plant.png')
+    this.bookshelfImage = WaitingAreaImageCache.getImage('bookshelf', 'images/bookshelf.png')
+  }
+  
+  // 设置新玩家模式
+  setNewPlayerMode(isNewPlayer) {
+    this.nurse.setNewPlayerMode(isNewPlayer)
   }
 
-  initSeats() {
-    // 两排座位，每排4个，共8个座位
-    const rows = 2
-    const seatsPerRow = 4
+  initStandingQueue() {
+    // 站立排队区：4列2行 = 8个位置（横排，左右间距缩小）
+    const standingCols = 4  // 4列
+    const standingRows = 2  // 2行
     
-    // 根据区域大小计算座位尺寸
-    const seatWidth = this.width * 0.22                   // 椅子宽度
-    const seatHeight = this.height * 0.16
-    const gapX = -3                                        // 椅子左右间距
-    const gapY = Math.max(8, this.height * 0.08)          // 行间距
+    const standingWidth = this.width * 0.20  // 宽度减小
+    const standingHeight = this.height * 0.22
+    const standingGapX = 4  // 左右间距缩小
+    const standingGapY = 10
     
-    // 计算椅子区域总宽度，使其在等候区居中
-    const seatsTotalWidth = seatsPerRow * seatWidth + (seatsPerRow - 1) * gapX
-    const startX = this.x + (this.width - seatsTotalWidth) / 2
+    const standingTotalWidth = standingCols * standingWidth + (standingCols - 1) * standingGapX
+    const leftStartX = this.x + (this.width - standingTotalWidth) / 2
+    const startY = this.y + this.height * 0.48
     
-    // 起始位置（前台下方）
-    const startY = this.y + this.height * 0.55
-    
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < seatsPerRow; col++) {
-        // 第一排往上移动，第二排保持不变
-        const rowOffset = row === 0 ? -10 : 0
-        this.seats.push({
-          x: startX + col * (seatWidth + gapX),
-          y: startY + row * (seatHeight + gapY) + rowOffset,
-          width: seatWidth,
-          height: seatHeight,
+    // 创建站立排队位置（从左上开始，从左到右，然后下一行）
+    let standingIndex = 0
+    for (let row = 0; row < standingRows; row++) {
+      for (let col = 0; col < standingCols; col++) {
+        this.standingQueue.push({
+          x: leftStartX + col * (standingWidth + standingGapX),
+          y: startY + row * (standingHeight + standingGapY),
+          width: standingWidth,
+          height: standingHeight,
           occupied: false,
-          patient: null
+          patient: null,
+          index: ++standingIndex
         })
       }
     }
   }
 
-  initQueuePositions() {
-    // 站位区域
-    for (let i = 0; i < 2; i++) {
-      this.queuePositions.push({
-        x: this.x + this.width * 0.2 + i * this.width * 0.3,
-        y: this.y + this.height * 2,
-        occupied: false,
-        patient: null
-      })
-    }
-  }
-
-  addPatient(patient) {
-    if (this.patients.length >= 8) return
-    this.patients.push(patient)
-    this.assignPosition(patient)
-  }
-
-  assignPosition(patient) {
-    const emptySeat = this.seats.find(seat => !seat.occupied)
-    if (emptySeat) {
-      emptySeat.occupied = true
-      emptySeat.patient = patient
-      patient.seat = emptySeat
-      // 设置病人尺寸（等候区专用，较小）
-      patient.width = 16
-      patient.height = 26
-      // 病人坐在椅子中央，靠下一点
-      const targetX = emptySeat.x + (emptySeat.width - patient.width) / 2
-      const targetY = emptySeat.y + emptySeat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
-      patient.moveTo(targetX, targetY)
-      return
+  // 添加病人到等候区（限制8人）
+  addPatientToReception(patient) {
+    // 最多8个位置
+    if (this.patients.length >= 8) return false
+    
+    const emptyStanding = this.standingQueue.find(pos => !pos.occupied)
+    if (!emptyStanding) {
+      return false
     }
     
-    const emptyQueue = this.queuePositions.find(pos => !pos.occupied)
-    if (emptyQueue) {
-      emptyQueue.occupied = true
-      emptyQueue.patient = patient
-      patient.queuePos = emptyQueue
-      // 设置病人尺寸（等候区专用，较小）
-      patient.width = 16
-      patient.height = 26
-      patient.moveTo(emptyQueue.x, emptyQueue.y)
-    }
+    this.patients.push(patient)
+    
+    patient.width = 16
+    patient.height = 26
+    
+    emptyStanding.occupied = true
+    emptyStanding.patient = patient
+    patient.standingPos = emptyStanding
+    patient.state = 'queuing'
+    
+    const targetX = emptyStanding.x + (emptyStanding.width - patient.width) / 2
+    const targetY = emptyStanding.y + emptyStanding.height * 0.7
+    patient.moveTo(targetX, targetY)
+    return true
+  }
+
+  // 获取站立区排队的病人
+  getReceptionQueuePatients() {
+    return this.patients.filter(p => p.state === 'queuing' && p.standingPos)
+      .sort((a, b) => (a.standingPos?.index || 0) - (b.standingPos?.index || 0))
   }
 
   removePatient(patient) {
     const index = this.patients.indexOf(patient)
     if (index > -1) {
-      if (patient.seat) {
-        patient.seat.occupied = false
-        patient.seat.patient = null
-        patient.seat = null
-      }
-      if (patient.queuePos) {
-        patient.queuePos.occupied = false
-        patient.queuePos.patient = null
-        patient.queuePos = null
+      if (patient.standingPos) {
+        patient.standingPos.occupied = false
+        patient.standingPos.patient = null
+        patient.standingPos = null
       }
       this.patients.splice(index, 1)
-      this.reorganizeQueue()
     }
   }
 
-  reorganizeQueue() {
-    let seatIndex = 0
-    let queueIndex = 0
-    
-    for (let patient of this.patients) {
-      if (patient.inBed) continue
-      
-      if (!patient.seat && !patient.queuePos) {
-        while (seatIndex < this.seats.length && this.seats[seatIndex].occupied) {
-          seatIndex++
-        }
-        if (seatIndex < this.seats.length) {
-          const seat = this.seats[seatIndex]
-          seat.occupied = true
-          seat.patient = patient
-          patient.seat = seat
-          // 设置病人尺寸（等候区专用，较小）
-          patient.width = 16
-          patient.height = 26
-          // 病人坐在椅子中央，靠下一点
-          const targetX = seat.x + (seat.width - patient.width) / 2
-          const targetY = seat.y + seat.height * 0.62  // 调整此值改变位置 (0-1 之间，越大越靠下)
-          patient.moveTo(targetX, targetY)
-        } else {
-          while (queueIndex < this.queuePositions.length && this.queuePositions[queueIndex].occupied) {
-            queueIndex++
-          }
-          if (queueIndex < this.queuePositions.length) {
-            const pos = this.queuePositions[queueIndex]
-            pos.occupied = true
-            pos.patient = patient
-            patient.queuePos = pos
-            // 设置病人尺寸（等候区专用，较小）
-            patient.width = 16
-            patient.height = 26
-            patient.moveTo(pos.x, pos.y)
-          }
-        }
-      }
-    }
+  // 【已废弃】输液椅已移到治疗区
+  hasEmptySeatOfType(seatType) {
+    return false
+  }
+
+  // 【已废弃】输液椅已移到治疗区
+  getEmptySeatCounts() {
+    return { iv: 0 }
   }
 
   clear() {
     this.patients = []
-    this.seats.forEach(seat => {
-      seat.occupied = false
-      seat.patient = null
-    })
-    this.queuePositions.forEach(pos => {
+    this.standingQueue.forEach(pos => {
       pos.occupied = false
       pos.patient = null
     })
@@ -230,22 +165,25 @@ export default class WaitingArea {
   }
 
   render(ctx) {
-    // 先画护士（在护士台后面，只露上半身）
+    // 粉色横向踢脚线（装饰）
+    const baseboardY = this.y + this.height * 0.35
+    ctx.fillStyle = '#FFB6C1'
+    ctx.fillRect(this.x + 8, baseboardY, this.width - 16, 6)
+    
+    // 绘制护士
     this.nurse.render(ctx)
-    // 再画护士台（遮挡护士下半身）
     this.renderReception(ctx)
-    this.renderSeats(ctx)
+    this.renderStandingQueue(ctx)
   }
 
   renderReception(ctx) {
-    const centerX = this.x + this.width / 2
-    const deskY = this.y + this.height * 0.03
-    const deskWidth = this.width * 0.45
-    const deskHeight = this.height * 0.1
+    // 护士台位置在最右边
+    const deskWidth = this.width * 0.5
+    const deskHeight = this.height * 0.4
+    const centerX = this.x + this.width - deskWidth + 10
+    const deskY = this.y + this.height * 0.12
     
-    // 优先使用护士台图片
     if (this.nurseDeskImage && this.nurseDeskImage.width > 0) {
-      // 使用图片绘制护士台，保持比例
       const targetWidth = deskWidth * 1.1
       const imageScale = targetWidth / this.nurseDeskImage.width
       const drawWidth = targetWidth
@@ -254,32 +192,25 @@ export default class WaitingArea {
       ctx.drawImage(
         this.nurseDeskImage,
         centerX - drawWidth / 2,
-        deskY - drawHeight * 0.1, // 稍微向上偏移，让护士台位置更合适
+        deskY - drawHeight * 0.1,
         drawWidth,
         drawHeight
       )
     } else {
-      // 图片未加载时，使用原来的代码绘制（fallback）
-      // 护士台主体 - 上直边，下弧形
+      // 图片未加载时的 fallback
       ctx.fillStyle = '#FFF'
       ctx.beginPath()
-      // 左上
       ctx.moveTo(centerX - deskWidth / 2, deskY)
-      // 右上
       ctx.lineTo(centerX + deskWidth / 2, deskY)
-      // 右下圆弧
       ctx.quadraticCurveTo(centerX + deskWidth / 2, deskY + deskHeight * 1.1, centerX, deskY + deskHeight * 1.15)
-      // 左下圆弧
       ctx.quadraticCurveTo(centerX - deskWidth / 2, deskY + deskHeight * 1.1, centerX - deskWidth / 2, deskY)
       ctx.closePath()
       ctx.fill()
       
-      // 边框
       ctx.strokeStyle = '#FFB7B2'
       ctx.lineWidth = 2
       ctx.stroke()
       
-      // 台面装饰（粉色弧形条纹）
       ctx.fillStyle = '#FFB7B2'
       ctx.beginPath()
       ctx.moveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
@@ -289,31 +220,48 @@ export default class WaitingArea {
       ctx.closePath()
       ctx.fill()
     }
+    
+    // 绘制植物（在护士台左边）
+    if (this.plantImage && this.plantImage.width > 0) {
+      const plantWidth = 40
+      const plantHeight = 60
+      const plantOffsetX = -125
+      const plantOffsetY = -30
+      
+      const plantX = centerX - deskWidth / 2 - plantWidth / 2 - plantOffsetX
+      const plantY = deskY + deskHeight - plantHeight + plantOffsetY
+      
+      ctx.drawImage(this.plantImage, plantX, plantY, plantWidth, plantHeight)
+    }
+    
+    // 绘制书架（在护士台右边，和植物同一Y位置）
+    if (this.bookshelfImage && this.bookshelfImage.width > 0) {
+      const bookshelfWidth = 35
+      const bookshelfHeight = 50
+      // 植物Y坐标 = deskY + deskHeight - plantHeight + plantOffsetY
+      // 简化后：deskY + deskHeight - 65 - 35 = deskY + deskHeight - 100
+      const plantY = deskY + deskHeight - 83
+      const bookshelfY = plantY
+      // 放在护士台右边，与植物对称
+      const bookshelfX = centerX - deskWidth / 2 -20
+      
+      ctx.drawImage(this.bookshelfImage, bookshelfX, bookshelfY, bookshelfWidth, bookshelfHeight)
+    }
   }
 
-  renderSeats(ctx) {
-    this.seats.forEach((seat, i) => {
-      // 根据座位状态选择图片
-      const currentImage = seat.occupied ? this.seatOccupiedImage : this.seatFreeImage
-      
-      if (currentImage && currentImage.width > 0) {
-        // 使用图片绘制椅子，保持比例
-        const targetHeight = seat.height * 1.3
-        const imageScale = targetHeight / currentImage.height
-        const drawWidth = currentImage.width * imageScale
-        const drawHeight = targetHeight
-        
-        ctx.drawImage(currentImage, seat.x + (seat.width - drawWidth) / 2, seat.y + (seat.height - drawHeight) / 2, drawWidth, drawHeight)
-      }
-      
-      // 座位号（只有座位空闲时显示）
-      if (!seat.occupied) {
-        ctx.fillStyle = '#2E86AB'
-        ctx.font = `bold ${Math.max(8, seat.width * 0.18)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(`${i + 1}`, seat.x + seat.width / 2, seat.y + seat.height * 0.25)
-      }
+  renderStandingQueue(ctx) {
+    // 绘制站立位置标记 - 灰色椭圆阴影
+    this.standingQueue.forEach((pos, i) => {
+      ctx.fillStyle = pos.occupied ? 'rgba(128, 128, 128, 0.5)' : 'rgba(128, 128, 128, 0.25)'
+      ctx.beginPath()
+      ctx.ellipse(
+        pos.x + pos.width / 2, 
+        pos.y + pos.height * 0.75, 
+        pos.width * 0.25,
+        pos.height * 0.06,
+        0, 0, Math.PI * 2
+      )
+      ctx.fill()
     })
   }
 }

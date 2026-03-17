@@ -1,0 +1,85 @@
+# Bug 修复历史记录
+
+---
+
+## Bug 1: iOS 真机打不开游戏（欢迎气泡/准备气泡渲染问题）
+
+### 修复日期
+2026-03-16 (commit: 4d15413)
+
+### Bug 现象
+- 游戏在 iOS 真机上无法正常打开或运行
+- 表现为闪退、白屏或渲染崩溃
+- 开发者工具正常，但真机环境崩溃
+
+### 原因分析
+
+#### 1. Canvas 渲染过于复杂
+欢迎气泡 (`renderWelcomeBubble`) 和准备气泡 (`renderReadyBubble`) 使用了以下复杂 Canvas 操作：
+- **呼吸动画缩放**: `ctx.scale(breathScale, breathScale)` - 动态变换矩阵
+- **复杂贝塞尔曲线**: 绘制带小三角的气泡形状（多段 quadraticCurveTo）
+- **Path2D 对象**: `new Path2D()` 创建复杂路径
+- **多重阴影效果**: 大模糊半径 (`shadowBlur = 20`) 配合偏移
+- **高光线条**: 额外的白色描边增加立体感
+
+这些复杂操作在 iOS WebView/小程序环境中可能导致渲染管线崩溃。
+
+#### 2. 位置计算 Bug（隐蔽）
+```javascript
+// 修复前 - 错误的坐标计算
+const bubbleX = this.x/2 - 90 * this.scale  // x/2 导致位置严重偏移！
+
+// 修复后
+const bubbleX = this.x - 130 * this.scale
+```
+
+### 修复方式
+
+#### 1. 简化气泡渲染逻辑
+- ❌ 移除呼吸动画效果（ctx.translate + ctx.scale 变换）
+- ❌ 移除小三角指针（复杂的贝塞尔曲线路径）
+- ❌ 移除 Path2D 对象使用
+- ❌ 移除内部高光线条
+- ✅ 简化为标准圆角矩形
+
+#### 2. 新增 iOS 兼容的绘制方法
+```javascript
+_drawRoundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.lineTo(x + width - radius, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+  // ... 简化的四段圆弧路径
+  ctx.closePath()
+}
+```
+
+#### 3. 降低渲染负载
+| 属性 | 修复前 | 修复后 |
+|------|--------|--------|
+| 阴影模糊 | 20px | 8px |
+| 阴影偏移 | 4px | 2px |
+| 边框宽度 | 6px | 2px |
+| 字体大小 | 14px | 12px |
+| 气泡宽度 | 200px | 180px |
+
+#### 4. 修复位置计算
+```javascript
+// 欢迎气泡
+bubbleX: this.x - 130 * this.scale
+bubbleY: this.y - 90 * this.scale
+
+// 准备气泡  
+bubbleX: this.x - 160 * this.scale
+bubbleY: this.y - 70 * this.scale
+```
+
+### 代码变更文件
+- `js/Nurse.js`: 重写 `renderWelcomeBubble()` 和 `renderReadyBubble()` 方法
+
+### 经验总结
+1. iOS 真机对 Canvas 复杂操作的支持有限，应避免动态变换矩阵和复杂路径
+2. 真机测试需要尽早进行，开发者工具无法完全模拟真机环境
+3. 简单的视觉降级（移除动画效果）比崩溃要好得多
+
+---

@@ -1,7 +1,65 @@
 // 简化版医生 - 像护士一样直接使用，不依赖复杂的走道计算
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getRandomItem, getItemById, getItemImage, isMedicine } from './Items.js'
-import { getDoctorItemCount } from './GameConfig.js'
+import { getDoctorItemCount, getTreatTimeByDisease } from './GameConfig.js'
+
+// ==================== 全局医生图片缓存 ====================
+const DoctorImageCache = {
+  // 空闲状态图片缓存: { doctorId: image }
+  idleImages: {},
+  // 治疗状态图片缓存: { doctorId: image }
+  treatImages: {},
+  // 治疗中图标缓存
+  curingImage: null,
+  
+  // 获取治疗中图标
+  getCuringImage() {
+    if (!this.curingImage) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.curingImage = img
+      }
+      img.onerror = () => {
+        console.warn('Failed to load curing image: images/curing.png')
+      }
+      img.src = 'images/curing.png'
+      this.curingImage = img
+    }
+    return this.curingImage
+  },
+  
+  // 获取空闲状态图片
+  getIdleImage(doctorId) {
+    if (!this.idleImages[doctorId]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.idleImages[doctorId] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load doctor idle image: images/doctor_${doctorId}_idle.png`)
+      }
+      img.src = `images/doctor_${doctorId}_idle.png`
+      this.idleImages[doctorId] = img
+    }
+    return this.idleImages[doctorId]
+  },
+  
+  // 获取治疗状态图片
+  getTreatImage(doctorId) {
+    if (!this.treatImages[doctorId]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.treatImages[doctorId] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load doctor treat image: images/doctor_${doctorId}_treat.png`)
+      }
+      img.src = `images/doctor_${doctorId}_treat.png`
+      this.treatImages[doctorId] = img
+    }
+    return this.treatImages[doctorId]
+  }
+}
 
 export default class Doctor {
   constructor(id, bedArea) {
@@ -13,7 +71,7 @@ export default class Doctor {
     // 医生1在左上，医生2在右下
     if (bedArea) {
       this.x = bedArea.x + bedArea.width * (id === 1 ? 0.25 : 0.75)
-      this.y = bedArea.y + bedArea.height * 0.5
+      this.y = bedArea.y + bedArea.height * 0.5 - 15
     } else {
       this.x = 100
       this.y = 100
@@ -35,6 +93,9 @@ export default class Doctor {
     this.bounceOffset = 0
     this.facing = 1
     
+    // 动画控制：第一个病人生成前暂停动画
+    this.animationEnabled = false
+    
     this.treatAnimation = 0
     this.blinkTimer = 0
     this.isBlinking = false
@@ -47,23 +108,10 @@ export default class Doctor {
     this.lockedByPatient = null
     
     // 加载图片
-    this.idleImage = null
-    this.treatImage = null
-    this.loadImages()
-  }
-  
-  loadImages() {
-    const imageId = this.id
-    const idlePath = `images/doctor_${imageId}_idle.png`
-    const treatPath = `images/doctor_${imageId}_treat.png`
-    
-    const idleImg = wx.createImage()
-    idleImg.onload = () => { this.idleImage = idleImg }
-    idleImg.src = idlePath
-    
-    const treatImg = wx.createImage()
-    treatImg.onload = () => { this.treatImage = treatImg }
-    treatImg.src = treatPath
+    // 从全局缓存获取图片
+    this.idleImage = DoctorImageCache.getIdleImage(this.id)
+    this.treatImage = DoctorImageCache.getTreatImage(this.id)
+    this.curingImage = DoctorImageCache.getCuringImage()
   }
   
   pickRandomTarget() {
@@ -72,7 +120,7 @@ export default class Doctor {
       // 医生1和医生2分别站在中心点的左右两侧，避免重叠
       const offsetX = this.id === 1 ? -30 : 30
       this.targetX = this.bedArea.x + this.bedArea.width / 2 + offsetX
-      this.targetY = this.bedArea.y + this.bedArea.height / 2
+      this.targetY = this.bedArea.y + this.bedArea.height / 2 - 15
       this.state = 'moving'
     }
   }
@@ -100,7 +148,10 @@ export default class Doctor {
   update(deltaTime, bedArea) {
     this.animationTime += deltaTime
     
-    if (this.isLocked) {
+    // 只有启用动画时才计算跳动效果
+    if (!this.animationEnabled) {
+      this.bounceOffset = 0
+    } else if (this.isLocked) {
       this.bounceOffset = Math.sin(this.animationTime / 300) * -1.5
       return
     }
@@ -117,7 +168,10 @@ export default class Doctor {
     switch (this.state) {
       case 'idle':
         this.idleTime += deltaTime
-        this.bounceOffset = Math.sin(this.animationTime / 600) * -2
+        // 待机时缓慢上下跃动（跟护士一样）
+        if (this.animationEnabled) {
+          this.bounceOffset = Math.sin(this.animationTime / 500) * -2
+        }
         
         const occupiedBeds = bedArea.getOccupiedBeds()
         const needsTreatment = occupiedBeds.find(bed => 
@@ -133,7 +187,9 @@ export default class Doctor {
         break
         
       case 'moving':
-        this.bounceOffset = Math.abs(Math.sin(this.animationTime / 120)) * -4
+        if (this.animationEnabled) {
+          this.bounceOffset = Math.abs(Math.sin(this.animationTime / 120)) * -4
+        }
         
         if (this.targetBed && (!this.targetBed.patient || this.targetBed.patient.isCured)) {
           this.targetBed.assignedDoctor = null
@@ -164,7 +220,7 @@ export default class Doctor {
         
       case 'treating':
         this.treatAnimation += deltaTime
-        this.bounceOffset = Math.sin(this.animationTime / 80) * -2
+        this.bounceOffset = 0  // 去掉申请物品时的上下跳动
         
         if (!this.targetBed || !this.targetBed.patient || this.targetBed.patient.isCured) {
           if (this.targetBed) {
@@ -193,7 +249,9 @@ export default class Doctor {
         } else if (!this.hasReceivedAllItems()) {
           // 等待物品
         } else {
-          this.targetBed.treatmentProgress += deltaTime / 2000
+          // 根据病人疾病获取治疗时间
+          const treatTime = getTreatTimeByDisease(this.targetBed.patient.condition.name)
+          this.targetBed.treatmentProgress += deltaTime / treatTime
           if (this.targetBed.treatmentProgress >= 1) {
             this.targetBed.patient.isCured = true
             this.targetBed.assignedDoctor = null
@@ -246,6 +304,11 @@ export default class Doctor {
   getRequiredItemId() {
     const item = this.getRequiredItem()
     return item ? item.id : null
+  }
+  
+  // 启用动画（第一个病人生成后调用）
+  enableAnimation() {
+    this.animationEnabled = true
   }
   
   lockByPatient(patient) {
@@ -359,32 +422,44 @@ export default class Doctor {
     if (this.state === 'treating' && requiredItems.length > 0) {
       const itemCount = requiredItems.length
       const itemSize = 36 * scale
-      const padding = 8 * scale
-      const gap = 6 * scale
+      const padding = 10 * scale
+      const gap = 8 * scale
       const bubbleWidth = itemCount * itemSize + (itemCount - 1) * gap + padding * 2
       const bubbleHeight = itemSize + padding * 2
       
       ctx.save()
-      ctx.translate(this.x, this.y - 70 * scale)
       
-      const bubbleColor = '#27AE60'
+      // 呼吸动效：1.5秒周期，缩放 0.92 ~ 1.08（更明显）
+      const breathScale = 1 + Math.sin(this.animationTime / 250) * 0.08
+      ctx.translate(this.x, this.y - 75 * scale)
+      ctx.scale(breathScale, breathScale)
       
+      // 柔和阴影
+      ctx.shadowColor = 'rgba(34, 166, 89, 0.25)'
+      ctx.shadowBlur = 24 * scale
+      ctx.shadowOffsetY = 8 * scale
+      
+      // 白色背景气泡（圆角更大，类似 rounded-3xl）
       ctx.fillStyle = '#FFF'
-      fillRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 12)
-      ctx.strokeStyle = bubbleColor
-      ctx.lineWidth = 4
-      strokeRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 12)
+      fillRoundRect(ctx, -bubbleWidth/2, -bubbleHeight/2, bubbleWidth, bubbleHeight, 16 * scale)
       
-      ctx.fillStyle = bubbleColor
+      // 重置阴影
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetY = 0
+      
+      // 气泡尾巴（白色，向下指）
+      const tailWidth = 14 * scale
+      const tailHeight = 10 * scale
+      ctx.fillStyle = '#FFF'
       ctx.beginPath()
-      ctx.moveTo(-12, bubbleHeight/2)
-      ctx.lineTo(0, bubbleHeight/2 + 12)
-      ctx.lineTo(12, bubbleHeight/2)
+      ctx.moveTo(-tailWidth/2, bubbleHeight/2 - 1)  // 左下
+      ctx.lineTo(tailWidth/2, bubbleHeight/2 - 1)   // 右下
+      ctx.lineTo(0, bubbleHeight/2 + tailHeight)    // 顶点向下
+      ctx.closePath()
       ctx.fill()
-      ctx.strokeStyle = bubbleColor
-      ctx.lineWidth = 2
-      ctx.stroke()
       
+      // 绘制物品图标
       const startIconX = -(itemCount * itemSize + (itemCount - 1) * gap) / 2 + itemSize / 2
       requiredItems.forEach((item, index) => {
         const iconX = startIconX + index * (itemSize + gap)
@@ -408,13 +483,25 @@ export default class Doctor {
       ctx.translate(this.x, this.y - 55 * scale)
       
       const barW = 40 * scale
-      const barH = 6 * scale
+      const barH = 8 * scale
+      const radius = barH / 2  // 圆角半径为高度的一半，形成圆润的胶囊形状
       
+      // 进度条背景（灰色圆角）
       ctx.fillStyle = '#E0E0E0'
-      ctx.fillRect(-barW/2, -barH/2, barW, barH)
+      fillRoundRect(ctx, -barW/2, -barH/2, barW, barH, radius)
       
-      ctx.fillStyle = '#27AE60'
-      ctx.fillRect(-barW/2, -barH/2, barW * this.targetBed.treatmentProgress, barH)
+      // 蓝色进度条（圆角）
+      ctx.fillStyle = '#3498DB'
+      const progressWidth = barW * this.targetBed.treatmentProgress
+      if (progressWidth > 0) {
+        fillRoundRect(ctx, -barW/2, -barH/2, progressWidth, barH, radius)
+      }
+      
+      // 绘制治疗中图标（在进度条左侧）
+      if (this.curingImage && this.curingImage.width > 0) {
+        const iconSize = 18 * scale
+        ctx.drawImage(this.curingImage, -barW / 2 - iconSize - 3 * scale, -iconSize / 2, iconSize, iconSize)
+      }
       
       ctx.restore()
     }
