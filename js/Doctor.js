@@ -9,6 +9,24 @@ const DoctorImageCache = {
   idleImages: {},
   // 治疗状态图片缓存: { doctorId: image }
   treatImages: {},
+  // 治疗中图标缓存
+  curingImage: null,
+  
+  // 获取治疗中图标
+  getCuringImage() {
+    if (!this.curingImage) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.curingImage = img
+      }
+      img.onerror = () => {
+        console.warn('Failed to load curing image: images/curing.png')
+      }
+      img.src = 'images/curing.png'
+      this.curingImage = img
+    }
+    return this.curingImage
+  },
   
   // 获取空闲状态图片
   getIdleImage(doctorId) {
@@ -93,6 +111,7 @@ export default class Doctor {
     // 从全局缓存获取图片
     this.idleImage = DoctorImageCache.getIdleImage(this.id)
     this.treatImage = DoctorImageCache.getTreatImage(this.id)
+    this.curingImage = DoctorImageCache.getCuringImage()
   }
   
   pickRandomTarget() {
@@ -476,6 +495,12 @@ export default class Doctor {
       const progressWidth = barW * this.targetBed.treatmentProgress
       if (progressWidth > 0) {
         fillRoundRect(ctx, -barW/2, -barH/2, progressWidth, barH, radius)
+      }
+      
+      // 绘制治疗中图标（在进度条左侧）
+      if (this.curingImage && this.curingImage.width > 0) {
+        const iconSize = 18 * scale
+        ctx.drawImage(this.curingImage, -barW / 2 - iconSize - 3 * scale, -iconSize / 2, iconSize, iconSize)
       }
       
       ctx.restore()

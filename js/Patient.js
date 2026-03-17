@@ -100,6 +100,33 @@ const PatientImageCache = {
       this.loadComfortImage()
     }
     return this.comfortImage
+  },
+  
+  // 治疗中图标
+  curingImage: null,
+  
+  // 加载治疗中图标
+  loadCuringImage() {
+    if (this.curingImage) return this.curingImage
+    
+    const img = wx.createImage()
+    img.onload = () => {
+      this.curingImage = img
+    }
+    img.onerror = () => {
+      console.warn('Failed to load curing image')
+    }
+    img.src = 'images/curing.png'
+    this.curingImage = img
+    return img
+  },
+  
+  // 获取治疗中图标
+  getCuringImage() {
+    if (!this.curingImage) {
+      this.loadCuringImage()
+    }
+    return this.curingImage
   }
 }
 
@@ -201,6 +228,7 @@ export default class Patient {
     this.angryImage = PatientImageCache.getAngryImage(this.patientType)
     this.boomImage = PatientImageCache.getBoomImage()
     this.comfortImage = PatientImageCache.getComfortImage()
+    this.curingImage = PatientImageCache.getCuringImage()
   }
 
   // 根据病情名称获取图标
@@ -556,6 +584,12 @@ export default class Patient {
         const progressWidth = barWidth * this.ivTreatmentProgress
         if (progressWidth > 0) {
           fillRoundRect(ctx, barX, barY, progressWidth, barHeight, radius)
+        }
+        
+        // 绘制治疗中图标（在进度条左侧）
+        if (this.curingImage && this.curingImage.width > 0) {
+          const iconSize = 18 * scale
+          ctx.drawImage(this.curingImage, barX - iconSize - 3 * scale, barY + (barHeight - iconSize) / 2, iconSize, iconSize)
         }
       }
       
