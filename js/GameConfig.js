@@ -71,14 +71,95 @@ export const GameConfig = {
       timeLimit: 90,           // 倒计时（秒）
       cureTarget: 5,            // 治愈人数目标
       doctorItemCount: 1,       // 医生请求物品数量
-      patients: [1, 2, 3, 4,5,6]  // 本关出现的病人ID列表：病人6， 疾病123
+      patients: [1, 2, 3, 14, 15, 16]  // 本关出现的病人ID列表：病人6， 疾病123
     },
     { 
       id: 2,                    // 第2关
       timeLimit: 100,            // 倒计时（秒）
       cureTarget: 6,            // 治愈人数目标
       doctorItemCount: 2,       // 医生请求物品数量
-      patients: [4,5,6,7,8,9]  // 本关出现的病人ID列表： 病人8，疾病 123+45
+      patients: [4,16,15,17,18,2,1,5]  // 本关出现的病人ID列表： 病人8，疾病 123+45
+    },
+    { 
+      id: 3,                    // 第3关
+      timeLimit: 105,           // 倒计时（秒）
+      cureTarget: 8,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.3         // 50%概率请求max个，否则请求min个
+      },
+      patients: [6,18,17,16,15,5,4,3,2,19]  // 本关出现的病人ID列表： 病人10，疾病 2345+6
+    },{ 
+      id: 4,                    // 第4关
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 10,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.35         // 50%概率请求max个，否则请求min个
+      },
+      patients: [2,7,6,18,17,16,5,4,3,19,20,15]  // 本关出现的病人ID列表： 病人12，疾病 23456+7
+    },{ 
+      id: 5,                    // 第5关
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 10,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.4         // 50%概率请求max个，否则请求min个
+      },
+      patients: [8,7,6,18,17,16,5,4,3,19,20,21]  // 本关出现的病人ID列表： 病人12，疾病 34567+8
+    },{ 
+      id: 6,                    // 第6关
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 12,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.4         // 50%概率请求max个，否则请求min个
+      },
+      patients: [9,8,7,6,18,17,16,5,4,19,20,21,22]  // 本关出现的病人ID列表： 病人13，疾病 45678+9
+    },{ 
+      id: 7,                    // 第7关
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 12,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.5         // 50%概率请求max个，否则请求min个
+      },
+      patients: [10,9,8,7,6,18,17,16,5,19,20,21,22,23]  // 本关出现的病人ID列表： 病人14，疾病 56789+10
+    },{ 
+      id: 8,                    // 第8关
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 10,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.6         // 50%概率请求max个，否则请求min个
+      },
+      patients: [11,10,9,8,7,6,18,17,16,19,20,21,22,23,24]  // 本关出现的病人ID列表： 病人15，疾病 678910+11
+    },{ 
+      id: 9,                    // 第9关
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 14,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.7         // 50%概率请求max个，否则请求min个
+      },
+      patients: [12,11,10,9,7,6,18,17,16,19,20,21,22,23,24,25]  // 本关出现的病人ID列表： 病人16，疾病 891011+12
+    },{ 
+      id: 10,                    // 第10关
+      timeLimit: 120,           // 倒计时（秒）
+      cureTarget: 10,           // 治愈人数目标
+      doctorItemCount: {         // 医生请求物品数量配置
+        min: 2,                  // 最少2个
+        max: 3,                  // 最多3个
+        probability: 0.9         // 50%概率请求max个，否则请求min个
+      },
+      patients:[13,18,17,16,19,12,11,10,9,7,20,21,22,24,25,26] // 本关出现的病人ID列表： 病人16，疾病 9101112+13
     }
   ],
 

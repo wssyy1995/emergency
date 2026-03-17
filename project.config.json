@@ -5,6 +5,9 @@
       {
         "value": ".venv",
         "type": "folder"
+      },{
+        "value": ".zip",
+        "type": "file"
       },
       {
         "value": "images_backup",

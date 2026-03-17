@@ -7,6 +7,8 @@ const PatientImageCache = {
   normalImages: {},
   // 生气状态图片缓存: { patientType: image }
   angryImages: {},
+  // 生病状态图片缓存: { patientType: image }
+  sickImages: {},
   // 爆炸图标（全局只加载一次）
   boomImage: null,
   // 是否已初始化
@@ -50,6 +52,22 @@ const PatientImageCache = {
       this.normalImages[patientType] = img
     }
     return this.normalImages[patientType]
+  },
+  
+  // 获取生病状态图片
+  getSickImage(patientType) {
+    if (!this.sickImages[patientType]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.sickImages[patientType] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load patient sick image: images/patient_${patientType}_sick.png`)
+      }
+      img.src = `images/patient_${patientType}_sick.png`
+      this.sickImages[patientType] = img
+    }
+    return this.sickImages[patientType]
   },
   
   // 获取生气状态图片
@@ -224,8 +242,11 @@ export default class Patient {
     this.patientType = patientDetail ? ((patientDetail.id - 1) % 14) + 1 : ((id - 1) % 14) + 1
     
     // 从全局缓存获取图片（避免重复加载）
-    this.normalImage = PatientImageCache.getNormalImage(this.patientType)
-    this.angryImage = PatientImageCache.getAngryImage(this.patientType)
+    // normalImage 保留给将来使用，现在默认显示 sick 图片
+    this.sickImage = PatientImageCache.getSickImage(this.patientType)
+    this.normalImage = this.sickImage  // 目前 normal 也指向 sick
+    // angryImage 也使用 sick 图片
+    this.angryImage = this.sickImage
     this.boomImage = PatientImageCache.getBoomImage()
     this.comfortImage = PatientImageCache.getComfortImage()
     this.curingImage = PatientImageCache.getCuringImage()
@@ -502,8 +523,8 @@ export default class Patient {
     // 根据基础尺寸计算缩放比例
     const scale = this.width / this.baseWidth
     
-    // 绘制病人图片
-    const currentImage = this.isAngry ? this.angryImage : this.normalImage
+    // 绘制病人图片（默认显示 sick 图片）
+    const currentImage = this.isAngry ? this.angryImage : this.sickImage
     
     if (currentImage && currentImage.width > 0) {
       // 使用图片绘制病人：targetHeight可以调整病人高度
