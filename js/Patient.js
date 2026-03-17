@@ -238,8 +238,8 @@ export default class Patient {
     this.patiencePaused = false     // 耐心值是否暂停减少
     this.patiencePauseTime = 0      // 暂停剩余时间（毫秒）
     
-    // 病人图片编号（使用 patientDetail.id，1-14 号循环）
-    this.patientType = patientDetail ? ((patientDetail.id - 1) % 14) + 1 : ((id - 1) % 14) + 1
+    // 病人图片编号（使用 patientDetail.id，直接对应图片编号 1-26）
+    this.patientType = patientDetail ? patientDetail.id : id
     
     // 从全局缓存获取图片（避免重复加载）
     // normalImage 保留给将来使用，现在默认显示 sick 图片
@@ -369,7 +369,8 @@ export default class Patient {
         }
       }
     } else {
-      this.bounceOffset = 0  // 去掉待机时的上下摆动
+      // 待机时的上下摆动（幅度比护士小）
+      this.bounceOffset = Math.sin(this.animationTime / 800) * -1
     }
     
     if (this.isCured) {

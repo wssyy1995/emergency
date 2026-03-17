@@ -214,7 +214,7 @@ export default class Nurse {
     ctx.save()
     
     // 分行计算文字
-    ctx.font = `bold ${12 * this.scale}px "PingFang SC", sans-serif`
+    ctx.font = `bold ${14 * this.scale}px "PingFang SC", sans-serif`
     const words = text.split('')
     const lines = []
     let currentLine = ''
@@ -234,29 +234,26 @@ export default class Nurse {
     const bubbleWidth = maxWidth
     const bubbleHeight = lines.length * lineHeight + padding * 2
     
-    // 小三角尺寸（放在右下角，指向护士）
-    const triangleSize = 8 * this.scale
-    const triangleOffsetX = bubbleWidth - cornerRadius - triangleSize * 2  // 距离左边距
-    const triangleOffsetY = bubbleHeight - cornerRadius  // 距离顶部
+    // 小三角尺寸（放在右侧中间，指向护士）
+    const triangleSize = 10 * this.scale
+    const triangleY = bubbleY + bubbleHeight / 2  // 垂直居中
     
-    const triangleTipX = bubbleX + triangleOffsetX + triangleSize * 1.5  // 尖端向右
-    const triangleTipY = bubbleY + triangleOffsetY + triangleSize       // 尖端向下
-    
-    // 绘制圆角矩形气泡主体
+    // 绘制圆角矩形气泡主体（右侧留缺口给小三角）
+    const bodyWidth = bubbleWidth - triangleSize
     ctx.fillStyle = '#FFFCF5'
     ctx.shadowColor = 'rgba(0, 0, 0, 0.1)'
     ctx.shadowBlur = 8 * this.scale
     ctx.shadowOffsetY = 2 * this.scale
     
-    this._drawRoundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, cornerRadius)
+    this._drawRoundRect(ctx, bubbleX, bubbleY, bodyWidth, bubbleHeight, cornerRadius)
     ctx.fill()
     ctx.shadowColor = 'transparent'
     
-    // 绘制右下角小三角（指向右下护士）
+    // 绘制右侧小三角（指向护士）
     ctx.beginPath()
-    ctx.moveTo(bubbleX + triangleOffsetX, bubbleY + triangleOffsetY - triangleSize)           // 左上
-    ctx.lineTo(bubbleX + triangleOffsetX + triangleSize * 1.5, bubbleY + triangleOffsetY + triangleSize)  // 右下（尖端）
-    ctx.lineTo(bubbleX + triangleOffsetX - triangleSize, bubbleY + triangleOffsetY + triangleSize)        // 左下
+    ctx.moveTo(bubbleX + bodyWidth, triangleY - triangleSize)  // 上
+    ctx.lineTo(bubbleX + bodyWidth + triangleSize, triangleY)  // 右（尖端指向护士）
+    ctx.lineTo(bubbleX + bodyWidth, triangleY + triangleSize)  // 下
     ctx.closePath()
     ctx.fillStyle = '#FFFCF5'
     ctx.fill()
@@ -264,14 +261,14 @@ export default class Nurse {
     // 绘制气泡主体边框
     ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
     ctx.lineWidth = 2 * this.scale
-    this._drawRoundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, cornerRadius)
+    this._drawRoundRect(ctx, bubbleX, bubbleY, bodyWidth, bubbleHeight, cornerRadius)
     ctx.stroke()
     
     // 绘制小三角边框（两条边）
     ctx.beginPath()
-    ctx.moveTo(bubbleX + triangleOffsetX, bubbleY + triangleOffsetY - triangleSize)
-    ctx.lineTo(bubbleX + triangleOffsetX + triangleSize * 1.5, bubbleY + triangleOffsetY + triangleSize)
-    ctx.lineTo(bubbleX + triangleOffsetX - triangleSize, bubbleY + triangleOffsetY + triangleSize)
+    ctx.moveTo(bubbleX + bodyWidth, triangleY - triangleSize)
+    ctx.lineTo(bubbleX + bodyWidth + triangleSize, triangleY)
+    ctx.lineTo(bubbleX + bodyWidth, triangleY + triangleSize)
     ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
     ctx.lineWidth = 2 * this.scale
     ctx.stroke()
@@ -302,7 +299,7 @@ export default class Nurse {
     const text = this.readyText
     
     // 准备气泡位置（护士头部左侧）
-    const bubbleX = this.x - 160 * this.scale
+    const bubbleX = this.x - 175 * this.scale
     const bubbleY = this.y - 70 * this.scale
     const padding = 10 * this.scale
     const lineHeight = 18 * this.scale
@@ -311,31 +308,31 @@ export default class Nurse {
     ctx.save()
     
     // 计算文字（单行）
-    ctx.font = `bold ${12 * this.scale}px "PingFang SC", sans-serif`
+    ctx.font = `bold ${14 * this.scale}px "PingFang SC", sans-serif`
     const textWidth = ctx.measureText(text).width
     const bubbleWidth = textWidth + padding * 2
     const bubbleHeight = lineHeight + padding * 2
     
-    // 小三角尺寸（放在右下角，指向护士）
-    const triangleSize = 8 * this.scale
-    const triangleOffsetX = bubbleWidth - cornerRadius - triangleSize * 2  // 距离左边距
-    const triangleOffsetY = bubbleHeight - cornerRadius  // 距离顶部
+    // 小三角尺寸（放在右侧中间，指向护士）
+    const triangleSize = 10 * this.scale
+    const triangleY = bubbleY + bubbleHeight / 2  // 垂直居中
     
-    // 绘制气泡主体
+    // 绘制气泡主体（右侧留缺口给小三角）
+    const bodyWidth = bubbleWidth - triangleSize
     ctx.fillStyle = '#FFFCF5'
     ctx.shadowColor = 'rgba(0, 0, 0, 0.1)'
     ctx.shadowBlur = 8 * this.scale
     ctx.shadowOffsetY = 2 * this.scale
     
-    this._drawRoundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, cornerRadius)
+    this._drawRoundRect(ctx, bubbleX, bubbleY, bodyWidth, bubbleHeight, cornerRadius)
     ctx.fill()
     ctx.shadowColor = 'transparent'
     
-    // 绘制右下角小三角（指向右下护士）
+    // 绘制右侧小三角（指向护士）
     ctx.beginPath()
-    ctx.moveTo(bubbleX + triangleOffsetX, bubbleY + triangleOffsetY - triangleSize)
-    ctx.lineTo(bubbleX + triangleOffsetX + triangleSize * 1.5, bubbleY + triangleOffsetY + triangleSize)
-    ctx.lineTo(bubbleX + triangleOffsetX - triangleSize, bubbleY + triangleOffsetY + triangleSize)
+    ctx.moveTo(bubbleX + bodyWidth, triangleY - triangleSize)  // 上
+    ctx.lineTo(bubbleX + bodyWidth + triangleSize, triangleY)  // 右（尖端指向护士）
+    ctx.lineTo(bubbleX + bodyWidth, triangleY + triangleSize)  // 下
     ctx.closePath()
     ctx.fillStyle = '#FFFCF5'
     ctx.fill()
@@ -343,14 +340,14 @@ export default class Nurse {
     // 绘制气泡主体边框
     ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
     ctx.lineWidth = 2 * this.scale
-    this._drawRoundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, cornerRadius)
+    this._drawRoundRect(ctx, bubbleX, bubbleY, bodyWidth, bubbleHeight, cornerRadius)
     ctx.stroke()
     
     // 绘制小三角边框（两条边）
     ctx.beginPath()
-    ctx.moveTo(bubbleX + bubbleWidth - cornerRadius - triangleSize * 2, bubbleY + bubbleHeight - cornerRadius - triangleSize)
-    ctx.lineTo(bubbleX + bubbleWidth - cornerRadius - triangleSize * 0.5, bubbleY + bubbleHeight - cornerRadius + triangleSize)
-    ctx.lineTo(bubbleX + bubbleWidth - cornerRadius - triangleSize * 3, bubbleY + bubbleHeight - cornerRadius + triangleSize)
+    ctx.moveTo(bubbleX + bodyWidth, triangleY - triangleSize)
+    ctx.lineTo(bubbleX + bodyWidth + triangleSize, triangleY)
+    ctx.lineTo(bubbleX + bodyWidth, triangleY + triangleSize)
     ctx.strokeStyle = 'rgba(255, 182, 193, 0.5)'
     ctx.lineWidth = 2 * this.scale
     ctx.stroke()
@@ -359,7 +356,7 @@ export default class Nurse {
     ctx.fillStyle = '#5D4E37'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(text, bubbleX + bubbleWidth / 2, bubbleY + bubbleHeight / 2)
+    ctx.fillText(text, bubbleX + bodyWidth / 2, bubbleY + bubbleHeight / 2)
     
     ctx.restore()
   }

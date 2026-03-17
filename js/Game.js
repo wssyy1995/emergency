@@ -230,7 +230,7 @@ export default class Game {
     
     // 加载疾病图标缓存
     this.diseaseImages = {}
-    for (let i = 1; i <= 9; i++) {
+    for (let i = 1; i <= 13; i++) {
       const diseaseImg = wx.createImage()
       diseaseImg.onload = ((id, img) => {
         this.diseaseImages[id] = img
@@ -482,21 +482,10 @@ export default class Game {
       }
     }
     
-    // 初始化倒计时
+    // 初始化倒计时（但暂不启动，等第一个病人生成后再开始）
     const levelConfig = getLevelConfig(this.currentLevel)
     this.timeRemaining = levelConfig.timeLimit || 60
-    
-    // 启动倒计时
-    if (this.countdownTimer) clearInterval(this.countdownTimer)
-    this.countdownTimer = setInterval(() => {
-      if (this.isRunning && this.timeRemaining > 0) {
-        this.timeRemaining--
-        // 检查是否时间到
-        if (this.timeRemaining <= 0) {
-          this.checkTimeUp()
-        }
-      }
-    }, 1000)
+    this.countdownTimer = null  // 倒计时定时器，等第一个病人生成后启动
     
     // 初始化当前关卡的病人池（不重复的病人）
     this.initCurrentLevelPatientPool()
@@ -529,9 +518,10 @@ export default class Game {
         if (success) {
           initialSpawnCount++
           this.spawnedPatientsCount++
-          // 【动画控制】第一个病人生成后，启用医生和护士的动画
+          // 【动画控制】第一个病人生成后，启用医生和护士的动画，并启动倒计时
           if (this.spawnedPatientsCount === 1) {
             this.enableCharacterAnimations()
+            this.startCountdown()
           }
         }
         // 无论成功与否，都继续尝试生成（直到达到spawnFirstCount或无法生成）
@@ -556,9 +546,9 @@ export default class Game {
     const spawnNext = () => {
       if (!this.isRunning) return
       
-      // 检查是否还有病人名额，且站立排队区未满
+      // 检查是否还有病人名额，且站立排队区未满（8个位置）
       const queueCount = this.waitingArea.getReceptionQueuePatients().length
-      if (this.spawnedPatientsCount < totalPatients && queueCount < 4) {
+      if (this.spawnedPatientsCount < totalPatients && queueCount < 8) {
         const success = this.spawnPatientFromLeft()
         if (success) {
           this.spawnedPatientsCount++
@@ -1313,7 +1303,7 @@ export default class Game {
       6    // padding（托盘外层和内层边距）
     )
     
-    // ===== 治疗区：双层托盘效果（支持背景图，往下30px）=====
+    // ===== 治疗区：双层托盘效果（支持背景图，=====
     this.renderTray(ctx, 
       this.bedArea.trayX, this.bedArea.trayY, 
       this.bedArea.trayWidth, this.bedArea.trayHeight,
@@ -3827,6 +3817,21 @@ export default class Game {
     this.waitingArea.nurse.enableAnimation()
     // 启用所有医生动画
     this.doctors.forEach(doctor => doctor.enableAnimation())
+  }
+  
+  // 启动倒计时（第一个病人生成后调用）
+  startCountdown() {
+    console.log('[倒计时] 第一个病人生成，启动倒计时')
+    if (this.countdownTimer) clearInterval(this.countdownTimer)
+    this.countdownTimer = setInterval(() => {
+      if (this.isRunning && this.timeRemaining > 0) {
+        this.timeRemaining--
+        // 检查是否时间到
+        if (this.timeRemaining <= 0) {
+          this.checkTimeUp()
+        }
+      }
+    }, 1000)
   }
 
   // 【新玩家指引】分诊指南关闭后处理

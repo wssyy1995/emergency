@@ -68,21 +68,21 @@ export const GameConfig = {
   levels: [
     { 
       id: 1,                    // 第1关
-      timeLimit: 90,           // 倒计时（秒）
+      timeLimit: 60,           // 倒计时（秒）
       cureTarget: 5,            // 治愈人数目标
       doctorItemCount: 1,       // 医生请求物品数量
       patients: [1, 2, 3, 14, 15, 16]  // 本关出现的病人ID列表：病人6， 疾病123
     },
     { 
       id: 2,                    // 第2关
-      timeLimit: 100,            // 倒计时（秒）
+      timeLimit: 60,            // 倒计时（秒）
       cureTarget: 6,            // 治愈人数目标
       doctorItemCount: 2,       // 医生请求物品数量
       patients: [4,16,15,17,18,2,1,5]  // 本关出现的病人ID列表： 病人8，疾病 123+45
     },
     { 
       id: 3,                    // 第3关
-      timeLimit: 105,           // 倒计时（秒）
+      timeLimit: 60,           // 倒计时（秒）
       cureTarget: 8,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
@@ -92,7 +92,7 @@ export const GameConfig = {
       patients: [6,18,17,16,15,5,4,3,2,19]  // 本关出现的病人ID列表： 病人10，疾病 2345+6
     },{ 
       id: 4,                    // 第4关
-      timeLimit: 120,           // 倒计时（秒）
+      timeLimit: 60,           // 倒计时（秒）
       cureTarget: 10,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
@@ -102,7 +102,7 @@ export const GameConfig = {
       patients: [2,7,6,18,17,16,5,4,3,19,20,15]  // 本关出现的病人ID列表： 病人12，疾病 23456+7
     },{ 
       id: 5,                    // 第5关
-      timeLimit: 120,           // 倒计时（秒）
+      timeLimit: 90,           // 倒计时（秒）
       cureTarget: 10,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
@@ -112,8 +112,8 @@ export const GameConfig = {
       patients: [8,7,6,18,17,16,5,4,3,19,20,21]  // 本关出现的病人ID列表： 病人12，疾病 34567+8
     },{ 
       id: 6,                    // 第6关
-      timeLimit: 120,           // 倒计时（秒）
-      cureTarget: 12,           // 治愈人数目标
+      timeLimit: 90,           // 倒计时（秒）
+      cureTarget: 10,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -122,7 +122,7 @@ export const GameConfig = {
       patients: [9,8,7,6,18,17,16,5,4,19,20,21,22]  // 本关出现的病人ID列表： 病人13，疾病 45678+9
     },{ 
       id: 7,                    // 第7关
-      timeLimit: 120,           // 倒计时（秒）
+      timeLimit: 100,           // 倒计时（秒）
       cureTarget: 12,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
@@ -132,8 +132,8 @@ export const GameConfig = {
       patients: [10,9,8,7,6,18,17,16,5,19,20,21,22,23]  // 本关出现的病人ID列表： 病人14，疾病 56789+10
     },{ 
       id: 8,                    // 第8关
-      timeLimit: 120,           // 倒计时（秒）
-      cureTarget: 10,           // 治愈人数目标
+      timeLimit: 100,           // 倒计时（秒）
+      cureTarget: 14,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -153,7 +153,7 @@ export const GameConfig = {
     },{ 
       id: 10,                    // 第10关
       timeLimit: 120,           // 倒计时（秒）
-      cureTarget: 10,           // 治愈人数目标
+      cureTarget: 15,           // 治愈人数目标
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -167,19 +167,19 @@ export const GameConfig = {
   // 每种病情对应的耐心值（秒）、急救治疗时间（毫秒）、自动治疗时间（毫秒）和所需物品
   // diseases_priority: 1=紧急, 2=普通, 3=轻微
   diseases: [
-    { disease_id: 1, disease_name: '发烧', diseases_priority: 2, patience: 30, emerge_treat_time: 3000, auto_treat_time: 9000, treat_need: ['thermometer', 'antibiotic'], unlock_level: 1 },
-    { disease_id: 2, disease_name: '外伤出血', diseases_priority: 2, patience: 40, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'], unlock_level: 1 },
-    { disease_id: 3, disease_name: '开放性骨折', diseases_priority: 1, patience: 20, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'], unlock_level: 1 },
-    { disease_id: 4, disease_name: '感冒', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['thermometer', 'antibiotic', 'injection'], unlock_level: 2 },
-    { disease_id: 5, disease_name: '严重过敏', diseases_priority: 1, patience: 20, emerge_treat_time: 3000, auto_treat_time: 10000, treat_need: ['adrenaline', 'injection'], unlock_level: 2 },
+    { disease_id: 1, disease_name: '发烧', diseases_priority: 2, patience: 20, emerge_treat_time: 3000, auto_treat_time: 9000, treat_need: ['thermometer', 'antibiotic'], unlock_level: 1 },
+    { disease_id: 2, disease_name: '外伤出血', diseases_priority: 2, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['painkiller', 'thermometer'], unlock_level: 1 },
+    { disease_id: 3, disease_name: '开放性骨折', diseases_priority: 1, patience: 15, emerge_treat_time: 5000, auto_treat_time: 10000, treat_need: ['scissors', 'tape', 'painkiller'], unlock_level: 1 },
+    { disease_id: 4, disease_name: '感冒', diseases_priority: 3, patience: 20, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['thermometer', 'antibiotic', 'injection'], unlock_level: 2 },
+    { disease_id: 5, disease_name: '严重过敏', diseases_priority: 1, patience: 15, emerge_treat_time: 3000, auto_treat_time: 10000, treat_need: ['adrenaline', 'injection'], unlock_level: 2 },
     { disease_id: 6, disease_name: '肠胃炎', diseases_priority: 3, patience: 25, emerge_treat_time: 3000, auto_treat_time: 6000, treat_need: ['thermometer', 'injection'], unlock_level: 3 },
-    { disease_id: 7, disease_name: '异物卡喉', diseases_priority: 1, patience: 30, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'], unlock_level: 4 },
-    { disease_id: 8, disease_name: '牙痛', diseases_priority: 3, patience: 35, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 5 },
-    { disease_id: 9, disease_name: '急性阑尾炎', diseases_priority: 1, patience: 25, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 6 },
-    { disease_id: 10, disease_name: '大面积烧伤', diseases_priority: 1, patience: 25, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 7 },
-    { disease_id: 11, disease_name: '眩晕（耳石症）', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 8 },
-    { disease_id: 12, disease_name: '心悸', diseases_priority: 2, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 9 },
-    { disease_id: 13, disease_name: '中毒呕吐', diseases_priority: 1, patience: 20, emerge_treat_time: 4000, auto_treat_time: 9000, treat_need: ['tape', 'painkiller'], unlock_level: 10 }
+    { disease_id: 7, disease_name: '异物卡喉', diseases_priority: 1, patience: 15, emerge_treat_time: 4000, auto_treat_time: 8000, treat_need: ['aed', 'adrenaline'], unlock_level: 4 },
+    { disease_id: 8, disease_name: '牙痛', diseases_priority: 3, patience: 30, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 5 },
+    { disease_id: 9, disease_name: '急性阑尾炎', diseases_priority: 1, patience: 15, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 6 },
+    { disease_id: 10, disease_name: '大面积烧伤', diseases_priority: 1, patience: 15, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 7 },
+    { disease_id: 11, disease_name: '眩晕（耳石症）', diseases_priority: 3, patience: 20, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 8 },
+    { disease_id: 12, disease_name: '心悸', diseases_priority: 2, patience: 20, emerge_treat_time: 2000, auto_treat_time: 6000, treat_need: ['tape', 'painkiller'], unlock_level: 9 },
+    { disease_id: 13, disease_name: '中毒呕吐', diseases_priority: 1, patience: 15, emerge_treat_time: 4000, auto_treat_time: 9000, treat_need: ['tape', 'painkiller'], unlock_level: 10 }
   ],
 
   // ==================== 病人配置 ====================
