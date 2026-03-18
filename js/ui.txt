@@ -1,158 +1,32 @@
-
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>关卡结算弹窗</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap');
-
-    body {
-      background-color: #A5DDF0; /* 模拟游戏背景被遮罩 */
-      background-image: radial-gradient(circle, #BCE4F5 10%, transparent 20%), 
-                        radial-gradient(circle, #BCE4F5 10%, transparent 20%);
-      background-size: 50px 50px;
-      background-position: 0 0, 25px 25px;
-      font-family: 'Nunito', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      overflow: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      user-select: none;
-    }
-
-    /* 弹窗出场动画 */
-    @keyframes popIn {
-      0% { transform: scale(0.6); opacity: 0; }
-      60% { transform: scale(1.05); opacity: 1; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .animate-pop {
-      animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }
-
-    /* 光芒旋转动画 */
-    @keyframes spinLight {
-      0% { transform: translate(-50%, -50%) rotate(0deg); }
-      100% { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-    .rays {
-      position: absolute;
-      top: 0;
-      left: 50%;
-      width: 400px;
-      height: 400px;
-      background: repeating-conic-gradient(
-        from 0deg,
-        rgba(255, 255, 255, 0.4) 0deg 15deg,
-        transparent 15deg 30deg
-      );
-      animation: spinLight 10s linear infinite;
-      z-index: -1;
-      border-radius: 50%;
-    }
-
-    /* 果冻按钮基础样式 */
-    .jelly-btn {
-      position: relative;
-      transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    
-    .jelly-btn:active {
-      transform: translateY(6px);
-    }
-  </style>
-</head>
-<body class="bg-black/40"> <!-- 暗色遮罩层 -->
-
-  <!-- 弹窗主容器 -->
-  <div class="relative w-[340px] animate-pop mt-12">
-    
-    <!-- 背部光芒 (增加过关的成就感) -->
-    <div class="rays pointer-events-none"></div>
-
-    <!-- 顶部装饰 (奖杯/星星) -->
-    <div class="absolute -top-16 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center">
-      <div class="text-6xl drop-shadow-md">🏆</div>
-      <div class="absolute top-2 -left-8 text-3xl rotate-[-20deg]">✨</div>
-      <div class="absolute top-4 -right-6 text-2xl rotate-[15deg]">🌟</div>
-    </div>
-
-    <!-- 白色主卡片 -->
-    <div class="bg-[#FFFDF7] rounded-[32px] border-4 border-[#FFB8C6] shadow-[0_12px_0_0_#FFB8C6,0_20px_30px_rgba(0,0,0,0.15)] p-6 pt-12 relative z-10">
-      
-      <!-- 标题 -->
-      <h1 class="text-[32px] font-black text-[#D97785] text-center tracking-widest drop-shadow-sm">
-        目标达成！
-      </h1>
-
-      <!-- 分隔线 -->
-      <div class="flex items-center justify-center gap-2 my-4 opacity-50">
-        <div class="w-12 h-1 bg-[#D97785] rounded-full"></div>
-        <div class="w-2 h-2 bg-[#D97785] rounded-full"></div>
-        <div class="w-12 h-1 bg-[#D97785] rounded-full"></div>
-      </div>
-
-      <!-- 下一关目标 区域 -->
-      <div class="bg-[#F2FAFD] border-2 border-[#CDE5EF] rounded-2xl p-4 mt-2 relative">
-        <!-- 小标题 -->
-        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-[#76A5B9] text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-          下一关目标
-        </div>
-        
-        <!-- 目标数据列表 -->
-        <div class="mt-2 space-y-3">
-          <!-- 目标 1：时间 -->
-          <div class="flex justify-between items-center bg-white border border-[#E1F0F6] rounded-xl px-3 py-2 shadow-sm">
-            <div class="flex items-center gap-2 font-bold text-[#6D5D6E]">
-              <span class="text-xl">⏱️</span>
-              <span>时间</span>
-            </div>
-            <div class="font-black text-[#76A5B9] text-lg">03:30</div>
-          </div>
-          
-          <!-- 目标 2：治愈人数 -->
-          <div class="flex justify-between items-center bg-white border border-[#E1F0F6] rounded-xl px-3 py-2 shadow-sm">
-            <div class="flex items-center gap-2 font-bold text-[#6D5D6E]">
-              <span class="text-xl">💖</span>
-              <span>治愈人数</span>
-            </div>
-            <div class="font-black text-[#D97785] text-lg">15 人</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 底部按钮区域 -->
-      <div class="flex justify-between gap-3 mt-7">
-        
-        <!-- 升级按钮 (暖色/次要操作) -->
-        <button class="jelly-btn flex-1 bg-[#FFD56B] border-2 border-[#E5B53C] text-[#A67114] font-black text-lg py-3 rounded-2xl shadow-[0_6px_0_0_#E5B53C] flex items-center justify-center gap-1 active:shadow-[0_0px_0_0_#E5B53C]">
-          <span>⬆️</span> 升级
-        </button>
-
-        <!-- 继续按钮 (薄荷绿/主要操作) -->
-        <button class="jelly-btn flex-1 bg-[#68C287] border-2 border-[#4E9B68] text-white font-black text-lg py-3 rounded-2xl shadow-[0_6px_0_0_#4E9B68] flex items-center justify-center gap-1 active:shadow-[0_0px_0_0_#4E9B68]">
-          继续 <span>▶️</span>
-        </button>
-
+<!-- 核心改动：把纯文字改成带Icon的胶囊气泡 -->
+    <div class="flex justify-center mt-3 mb-5">
+      <div class="pill-highlight text-[#d97706] px-5 py-1.5 rounded-full flex items-center gap-2 border border-[#fde68a] font-bold text-sm">
+        <span class="text-lg drop-shadow-sm">⭐</span> 
+        <span>获得荣誉点</span>
+        <span class="text-lg text-[#b45309] ml-1">+80</span>
       </div>
     </div>
-  </div>
 
-  <script>
-    // 简单的按钮点击音效反馈模拟
-    const buttons = document.querySelectorAll('button');
-    buttons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        // 在微信小游戏中可以调用 wx.vibrateShort() 增加震动反馈
-        console.log('Button clicked: ' + btn.innerText);
-      });
-    });
-  </script>
-</body>
-</html>
+    <!-- 下一关目标卡片 (保留了你的原设计，微调了间距) -->
+    <div class="card-border rounded-2xl relative mt-6 pt-6 pb-2 px-4">
+      <!-- 卡片悬浮标题 -->
+      <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#7aaeb8] text-white px-4 py-1 rounded-full text-sm font-bold border-2 border-white shadow-sm">
+        下一关目标
+      </div>
+
+      <!-- 数据行 1 -->
+      <div class="flex justify-between items-center py-2 border-b border-slate-100 mb-1">
+        <div class="flex items-center gap-2 text-[#57748e] font-bold">
+          <span class="text-xl">👥</span> 病人总数
+        </div>
+        <div class="text-[#57748e] font-black text-lg">8 人</div>
+      </div>
+
+      <!-- 数据行 2 -->
+      <div class="flex justify-between items-center py-2">
+        <div class="flex items-center gap-2 text-[#57748e] font-bold">
+          <span class="text-xl">💖</span> 治愈人数
+        </div>
+        <div class="text-[#e86a7d] font-black text-lg">6 人</div>
+      </div>
+    </div>
