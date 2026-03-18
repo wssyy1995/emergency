@@ -464,3 +464,133 @@ export function getRandomToolByLevel(level) {
   const unlocked = getUnlockedTools(level)
   return unlocked[Math.floor(Math.random() * unlocked.length)]
 }
+
+// ==================== 升级系统配置 ====================
+
+// 本地存储键名
+const UPGRADE_STORAGE_KEY = 'emergency_game_upgrades'
+
+// 升级配置
+export const UpgradeConfig = {
+  // 护士升级选项
+  nurses: [
+    {
+      id: 'nurse_default',
+      name: '实习护士',
+      imagePath: 'images/nurse.png',
+      skill: '基础安抚，暂停耐心减少5秒',
+      cost: 0,
+      isDefault: true
+    },
+    {
+      id: 'nurse_pro',
+      name: '专业护士',
+      imagePath: 'images/nurse_pro.png',
+      skill: '安抚效果+50%，暂停耐心减少7.5秒',
+      cost: 100
+    },
+    {
+      id: 'nurse_expert',
+      name: '专家护士',
+      imagePath: 'images/nurse_pro.png', // 暂时使用相同图片
+      skill: '安抚效果+100%，暂停耐心减少10秒',
+      cost: 250
+    }
+  ],
+  
+  // 医生升级选项
+  doctors: [
+    {
+      id: 'doctor_default',
+      name: '实习医生',
+      imagePath: 'images/doctor_1_idle.png',
+      skill: '基础治疗速度',
+      cost: 0,
+      isDefault: true
+    },
+    {
+      id: 'doctor_pro',
+      name: '主治医生',
+      imagePath: 'images/nurse_pro.png', // 暂时使用护士图片
+      skill: '治疗速度+20%，更快治愈病人',
+      cost: 150
+    },
+    {
+      id: 'doctor_expert',
+      name: '主任医师',
+      imagePath: 'images/nurse_pro.png', // 暂时使用护士图片
+      skill: '治疗速度+40%，物品需求减少1个',
+      cost: 300
+    }
+  ],
+  
+  // 输液椅升级选项
+  ivSeats: [
+    {
+      id: 'ivseat_default',
+      name: '普通输液椅',
+      imagePath: 'images/seat_free.png',
+      skill: '基础治疗速度',
+      cost: 0,
+      isDefault: true
+    },
+    {
+      id: 'ivseat_pro',
+      name: '舒适输液椅',
+      imagePath: 'images/seat_pro.png',
+      skill: '治疗速度+15%，病人更不容易暴走',
+      cost: 120
+    },
+    {
+      id: 'ivseat_expert',
+      name: '豪华输液椅',
+      imagePath: 'images/seat_pro.png', // 暂时使用相同图片
+      skill: '治疗速度+30%，耐心消耗减半',
+      cost: 280
+    }
+  ]
+}
+
+// 从本地存储读取已选择的升级
+export function getSelectedUpgrades() {
+  try {
+    const data = wx.getStorageSync(UPGRADE_STORAGE_KEY)
+    if (data && data.upgrades) {
+      return data.upgrades
+    }
+  } catch (e) {
+    console.warn('[本地缓存] 读取升级状态失败:', e)
+  }
+  // 默认返回初始升级
+  return {
+    nurse: 'nurse_default',
+    doctor: 'doctor_default',
+    ivSeat: 'ivseat_default'
+  }
+}
+
+// 保存升级选择到本地缓存
+export function saveSelectedUpgrade(type, upgradeId) {
+  try {
+    const current = getSelectedUpgrades()
+    current[type] = upgradeId
+    wx.setStorageSync(UPGRADE_STORAGE_KEY, { upgrades: current })
+    console.log(`[本地缓存] 保存升级: ${type} = ${upgradeId}`)
+    return true
+  } catch (e) {
+    console.warn('[本地缓存] 保存升级失败:', e)
+    return false
+  }
+}
+
+// 获取指定类型的所有升级选项
+export function getUpgradesByType(type) {
+  return UpgradeConfig[type] || []
+}
+
+// 获取当前选中的升级配置
+export function getCurrentUpgrade(type) {
+  const selectedId = getSelectedUpgrades()[type]
+  const upgrades = getUpgradesByType(type)
+  return upgrades.find(u => u.id === selectedId) || upgrades[0]
+}

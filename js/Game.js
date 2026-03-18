@@ -6,7 +6,7 @@ import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
 import { audioManager } from './AudioManager.js'
-import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus, getLevelHintStatus, saveLevelHintStatus } from './GameConfig.js'
+import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus, getLevelHintStatus, saveLevelHintStatus, getSelectedUpgrades, saveSelectedUpgrade, getUpgradesByType, getCurrentUpgrade } from './GameConfig.js'
 
 // ==================== 马卡龙 UI 颜色配置（可自行调整）====================
 const UI_COLORS = {
@@ -198,6 +198,21 @@ export default class Game {
     
     // 【已移除】1秒轮询定时器已禁用（玩家需手动分配病人到病床）
     // this.bedAssignmentTimer = null
+    
+    // 【开始接诊按钮】状态
+    this.showStartButton = false
+    this.startButtonPressed = false
+    this.startButtonBounds = null
+    this.skipStartButton = false  // 是否跳过开始按钮（从下一关进入时为true）
+    
+    // 【升级模式】状态
+    this.upgradeMode = false  // 是否处于升级模式
+    this.upgradeModal = null  // 升级弹窗状态
+    this.showUpgradeBubbles = false  // 是否显示升级气泡
+    
+    // 实例ID，用于调试
+    this._instanceId = Math.random().toString(36).substr(2, 9)
+    console.log('[Game] 创建实例, ID:', this._instanceId)
     
     this.initTouch()
   }
@@ -519,11 +534,20 @@ export default class Game {
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
     if (this.spawnTimer) clearTimeout(this.spawnTimer)
     
-    // 【新玩家指引】如果不是新玩家，立即开始生成病人
-    if (!GameConfig.is_new_player) {
-      this.startPatientSpawning()
+    // 【开始接诊按钮】根据是否新玩家决定是否显示
+    // 新玩家：先不显示按钮，等关闭疾病清单后再显示
+    // 老玩家：直接显示按钮
+    // 从下一关进入：不显示按钮，直接开始
+    if (this.skipStartButton) {
+      // 从【继续】按钮进入下一关，直接开始游戏
+      this.showStartButton = false
+      console.log('[下一关] 直接开始游戏，不显示【开始接诊】按钮')
+    } else if (GameConfig.is_new_player) {
+      this.showStartButton = false
+      console.log('[新玩家指引] 游戏启动，暂不显示【开始接诊】按钮')
     } else {
-      console.log('[新玩家指引] 等待点击护士后开始生成病人')
+      this.showStartButton = true
+      console.log('[游戏开始] 显示【开始接诊】按钮')
     }
   }
   
@@ -608,7 +632,11 @@ export default class Game {
                      this.levelCompleteModal?.visible || 
                      this.gameWinModal?.visible
     
-    if (!this.isRunning && !hasModal) return
+    if (!this.isRunning && !hasModal && !this.upgradeMode) {
+      console.log('[loop] 跳过渲染, isRunning=', this.isRunning, 'hasModal=', hasModal, 'upgradeMode=', this.upgradeMode)
+      requestAnimationFrame((t) => this.loop(t))
+      return
+    }
     
     const deltaTime = timestamp - this.lastTime
     this.lastTime = timestamp
@@ -1001,6 +1029,11 @@ export default class Game {
   }
 
   render() {
+    // 调试：检查升级模式状态
+    if (this.upgradeMode && this.levelCompleteModal) {
+      console.log('[render] 异常：upgradeMode=true 但 levelCompleteModal 存在！')
+    }
+    
     // 【每帧强校准】彻底治愈 iOS 切后台画面缩小问题
     // 不管之前发生了什么，每帧都强制重置缩放比例
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -1044,6 +1077,13 @@ export default class Game {
     this.renderSeatSelectionModal()
     this.renderIVPatientSelectionModal()
     this.renderDiseaseListModal()
+    
+    // 【升级模式】渲染升级气泡和升级弹窗
+    this.renderUpgradeBubbles()
+    this.renderUpgradeModal()
+    
+    // 【开始接诊按钮】渲染
+    this.renderStartButton()
 
     // 【调试面板】放在最后渲染，确保层级最高
     if (this.debugModal && this.debugModal.visible) {
@@ -1534,6 +1574,25 @@ export default class Game {
     }
     
     // ===== 胶囊显示（根据是否开启倒计时显示2个或3个胶囊） =====
+    // 【升级模式】隐藏关卡、病人总数、治愈人数胶囊，只保留荣誉点
+    if (this.upgradeMode) {
+      // 只绘制荣誉点胶囊（在右侧）
+      const honorX = this.mapX + this.mapWidth - 160
+      const honorText = `${this.score}`
+      ctx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
+      const honorWidth = ctx.measureText(honorText).width + 60
+      ctx.fillStyle = 'rgba(255,255,255,0.25)'
+      fillRoundRect(ctx, honorX - 10, titleY - 13, honorWidth, 26, 13)
+      if (this.honorImage) {
+        ctx.drawImage(this.honorImage, honorX, titleY - 10, 20, 20)
+      }
+      ctx.fillStyle = '#FFF'
+      ctx.fillText(honorText, honorX + 35, titleY)
+      
+      // 升级模式下跳过其他胶囊的绘制
+      return
+    }
+    
     const levelConfig = getLevelConfig(this.currentLevel)
     const capsuleSpacing = 12  // 胶囊之间的间距（padding）
     const hasCountdown = this.hasCountdown || false  // 是否开启倒计时
@@ -1800,13 +1859,16 @@ export default class Game {
       }
       
       // 4. 关卡完成弹窗 - 处理按钮按下状态
+      console.log('[TouchStart] 检测关卡完成弹窗, visible:', this.levelCompleteModal?.visible)
       if (this.levelCompleteModal && this.levelCompleteModal.visible) {
         // 检查是否按下了升级按钮（使用原始位置检测）
         const modal = this.levelCompleteModal
         const upgradeBtnY = modal.upgradeBtn?.originalY || modal.upgradeBtn?.y || 0
+        console.log('[TouchStart] 升级按钮检测, 坐标:', x, y, '按钮Y:', upgradeBtnY, '按钮:', modal.upgradeBtn)
         if (modal.upgradeBtn &&
             x >= modal.upgradeBtn.x && x <= modal.upgradeBtn.x + modal.upgradeBtn.width &&
             y >= upgradeBtnY && y <= upgradeBtnY + modal.upgradeBtn.height) {
+          console.log('[TouchStart] 升级按钮按下!')
           modal.upgradeBtnPressed = true
           modal.continueBtnPressed = false
           return
@@ -1821,6 +1883,7 @@ export default class Game {
           return
         }
         // 点击了弹窗其他区域，只重置按钮状态，不响应其他操作（弹窗外部点击无效）
+        console.log('[TouchStart] 点击弹窗其他区域，重置按钮状态')
         modal.upgradeBtnPressed = false
         modal.continueBtnPressed = false
         return  // 阻止点击穿透到其他区域
@@ -1836,6 +1899,32 @@ export default class Game {
       // 5. 疾病清单弹窗（点击护士显示）
       if (this.diseaseListModal && this.diseaseListModal.visible) {
         if (this.handleDiseaseListTouch(x, y)) {
+          return
+        }
+      }
+      
+      // 6. 【升级模式】升级弹窗检测
+      if (this.upgradeModal && this.upgradeModal.visible) {
+        if (this.handleUpgradeModalTouch(x, y)) {
+          return
+        }
+      }
+      
+      // 7. 【升级模式】升级气泡检测
+      if (this.showUpgradeBubbles) {
+        if (this.handleUpgradeBubbleTouch(x, y)) {
+          return
+        }
+      }
+      
+      // 8. 【开始接诊按钮】检测
+      if (this.showStartButton && this.startButtonBounds) {
+        if (x >= this.startButtonBounds.x && x <= this.startButtonBounds.x + this.startButtonBounds.width &&
+            y >= this.startButtonBounds.y && y <= this.startButtonBounds.y + this.startButtonBounds.height) {
+          // 设置按下状态
+          this.startButtonPressed = true
+          // 触发震动（仅真机）
+          this.vibrate()
           return
         }
       }
@@ -1980,6 +2069,7 @@ export default class Game {
         this.vibrate()
         
         // 【新玩家指引】如果是新玩家，立即恢复正常护士图片（移除灯泡）
+        // 【修改】不再关闭开始接诊按钮，只是切换护士图片
         if (GameConfig.is_new_player) {
           console.log('[新玩家指引] 护士被点击，恢复正常图片，显示分诊指南')
           this.waitingArea.setNewPlayerMode(false)
@@ -1992,7 +2082,7 @@ export default class Game {
           console.log(`[关卡提示] 第${this.currentLevel + 1}关灯泡已关闭`)
         }
         
-        // 显示疾病清单弹窗
+        // 【修改】所有玩家点击护士都显示疾病清单（包括老玩家第一关）
         this.showDiseaseListModal()
         return
       }
@@ -2031,29 +2121,26 @@ export default class Game {
     // 触摸结束 - 释放暴走病人 或 执行按钮点击
     wx.onTouchEnd((e) => {
       // 处理关卡完成弹窗按钮释放
+      console.log('[TouchEnd] 处理关卡完成弹窗, visible:', this.levelCompleteModal?.visible, 'upgradeBtnPressed:', this.levelCompleteModal?.upgradeBtnPressed)
       if (this.levelCompleteModal && this.levelCompleteModal.visible) {
         const modal = this.levelCompleteModal
         const touch = e.changedTouches[0]
         const x = touch.clientX
         const y = touch.clientY
+        console.log('[TouchEnd] 关卡完成弹窗按钮释放检测, 坐标:', x, y)
+        console.log('[TouchEnd] upgradeBtnPressed:', modal.upgradeBtnPressed, 'upgradeBtn:', modal.upgradeBtn)
         
-        // 检查是否释放了升级按钮（使用原始位置检测）
-        const upgradeBtnReleaseY = modal.upgradeBtn?.originalY || modal.upgradeBtn?.y || 0
-        if (modal.upgradeBtnPressed && modal.upgradeBtn &&
-            x >= modal.upgradeBtn.x && x <= modal.upgradeBtn.x + modal.upgradeBtn.width &&
-            y >= upgradeBtnReleaseY && y <= upgradeBtnReleaseY + modal.upgradeBtn.height) {
-          console.log('释放了升级按钮')
+        // 简化的按钮释放检测：只要升级按钮被按下过，就触发
+        if (modal.upgradeBtnPressed) {
+          console.log('[TouchEnd] 升级按钮释放，进入升级模式!')
           modal.upgradeBtnPressed = false
           // 震动反馈
           if (this.platform === 'ios' || this.platform === 'android') {
             wx.vibrateShort({ type: 'light' })
           }
-          // 显示提示：升级功能开发中
-          wx.showToast({
-            title: '升级功能开发中',
-            icon: 'none',
-            duration: 1500
-          })
+          // 关闭关卡完成弹窗，进入升级模式
+          this.levelCompleteModal = null
+          this.enterUpgradeMode()
           return
         }
         
@@ -2076,6 +2163,26 @@ export default class Game {
         // 手指移出按钮区域，重置按下状态
         modal.upgradeBtnPressed = false
         modal.continueBtnPressed = false
+      }
+      
+      // 【开始接诊按钮】松开处理
+      if (this.startButtonPressed) {
+        const touch = e.changedTouches[0]
+        const x = touch.clientX
+        const y = touch.clientY
+        
+        // 检查是否还在按钮区域内
+        if (this.showStartButton && this.startButtonBounds &&
+            x >= this.startButtonBounds.x && x <= this.startButtonBounds.x + this.startButtonBounds.width &&
+            y >= this.startButtonBounds.y && y <= this.startButtonBounds.y + this.startButtonBounds.height) {
+          // 执行按钮点击
+          this.startButtonPressed = false
+          this.handleStartButtonClick()
+          return
+        }
+        
+        // 手指移出按钮区域，重置按下状态
+        this.startButtonPressed = false
       }
       
       if (!this.draggingRagePatient) return
@@ -2754,11 +2861,29 @@ export default class Game {
       return
     }
     
+    // 【升级模式】不检查关卡完成
+    if (this.upgradeMode) {
+      console.log('[升级模式] 跳过关卡完成检查')
+      return
+    }
+    
+    // 如果弹窗已经显示，不重复检查
+    if (this.levelCompleteModal && this.levelCompleteModal.visible) {
+      console.log('[升级模式] 弹窗已显示，跳过检查')
+      return
+    }
+    
     // 延迟检查，确保所有病人都已处理
     setTimeout(() => {
       // 再次检查游戏状态
       if (!this.isRunning) {
         console.log('游戏已停止，跳过检查')
+        return
+      }
+      
+      // 【升级模式】不检查关卡完成
+      if (this.upgradeMode) {
+        console.log('[升级模式] setTimeout回调中跳过关卡完成检查')
         return
       }
       
@@ -2795,6 +2920,18 @@ export default class Game {
   
   // 显示关卡完成提示（自定义确认弹窗）
   showLevelCompleteModal() {
+    // 【升级模式】不显示关卡完成弹窗
+    if (this.upgradeMode) {
+      console.log('[升级模式] 跳过显示关卡完成弹窗')
+      return
+    }
+    
+    // 如果弹窗已经存在，不重复创建
+    if (this.levelCompleteModal) {
+      console.log('[升级模式] 弹窗已存在，跳过创建')
+      return
+    }
+    
     console.log('显示关卡完成弹窗，当前关卡:', this.currentLevel)
     
     // 停止游戏运行（等待用户点击继续）
@@ -2803,7 +2940,17 @@ export default class Game {
     // 结算本关荣誉点
     const honorEarned = this.honorEarnedThisLevel || 0
     
+    console.log('[关卡完成] 创建弹窗, 实例ID:', this._instanceId)
     // 显示自定义确认弹窗
+    // 计算弹窗位置（用于初始化按钮位置）
+    const modalWidth = 280
+    const modalHeight = 310
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2 + 20
+    const btnY = modalY + 245
+    const btnWidth = 100
+    const btnHeight = 38
+    
     this.levelCompleteModal = {
       visible: true,
       isAnimating: true,
@@ -2813,8 +2960,24 @@ export default class Game {
       buttonText: '继续',
       honorEarned: honorEarned,  // 保存本关获得的荣誉点
       upgradeBtnPressed: false,   // 升级按钮按下状态
-      continueBtnPressed: false   // 继续按钮按下状态
+      continueBtnPressed: false,  // 继续按钮按下状态
+      // 预先初始化按钮位置，避免渲染前点击失败
+      upgradeBtn: {
+        x: modalX + 18,
+        y: btnY,
+        width: btnWidth,
+        height: btnHeight,
+        originalY: btnY
+      },
+      continueBtn: {
+        x: modalX + modalWidth - 18 - btnWidth,
+        y: btnY,
+        width: btnWidth,
+        height: btnHeight,
+        originalY: btnY
+      }
     }
+    console.log('[关卡完成] 弹窗已创建，按钮位置:', this.levelCompleteModal.upgradeBtn)
   }
   
   // 处理游戏胜利弹窗的点击
@@ -2850,17 +3013,10 @@ export default class Game {
     if (modal.upgradeBtn &&
         x >= modal.upgradeBtn.x && x <= modal.upgradeBtn.x + modal.upgradeBtn.width &&
         y >= modal.upgradeBtn.y && y <= modal.upgradeBtn.y + modal.upgradeBtn.height) {
-      console.log('点击了升级按钮')
-      // 震动反馈
-      if (this.platform === 'ios' || this.platform === 'android') {
-        wx.vibrateShort({ type: 'light' })
-      }
-      // 显示提示：升级功能开发中
-      wx.showToast({
-        title: '升级功能开发中',
-        icon: 'none',
-        duration: 1500
-      })
+      console.log('点击了升级按钮，设置按下状态')
+      // 设置按下状态，在 onTouchEnd 中处理升级
+      modal.upgradeBtnPressed = true
+      modal.continueBtnPressed = false
       return true
     }
     
@@ -3098,9 +3254,14 @@ export default class Game {
       clearInterval(this.countdownTimer)
     }
     
+    // 标记从下一关进入，跳过【开始接诊】按钮
+    this.skipStartButton = true
+    
     // 延迟一点再启动，确保清理完成
     setTimeout(() => {
       this.start()
+      // 直接开始生成病人（不需要点击【开始接诊】按钮）
+      this.startPatientSpawning()
     }, 100)
   }
   
@@ -3124,6 +3285,89 @@ export default class Game {
     
     // 手动触发一帧渲染，确保弹窗显示
     this.render()
+  }
+
+  // ==================== 升级模式相关方法 ====================
+  
+  // 进入升级模式
+  enterUpgradeMode() {
+    console.log('[升级模式] ========== 进入升级模式 START ==========')
+    console.log('[升级模式] 实例ID:', this._instanceId)
+    console.log('[升级模式] 当前 upgradeMode:', this.upgradeMode)
+    
+    // 彻底关闭所有弹窗
+    console.log('[升级模式] 设置 levelCompleteModal = null')
+    this.levelCompleteModal = null
+    this.gameOverModal = null
+    this.gameWinModal = null
+    this.levelToast = null
+    this.seatSelectionModal = null
+    this.ivPatientSelectionModal = null
+    this.diseaseListModal = null
+    
+    this.upgradeMode = true
+    console.log('[升级模式] upgradeMode 已设置为:', this.upgradeMode)
+    this.showUpgradeBubbles = true
+    this.showStartButton = true  // 显示【开始接诊】按钮
+    this.isRunning = false  // 停止游戏运行（停止生成病人）
+    
+    // 清除病人生成定时器
+    if (this.spawnTimer) {
+      clearTimeout(this.spawnTimer)
+      this.spawnTimer = null
+    }
+    if (this.initialSpawnTimer) {
+      clearTimeout(this.initialSpawnTimer)
+      this.initialSpawnTimer = null
+    }
+    
+    // 清除所有病人（升级模式下不保留病人）
+    this.waitingArea.clear()
+    this.bedArea.clear()
+    
+    // 加载已选择的升级配置
+    this.loadSelectedUpgrades()
+    
+    wx.showToast({
+      title: '点击角色气泡进行升级',
+      icon: 'none',
+      duration: 2000
+    })
+  }
+  
+  // 加载已选择的升级配置
+  loadSelectedUpgrades() {
+    const selected = getSelectedUpgrades()
+    console.log('[升级模式] 加载已选升级:', selected)
+    
+    // 应用护士升级
+    if (selected.nurse && this.waitingArea.nurse) {
+      this.waitingArea.nurse.setUpgrade(selected.nurse)
+    }
+    
+    // 应用医生升级
+    if (selected.doctor) {
+      this.doctors.forEach(doctor => {
+        doctor.setUpgrade(selected.doctor)
+      })
+    }
+    
+    // 应用输液椅升级
+    if (selected.ivSeat && this.bedArea) {
+      this.bedArea.setUpgrade(selected.ivSeat)
+    }
+  }
+  
+  // 退出升级模式（点击【开始接诊】时调用）
+  exitUpgradeMode() {
+    console.log('[升级模式] 退出升级模式，开始游戏')
+    this.upgradeMode = false
+    this.showUpgradeBubbles = false
+    this.showStartButton = false
+    this.isRunning = true
+    
+    // 开始生成病人
+    this.startPatientSpawning()
   }
 
   // 重新开始游戏
@@ -3157,6 +3401,14 @@ export default class Game {
     this.doctorIdCounter = 1  // 重置医生ID计数器
     this.waitingArea.clear()
     this.bedArea.clear()
+    
+    // 重置跳过按钮标志（重新开始游戏需要显示按钮）
+    this.skipStartButton = false
+    
+    // 重置升级模式
+    this.upgradeMode = false
+    this.showUpgradeBubbles = false
+    this.upgradeModal = null
     
     // 重新创建医生
     this.doctors = []
@@ -3247,9 +3499,21 @@ export default class Game {
   
   // 绘制关卡完成弹窗
   renderLevelCompleteModal() {
-    if (!this.levelCompleteModal || !this.levelCompleteModal.visible) {
+    // 【升级模式】不渲染关卡完成弹窗
+    if (this.upgradeMode) {
+      console.log('[renderLevelCompleteModal] upgradeMode=true, SKIP')
       return
     }
+    
+    if (!this.levelCompleteModal) {
+      return
+    }
+    
+    if (!this.levelCompleteModal.visible) {
+      return
+    }
+    
+    console.log('[renderLevelCompleteModal] 正在绘制, upgradeMode=', this.upgradeMode)
     
     const ctx = this.ctx
     const modalWidth = 280
@@ -3434,21 +3698,24 @@ export default class Game {
     const btnHeight = 38
     const btnSpacing = 15
     
-    // 保存按钮位置用于点击检测（使用未按下的原始位置）
-    this.levelCompleteModal.upgradeBtn = {
-      x: modalX + 18,
-      y: btnY,
-      width: btnWidth,
-      height: btnHeight,
-      originalY: btnY  // 保存原始Y位置用于点击检测
+    // 更新按钮位置用于点击检测（保留原有对象，只更新位置和尺寸）
+    if (!this.levelCompleteModal.upgradeBtn) {
+      this.levelCompleteModal.upgradeBtn = {}
     }
-    this.levelCompleteModal.continueBtn = {
-      x: modalX + modalWidth - 18 - btnWidth,
-      y: btnY,
-      width: btnWidth,
-      height: btnHeight,
-      originalY: btnY  // 保存原始Y位置用于点击检测
+    this.levelCompleteModal.upgradeBtn.x = modalX + 18
+    this.levelCompleteModal.upgradeBtn.y = btnY
+    this.levelCompleteModal.upgradeBtn.width = btnWidth
+    this.levelCompleteModal.upgradeBtn.height = btnHeight
+    this.levelCompleteModal.upgradeBtn.originalY = btnY
+    
+    if (!this.levelCompleteModal.continueBtn) {
+      this.levelCompleteModal.continueBtn = {}
     }
+    this.levelCompleteModal.continueBtn.x = modalX + modalWidth - 18 - btnWidth
+    this.levelCompleteModal.continueBtn.y = btnY
+    this.levelCompleteModal.continueBtn.width = btnWidth
+    this.levelCompleteModal.continueBtn.height = btnHeight
+    this.levelCompleteModal.continueBtn.originalY = btnY
     
     // 左按钮：升级（黄色，带按下动效，加大凸起）
     const upgradeBtnPressed = this.levelCompleteModal.upgradeBtnPressed || false
@@ -4273,6 +4540,481 @@ export default class Game {
     ctx.fillText(text, x + w / 2, y + h / 2 + 1)
   }
 
+  // ==================== 升级模式渲染方法 ====================
+  
+  // 渲染升级气泡
+  renderUpgradeBubbles() {
+    if (!this.showUpgradeBubbles) return
+    
+    const ctx = this.ctx
+    const time = Date.now()
+    
+    // 呼吸动画参数
+    const breathCycle = 1500 // 1.5秒一个周期
+    const breathScale = 1 + Math.sin(time / breathCycle * Math.PI * 2) * 0.1
+    
+    // 绘制护士升级气泡
+    const nurse = this.waitingArea.nurse
+    if (nurse) {
+      this.drawUpgradeBubble(ctx, nurse.x, nurse.y - 60 * nurse.scale, breathScale, 'nurse')
+    }
+    
+    // 绘制医生升级气泡
+    this.doctors.forEach((doctor, index) => {
+      this.drawUpgradeBubble(ctx, doctor.x, doctor.y - 50, breathScale, `doctor_${index}`)
+    })
+    
+    // 绘制输液椅升级气泡（在每个椅子上方）
+    if (this.bedArea && this.bedArea.ivSeats) {
+      this.bedArea.ivSeats.forEach((seat, index) => {
+        if (index === 0) { // 只在第一个椅子上显示气泡（代表所有椅子）
+          this.drawUpgradeBubble(ctx, seat.x + seat.width / 2, seat.y - 20, breathScale, 'ivSeat')
+        }
+      })
+    }
+  }
+  
+  // 绘制单个升级气泡
+  drawUpgradeBubble(ctx, x, y, scale, type) {
+    const bubbleRadius = 28 * scale
+    
+    ctx.save()
+    ctx.translate(x, y)
+    
+    // 气泡阴影
+    ctx.shadowColor = 'rgba(39, 174, 96, 0.4)'
+    ctx.shadowBlur = 12
+    ctx.shadowOffsetY = 4
+    
+    // 气泡背景（绿色圆形）
+    ctx.fillStyle = '#27AE60'
+    ctx.beginPath()
+    ctx.arc(0, 0, bubbleRadius, 0, Math.PI * 2)
+    ctx.fill()
+    
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetY = 0
+    
+    // 内部白色小圆（增加层次感）
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'
+    ctx.beginPath()
+    ctx.arc(-8, -8, bubbleRadius * 0.3, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // 文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 11px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('↑升级', 0, 0)
+    
+    ctx.restore()
+    
+    // 保存点击区域（用于检测点击）
+    if (!this.upgradeBubbleBounds) {
+      this.upgradeBubbleBounds = {}
+    }
+    this.upgradeBubbleBounds[type] = {
+      x: x - bubbleRadius,
+      y: y - bubbleRadius,
+      width: bubbleRadius * 2,
+      height: bubbleRadius * 2,
+      type: type
+    }
+  }
+  
+  // 渲染升级弹窗
+  renderUpgradeModal() {
+    if (!this.upgradeModal || !this.upgradeModal.visible) return
+    
+    const ctx = this.ctx
+    const { type, selectedIndex = 0 } = this.upgradeModal
+    
+    // 半透明遮罩
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    // 弹窗尺寸
+    const modalWidth = 320
+    const modalHeight = 420
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // 弹窗背景
+    ctx.fillStyle = '#FFFFFF'
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 20)
+    
+    // 弹窗标题
+    const titles = {
+      nurse: '👩‍⚕️ 护士升级',
+      doctor_0: '👨‍⚕️ 医生升级',
+      doctor_1: '👨‍⚕️ 医生升级',
+      ivSeat: '💺 输液椅升级'
+    }
+    ctx.fillStyle = '#333333'
+    ctx.font = 'bold 20px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText(titles[type] || '升级', modalX + modalWidth / 2, modalY + 20)
+    
+    // 获取升级选项
+    let upgrades = []
+    if (type === 'nurse') {
+      upgrades = getUpgradesByType('nurses')
+    } else if (type.startsWith('doctor')) {
+      upgrades = getUpgradesByType('doctors')
+    } else if (type === 'ivSeat') {
+      upgrades = getUpgradesByType('ivSeats')
+    }
+    
+    // 绘制升级选项卡片区域（支持横向滑动，这里简化显示当前选中）
+    const cardWidth = 200
+    const cardHeight = 240
+    const cardX = modalX + (modalWidth - cardWidth) / 2
+    const cardY = modalY + 60
+    
+    // 绘制左右箭头
+    if (selectedIndex > 0) {
+      ctx.fillStyle = '#38BDF8'
+      ctx.font = 'bold 24px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('◀', modalX + 25, cardY + cardHeight / 2)
+    }
+    if (selectedIndex < upgrades.length - 1) {
+      ctx.fillStyle = '#38BDF8'
+      ctx.font = 'bold 24px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('▶', modalX + modalWidth - 25, cardY + cardHeight / 2)
+    }
+    
+    // 绘制当前选中的升级卡片
+    const currentUpgrade = upgrades[selectedIndex]
+    if (currentUpgrade) {
+      // 卡片背景
+      const isSelected = this.isUpgradeSelected(type, currentUpgrade.id)
+      ctx.fillStyle = isSelected ? '#E8F5E9' : '#F8F9FA'
+      fillRoundRect(ctx, cardX, cardY, cardWidth, cardHeight, 12)
+      
+      // 卡片边框
+      ctx.strokeStyle = isSelected ? '#27AE60' : '#E0E0E0'
+      ctx.lineWidth = isSelected ? 3 : 1
+      strokeRoundRect(ctx, cardX, cardY, cardWidth, cardHeight, 12)
+      
+      // 升级图片（圆形）
+      const imgSize = 80
+      const imgY = cardY + 20
+      ctx.fillStyle = '#E0E0E0'
+      ctx.beginPath()
+      ctx.arc(cardX + cardWidth / 2, imgY + imgSize / 2, imgSize / 2, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // 图片加载和绘制（简化处理，使用占位符）
+      // TODO: 加载实际图片
+      ctx.fillStyle = '#999999'
+      ctx.font = '12px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('[图片]', cardX + cardWidth / 2, imgY + imgSize / 2)
+      
+      // 升级名称
+      ctx.fillStyle = '#333333'
+      ctx.font = 'bold 16px "PingFang SC", sans-serif'
+      ctx.fillText(currentUpgrade.name, cardX + cardWidth / 2, imgY + imgSize + 15)
+      
+      // 技能描述（多行）
+      ctx.fillStyle = '#666666'
+      ctx.font = '13px "PingFang SC", sans-serif'
+      const skillLines = this.wrapText(ctx, currentUpgrade.skill, cardWidth - 30, 13)
+      let lineY = imgY + imgSize + 45
+      skillLines.forEach(line => {
+        ctx.fillText(line, cardX + cardWidth / 2, lineY)
+        lineY += 18
+      })
+      
+      // 升级按钮或已选择标记
+      const btnY = cardY + cardHeight - 45
+      const btnWidth = 140
+      const btnHeight = 36
+      const btnX = cardX + (cardWidth - btnWidth) / 2
+      
+      if (isSelected) {
+        // 已选择标记
+        ctx.fillStyle = '#27AE60'
+        fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 18)
+        ctx.fillStyle = '#FFFFFF'
+        ctx.font = 'bold 14px sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('✓ 已选择', btnX + btnWidth / 2, btnY + btnHeight / 2)
+      } else {
+        // 升级按钮
+        const canAfford = this.score >= currentUpgrade.cost
+        ctx.fillStyle = canAfford ? '#38BDF8' : '#BDBDBD'
+        fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 18)
+        ctx.fillStyle = '#FFFFFF'
+        ctx.font = 'bold 14px sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        const btnText = currentUpgrade.cost > 0 ? `升级 (${currentUpgrade.cost})` : '初始等级'
+        ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2)
+        
+        // 保存按钮区域
+        this.upgradeModal.upgradeBtn = {
+          x: btnX,
+          y: btnY,
+          width: btnWidth,
+          height: btnHeight,
+          upgradeId: currentUpgrade.id,
+          cost: currentUpgrade.cost,
+          canAfford
+        }
+      }
+    }
+    
+    // 关闭按钮
+    const closeBtnSize = 30
+    const closeBtnX = modalX + modalWidth - closeBtnSize - 10
+    const closeBtnY = modalY + 10
+    ctx.fillStyle = '#E0E0E0'
+    ctx.beginPath()
+    ctx.arc(closeBtnX + closeBtnSize / 2, closeBtnY + closeBtnSize / 2, closeBtnSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#666666'
+    ctx.font = 'bold 18px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('×', closeBtnX + closeBtnSize / 2, closeBtnY + closeBtnSize / 2)
+    
+    this.upgradeModal.closeBtn = {
+      x: closeBtnX,
+      y: closeBtnY,
+      width: closeBtnSize,
+      height: closeBtnSize
+    }
+    
+    // 保存弹窗区域用于点击检测
+    this.upgradeModal.bounds = { x: modalX, y: modalY, width: modalWidth, height: modalHeight }
+    this.upgradeModal.leftArrow = { x: modalX, y: cardY, width: 50, height: cardHeight }
+    this.upgradeModal.rightArrow = { x: modalX + modalWidth - 50, y: cardY, width: 50, height: cardHeight }
+  }
+  
+  // 辅助方法：自动换行
+  wrapText(ctx, text, maxWidth, fontSize) {
+    const chars = text.split('')
+    const lines = []
+    let currentLine = ''
+    
+    for (let char of chars) {
+      const testLine = currentLine + char
+      const metrics = ctx.measureText(testLine)
+      if (metrics.width > maxWidth && currentLine !== '') {
+        lines.push(currentLine)
+        currentLine = char
+      } else {
+        currentLine = testLine
+      }
+    }
+    lines.push(currentLine)
+    return lines
+  }
+  
+  // 检查升级是否已选择
+  isUpgradeSelected(type, upgradeId) {
+    const selected = getSelectedUpgrades()
+    if (type === 'nurse') return selected.nurse === upgradeId
+    if (type.startsWith('doctor')) return selected.doctor === upgradeId
+    if (type === 'ivSeat') return selected.ivSeat === upgradeId
+    return false
+  }
+  
+  // 显示升级弹窗
+  showUpgradeModal(type) {
+    this.upgradeModal = {
+      visible: true,
+      type: type,
+      selectedIndex: 0
+    }
+    console.log('[升级模式] 打开升级弹窗:', type)
+  }
+  
+  // 处理升级弹窗点击
+  handleUpgradeModalTouch(x, y) {
+    if (!this.upgradeModal || !this.upgradeModal.visible) return false
+    
+    const modal = this.upgradeModal
+    
+    // 检查关闭按钮
+    if (modal.closeBtn &&
+        x >= modal.closeBtn.x && x <= modal.closeBtn.x + modal.closeBtn.width &&
+        y >= modal.closeBtn.y && y <= modal.closeBtn.y + modal.closeBtn.height) {
+      this.upgradeModal.visible = false
+      this.upgradeModal = null
+      return true
+    }
+    
+    // 检查左右箭头（切换选项）
+    let upgrades = []
+    if (modal.type === 'nurse') upgrades = getUpgradesByType('nurses')
+    else if (modal.type.startsWith('doctor')) upgrades = getUpgradesByType('doctors')
+    else if (modal.type === 'ivSeat') upgrades = getUpgradesByType('ivSeats')
+    
+    // 左箭头
+    if (modal.leftArrow && modal.selectedIndex > 0 &&
+        x >= modal.leftArrow.x && x <= modal.leftArrow.x + modal.leftArrow.width &&
+        y >= modal.leftArrow.y && y <= modal.leftArrow.y + modal.leftArrow.height) {
+      this.upgradeModal.selectedIndex--
+      this.vibrate()
+      return true
+    }
+    
+    // 右箭头
+    if (modal.rightArrow && modal.selectedIndex < upgrades.length - 1 &&
+        x >= modal.rightArrow.x && x <= modal.rightArrow.x + modal.rightArrow.width &&
+        y >= modal.rightArrow.y && y <= modal.rightArrow.y + modal.rightArrow.height) {
+      this.upgradeModal.selectedIndex++
+      this.vibrate()
+      return true
+    }
+    
+    // 检查升级按钮
+    if (modal.upgradeBtn &&
+        x >= modal.upgradeBtn.x && x <= modal.upgradeBtn.x + modal.upgradeBtn.width &&
+        y >= modal.upgradeBtn.y && y <= modal.upgradeBtn.y + modal.upgradeBtn.height) {
+      if (modal.upgradeBtn.canAfford && !this.isUpgradeSelected(modal.type, modal.upgradeBtn.upgradeId)) {
+        // 执行升级
+        this.purchaseUpgrade(modal.type, modal.upgradeBtn.upgradeId, modal.upgradeBtn.cost)
+      }
+      return true
+    }
+    
+    // 点击弹窗外部不关闭（必须点关闭按钮）
+    return true
+  }
+  
+  // 购买升级
+  purchaseUpgrade(type, upgradeId, cost) {
+    // 扣除荣誉点
+    this.score -= cost
+    
+    // 确定存储类型
+    let storageType = ''
+    if (type === 'nurse') storageType = 'nurse'
+    else if (type.startsWith('doctor')) storageType = 'doctor'
+    else if (type === 'ivSeat') storageType = 'ivSeat'
+    
+    // 保存到本地存储
+    saveSelectedUpgrade(storageType, upgradeId)
+    
+    // 应用到游戏
+    this.loadSelectedUpgrades()
+    
+    // 震动反馈
+    this.vibrate()
+    
+    wx.showToast({
+      title: '升级成功！',
+      icon: 'success',
+      duration: 1500
+    })
+    
+    console.log('[升级模式] 购买升级:', type, upgradeId, '花费:', cost)
+  }
+  
+  // 处理升级气泡点击
+  handleUpgradeBubbleTouch(x, y) {
+    if (!this.showUpgradeBubbles || !this.upgradeBubbleBounds) return false
+    
+    for (const [type, bounds] of Object.entries(this.upgradeBubbleBounds)) {
+      if (x >= bounds.x && x <= bounds.x + bounds.width &&
+          y >= bounds.y && y <= bounds.y + bounds.height) {
+        console.log('[升级模式] 点击升级气泡:', type)
+        this.showUpgradeModal(type)
+        this.vibrate()
+        return true
+      }
+    }
+    return false
+  }
+
+  // 【开始接诊按钮】渲染
+  renderStartButton() {
+    if (!this.showStartButton) return
+    
+    const ctx = this.ctx
+    
+    // 按钮位置和尺寸（屏幕底部中央）
+    const btnWidth = 160
+    const btnHeight = 48
+    const btnX = (this.screenWidth - btnWidth) / 2
+    const btnY = this.screenHeight - btnHeight - 40
+    
+    // 按钮样式配置（果冻风格）
+    const style = {
+      topColor: '#38BDF8',      // 顶层主色（天蓝色）
+      bottomColor: '#0284C7',   // 底层厚度色（深蓝色）
+      textColor: '#FFFFFF',     // 文字颜色（白色）
+      thickness: 6,             // 3D厚度
+      radius: 24                // 圆角半径
+    }
+    
+    // 呼吸动效：轻微缩放
+    const breathScale = 1 + Math.sin(this.lastTime / 300) * 0.02
+    const pressOffsetY = this.startButtonPressed ? style.thickness : 0
+    
+    ctx.save()
+    ctx.translate(btnX + btnWidth / 2, btnY + btnHeight / 2)
+    ctx.scale(breathScale, breathScale)
+    ctx.translate(-(btnX + btnWidth / 2), -(btnY + btnHeight / 2))
+    
+    // 1. 绘制底层阴影/厚度（固定位置）
+    ctx.fillStyle = style.bottomColor
+    fillRoundRect(ctx, btnX, btnY + style.thickness, btnWidth, btnHeight, style.radius)
+    
+    // 2. 绘制顶层（会随按下状态移动）
+    ctx.fillStyle = style.topColor
+    fillRoundRect(ctx, btnX, btnY + pressOffsetY, btnWidth, btnHeight, style.radius)
+    
+    // 3. 绘制文字（跟着顶层一起移动）
+    ctx.fillStyle = style.textColor
+    ctx.font = 'bold 18px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('开始接诊', btnX + btnWidth / 2, btnY + btnHeight / 2 + pressOffsetY)
+    
+    ctx.restore()
+    
+    // 记录按钮点击区域
+    this.startButtonBounds = {
+      x: btnX,
+      y: btnY,
+      width: btnWidth,
+      height: btnHeight
+    }
+  }
+  
+  // 【开始接诊按钮】点击处理
+  handleStartButtonClick() {
+    console.log('[开始接诊] 按钮被点击')
+    
+    // 如果在升级模式，退出升级模式并开始游戏
+    if (this.upgradeMode) {
+      this.exitUpgradeMode()
+      return
+    }
+    
+    // 隐藏按钮
+    this.showStartButton = false
+    
+    // 显示准备气泡
+    this.waitingArea.nurse.showReadyHint()
+    
+    // 3秒后气泡消失，开始生成病人
+    setTimeout(() => {
+      console.log('[开始接诊] 准备气泡消失，开始生成病人')
+      this.startPatientSpawning()
+    }, 3000)
+  }
+
   // 启用医生和护士的动画（第一个病人生成后调用）
   enableCharacterAnimations() {
     console.log('[动画控制] 第一个病人生成，启用角色动画')
@@ -4306,20 +5048,14 @@ export default class Game {
   handleNewPlayerGuideComplete() {
     // 如果还是新玩家模式（未开始生成病人）
     if (GameConfig.is_new_player) {
-      console.log('[新玩家指引] 分诊指南已关闭，显示准备气泡')
+      console.log('[新玩家指引] 分诊指南已关闭，显示【开始接诊】按钮')
       // 更新为新玩家状态为 false
       GameConfig.is_new_player = false
       // 保存到本地缓存（下次游戏不再显示新玩家指引）
       saveNewPlayerStatus(false)
       
-      // 显示准备气泡
-      this.waitingArea.nurse.showReadyHint()
-      
-      // 3秒后气泡自动消失，并开始生成病人
-      setTimeout(() => {
-        console.log('[新玩家指引] 准备气泡消失，开始生成病人')
-        this.startPatientSpawning()
-      }, 3000)
+      // 【修改】不再直接开始游戏，而是显示【开始接诊】按钮
+      this.showStartButton = true
     }
     // 如果 is_new_player 已经是 false，不做任何处理
   }
@@ -4335,7 +5071,7 @@ export default class Game {
     // 点击弹窗外部关闭弹窗
     if (x < modal.x || x > modal.x + modal.width || y < modal.y || y > modal.y + modal.height) {
       this.diseaseListModal = null
-      // 【新玩家指引】如果是新玩家模式下关闭弹窗，开始游戏
+      // 【新玩家指引】处理新玩家状态（老玩家不做处理）
       this.handleNewPlayerGuideComplete()
       return true
     }
@@ -4364,7 +5100,7 @@ export default class Game {
       } else {
         // 最后一页，关闭弹窗
         this.diseaseListModal = null
-        // 【新玩家指引】如果是新玩家模式下关闭弹窗，开始游戏
+        // 【新玩家指引】处理新玩家状态（老玩家不做处理）
         this.handleNewPlayerGuideComplete()
       }
       return true

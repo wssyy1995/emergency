@@ -107,6 +107,11 @@ export default class Doctor {
     this.isLocked = false
     this.lockedByPatient = null
     
+    // 【升级系统】当前升级ID
+    this.currentUpgradeId = 'doctor_default'
+    this.upgradedIdleImage = null
+    this.upgradedTreatImage = null
+    
     // 加载图片
     // 从全局缓存获取图片
     this.idleImage = DoctorImageCache.getIdleImage(this.id)
@@ -357,8 +362,8 @@ export default class Doctor {
     ctx.ellipse(0, 28 * scale, 18 * scale, 6 * scale, 0, 0, Math.PI * 2)
     ctx.fill()
     
-    // 根据状态选择图片
-    const currentImage = this.state === 'treating' ? this.treatImage : this.idleImage
+    // 根据状态选择图片（支持升级）
+    const currentImage = this.state === 'treating' ? this.getCurrentTreatImage() : this.getCurrentIdleImage()
     
     if (currentImage && currentImage.width > 0) {
       // 使用图片
@@ -505,5 +510,56 @@ export default class Doctor {
       
       ctx.restore()
     }
+  }
+  
+  // 【升级系统】设置升级
+  setUpgrade(upgradeId) {
+    if (this.currentUpgradeId === upgradeId) return
+    
+    this.currentUpgradeId = upgradeId
+    
+    // 如果不是默认升级，加载升级图片
+    if (upgradeId !== 'doctor_default') {
+      // 加载空闲图片
+      const idleImg = wx.createImage()
+      idleImg.onload = () => {
+        this.upgradedIdleImage = idleImg
+        console.log('[医生升级] 加载空闲图片成功:', upgradeId)
+      }
+      idleImg.onerror = () => {
+        console.warn('[医生升级] 加载空闲图片失败:', upgradeId)
+        this.upgradedIdleImage = null
+      }
+      // 所有医生使用相同的升级图片（简化处理）
+      idleImg.src = `images/${upgradeId}.png`
+      
+      // 加载治疗图片（使用相同图片）
+      const treatImg = wx.createImage()
+      treatImg.onload = () => {
+        this.upgradedTreatImage = treatImg
+      }
+      treatImg.src = `images/${upgradeId}.png`
+    } else {
+      this.upgradedIdleImage = null
+      this.upgradedTreatImage = null
+    }
+    
+    console.log('[医生升级] 设置升级:', upgradeId)
+  }
+  
+  // 【升级系统】获取当前空闲图片
+  getCurrentIdleImage() {
+    if (this.upgradedIdleImage) {
+      return this.upgradedIdleImage
+    }
+    return this.idleImage
+  }
+  
+  // 【升级系统】获取当前治疗图片
+  getCurrentTreatImage() {
+    if (this.upgradedTreatImage) {
+      return this.upgradedTreatImage
+    }
+    return this.treatImage
   }
 }

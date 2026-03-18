@@ -41,6 +41,10 @@ export default class Nurse {
     // 【关卡提示】第2关及以后的灯泡提示
     this.showLevelHint = false
     
+    // 【升级系统】当前升级ID
+    this.currentUpgradeId = 'nurse_default'
+    this.upgradedImage = null  // 升级后的图片
+    
     this.loadImage()
   }
 
@@ -148,7 +152,7 @@ export default class Nurse {
     // 根据是否新玩家选择图片
     const currentImage = (this.isNewPlayer && this.nurseHelloImage && this.nurseHelloImage.width > 0) 
       ? this.nurseHelloImage 
-      : this.nurseImage
+      : this.getCurrentImage()
     
     if (currentImage && currentImage.width > 0) {
       // 使用图片绘制护士
@@ -393,6 +397,43 @@ export default class Nurse {
     ctx.stroke()
     
     ctx.restore()
+  }
+  
+  // 【升级系统】设置升级
+  setUpgrade(upgradeId) {
+    if (this.currentUpgradeId === upgradeId) return
+    
+    this.currentUpgradeId = upgradeId
+    
+    // 如果不是默认升级，加载升级图片
+    if (upgradeId !== 'nurse_default') {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.upgradedImage = img
+        console.log('[护士升级] 加载升级图片成功:', upgradeId)
+      }
+      img.onerror = () => {
+        console.warn('[护士升级] 加载升级图片失败:', upgradeId)
+        this.upgradedImage = null
+      }
+      // 根据升级ID确定图片路径
+      img.src = `images/${upgradeId}.png`
+    } else {
+      this.upgradedImage = null
+    }
+    
+    console.log('[护士升级] 设置升级:', upgradeId)
+  }
+  
+  // 【升级系统】获取当前显示的图片
+  getCurrentImage() {
+    if (this.isNewPlayer && this.nurseHelloImage) {
+      return this.nurseHelloImage
+    }
+    if (this.upgradedImage) {
+      return this.upgradedImage
+    }
+    return this.nurseImage
   }
   
   // 点击检测（扩大点击范围方便玩家点击）

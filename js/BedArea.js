@@ -151,6 +151,46 @@ class IVSeat {
     
     this.seatFreeImage = getIVSeatFreeImage()
     this.seatOccupiedImage = getIVSeatOccupiedImage()
+    
+    // 【升级系统】
+    this.currentUpgradeId = 'ivseat_default'
+    this.upgradedFreeImage = null
+    this.upgradedOccupiedImage = null
+  }
+  
+  // 【升级系统】设置升级
+  setUpgrade(upgradeId) {
+    if (this.currentUpgradeId === upgradeId) return
+    
+    this.currentUpgradeId = upgradeId
+    
+    // 如果不是默认升级，加载升级图片
+    if (upgradeId !== 'ivseat_default') {
+      const freeImg = wx.createImage()
+      freeImg.onload = () => {
+        this.upgradedFreeImage = freeImg
+      }
+      freeImg.src = `images/${upgradeId}.png`
+      
+      const occupiedImg = wx.createImage()
+      occupiedImg.onload = () => {
+        this.upgradedOccupiedImage = occupiedImg
+      }
+      occupiedImg.src = `images/${upgradeId}.png`
+    } else {
+      this.upgradedFreeImage = null
+      this.upgradedOccupiedImage = null
+    }
+  }
+  
+  // 【升级系统】获取当前空闲图片
+  getCurrentFreeImage() {
+    return this.upgradedFreeImage || this.seatFreeImage
+  }
+  
+  // 【升级系统】获取当前占用图片
+  getCurrentOccupiedImage() {
+    return this.upgradedOccupiedImage || this.seatOccupiedImage
   }
 
   assignPatient(patient) {
@@ -178,7 +218,7 @@ class IVSeat {
   }
 
   render(ctx, curedImage = null) {
-    const currentImage = this.patient ? this.seatOccupiedImage : this.seatFreeImage
+    const currentImage = this.patient ? this.getCurrentOccupiedImage() : this.getCurrentFreeImage()
     
     if (currentImage && currentImage.width > 0) {
       // 使用椅子定义的宽高，保持图片比例
@@ -476,5 +516,13 @@ export default class BedArea {
     ctx.fillText(text, x, y)
     
     ctx.restore()
+  }
+  
+  // 【升级系统】设置输液椅升级
+  setUpgrade(upgradeId) {
+    console.log('[BedArea升级] 设置输液椅升级:', upgradeId)
+    this.ivSeats.forEach(seat => {
+      seat.setUpgrade(upgradeId)
+    })
   }
 }
