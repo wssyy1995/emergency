@@ -7,6 +7,8 @@ const PatientImageCache = {
   normalImages: {},
   // 生气状态图片缓存: { patientType: image }
   angryImages: {},
+  // 生病状态图片缓存: { patientType: image }
+  sickImages: {},
   // 爆炸图标（全局只加载一次）
   boomImage: null,
   // 是否已初始化
@@ -50,6 +52,22 @@ const PatientImageCache = {
       this.normalImages[patientType] = img
     }
     return this.normalImages[patientType]
+  },
+  
+  // 获取生病状态图片
+  getSickImage(patientType) {
+    if (!this.sickImages[patientType]) {
+      const img = wx.createImage()
+      img.onload = () => {
+        this.sickImages[patientType] = img
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load patient sick image: images/patient_${patientType}_sick.png`)
+      }
+      img.src = `images/patient_${patientType}_sick.png`
+      this.sickImages[patientType] = img
+    }
+    return this.sickImages[patientType]
   },
   
   // 获取生气状态图片
@@ -220,12 +238,15 @@ export default class Patient {
     this.patiencePaused = false     // 耐心值是否暂停减少
     this.patiencePauseTime = 0      // 暂停剩余时间（毫秒）
     
-    // 病人图片编号（使用 patientDetail.id，1-14 号循环）
-    this.patientType = patientDetail ? ((patientDetail.id - 1) % 14) + 1 : ((id - 1) % 14) + 1
+    // 病人图片编号（使用 patientDetail.id，直接对应图片编号 1-26）
+    this.patientType = patientDetail ? patientDetail.id : id
     
     // 从全局缓存获取图片（避免重复加载）
-    this.normalImage = PatientImageCache.getNormalImage(this.patientType)
-    this.angryImage = PatientImageCache.getAngryImage(this.patientType)
+    // normalImage 保留给将来使用，现在默认显示 sick 图片
+    this.sickImage = PatientImageCache.getSickImage(this.patientType)
+    this.normalImage = this.sickImage  // 目前 normal 也指向 sick
+    // angryImage 也使用 sick 图片
+    this.angryImage = this.sickImage
     this.boomImage = PatientImageCache.getBoomImage()
     this.comfortImage = PatientImageCache.getComfortImage()
     this.curingImage = PatientImageCache.getCuringImage()
@@ -348,7 +369,8 @@ export default class Patient {
         }
       }
     } else {
-      this.bounceOffset = 0  // 去掉待机时的上下摆动
+      // 待机时的上下摆动（幅度比护士小）
+      this.bounceOffset = Math.sin(this.animationTime / 800) * -1
     }
     
     if (this.isCured) {
@@ -502,8 +524,8 @@ export default class Patient {
     // 根据基础尺寸计算缩放比例
     const scale = this.width / this.baseWidth
     
-    // 绘制病人图片
-    const currentImage = this.isAngry ? this.angryImage : this.normalImage
+    // 绘制病人图片（默认显示 sick 图片）
+    const currentImage = this.isAngry ? this.angryImage : this.sickImage
     
     if (currentImage && currentImage.width > 0) {
       // 使用图片绘制病人：targetHeight可以调整病人高度
@@ -622,7 +644,7 @@ export default class Patient {
       // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色，暂停状态粉色
       let barColor
       if (this.patiencePaused) {
-        barColor = '#F5B2AE' // 粉色（安抚暂停状态）
+        barColor = '#f78e88' // 粉色（安抚暂停状态）
       } else if (patiencePercent > 0.5) {
         barColor = '#2ECC71' // 绿色
       } else if (patiencePercent > 0.3) {

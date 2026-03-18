@@ -223,27 +223,22 @@ export default class WaitingArea {
     
     // 绘制植物（在护士台左边）
     if (this.plantImage && this.plantImage.width > 0) {
-      const plantWidth = 40
-      const plantHeight = 60
-      const plantOffsetX = -125
-      const plantOffsetY = -30
-      
-      const plantX = centerX - deskWidth / 2 - plantWidth / 2 - plantOffsetX
-      const plantY = deskY + deskHeight - plantHeight + plantOffsetY
+      const plantWidth = deskWidth * 0.28
+      const plantHeight = plantWidth * 1.5
+      // 相对于护士台左侧的位置（使用比例，适配所有屏幕）
+      const plantX = centerX + deskWidth * 0.32
+      const plantY = deskY + deskHeight - plantHeight * 1.62
       
       ctx.drawImage(this.plantImage, plantX, plantY, plantWidth, plantHeight)
     }
     
     // 绘制书架（在护士台右边，和植物同一Y位置）
     if (this.bookshelfImage && this.bookshelfImage.width > 0) {
-      const bookshelfWidth = 35
-      const bookshelfHeight = 50
-      // 植物Y坐标 = deskY + deskHeight - plantHeight + plantOffsetY
-      // 简化后：deskY + deskHeight - 65 - 35 = deskY + deskHeight - 100
-      const plantY = deskY + deskHeight - 83
-      const bookshelfY = plantY
-      // 放在护士台右边，与植物对称
-      const bookshelfX = centerX - deskWidth / 2 -20
+      const bookshelfWidth = deskWidth * 0.28
+      const bookshelfHeight = bookshelfWidth * 1.3
+      // 相对于护士台左侧的位置
+      const bookshelfX = centerX - deskWidth *0.65
+      const bookshelfY = deskY + deskHeight - bookshelfHeight * 1.74
       
       ctx.drawImage(this.bookshelfImage, bookshelfX, bookshelfY, bookshelfWidth, bookshelfHeight)
     }
