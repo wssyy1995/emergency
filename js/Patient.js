@@ -644,7 +644,7 @@ export default class Patient {
       // 耐心条颜色：>50%绿色，30%-50%橙色，<30%红色，暂停状态粉色
       let barColor
       if (this.patiencePaused) {
-        barColor = '#F5B2AE' // 粉色（安抚暂停状态）
+        barColor = '#f78e88' // 粉色（安抚暂停状态）
       } else if (patiencePercent > 0.5) {
         barColor = '#2ECC71' // 绿色
       } else if (patiencePercent > 0.3) {

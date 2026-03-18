@@ -4,124 +4,155 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Canvas 急救间胶囊标签</title>
+  <title>关卡结算弹窗</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap');
+
     body {
+      background-color: #A5DDF0; /* 模拟游戏背景被遮罩 */
+      background-image: radial-gradient(circle, #BCE4F5 10%, transparent 20%), 
+                        radial-gradient(circle, #BCE4F5 10%, transparent 20%);
+      background-size: 50px 50px;
+      background-position: 0 0, 25px 25px;
+      font-family: 'Nunito', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
       margin: 0;
-      background-color: #333;
+      user-select: none;
     }
-    canvas {
-      background-color: #EBF4F6; /* 模拟原图的浅蓝色背景 */
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      border-radius: 20px;
+
+    /* 弹窗出场动画 */
+    @keyframes popIn {
+      0% { transform: scale(0.6); opacity: 0; }
+      60% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .animate-pop {
+      animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    /* 光芒旋转动画 */
+    @keyframes spinLight {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .rays {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 400px;
+      height: 400px;
+      background: repeating-conic-gradient(
+        from 0deg,
+        rgba(255, 255, 255, 0.4) 0deg 15deg,
+        transparent 15deg 30deg
+      );
+      animation: spinLight 10s linear infinite;
+      z-index: -1;
+      border-radius: 50%;
+    }
+
+    /* 果冻按钮基础样式 */
+    .jelly-btn {
+      position: relative;
+      transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    .jelly-btn:active {
+      transform: translateY(6px);
     }
   </style>
 </head>
-<body>
+<body class="bg-black/40"> <!-- 暗色遮罩层 -->
 
-<canvas id="gameCanvas" width="400" height="200"></canvas>
-
-<script>
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
-
-  // 处理高清屏模糊问题 (DPI 缩放)
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.scale(dpr, dpr);
-
-  // 中心坐标
-  const cx = rect.width / 2;
-  const cy = rect.height / 2;
-
-  // 提取的颜色值
-  const COLOR_RED = '#D32222';      // 主题亮红
-  const COLOR_WHITE = '#FFFFFF';    // 纯白
-  const COLOR_DARK_RED = '#821313'; // 文字的深红色描边
-
-  /**
-   * 核心函数：绘制绝对居中的胶囊体 (兼容性极强的弧线画法)
-   * @param {number} x - 中心X
-   * @param {number} y - 中心Y
-   * @param {number} w - 总宽度
-   * @param {number} h - 总高度
-   * @param {string} color - 填充颜色
-   */
-  function drawPill(x, y, w, h, color) {
-    const r = h / 2; // 胶囊的圆角半径是高度的一半
-    ctx.beginPath();
-    // 顶部水平线
-    ctx.moveTo(x - w / 2 + r, y - h / 2);
-    ctx.lineTo(x + w / 2 - r, y - h / 2);
-    // 右侧半圆
-    ctx.arc(x + w / 2 - r, y, r, -Math.PI / 2, Math.PI / 2);
-    // 底部水平线
-    ctx.lineTo(x - w / 2 + r, y + h / 2);
-    // 左侧半圆
-    ctx.arc(x - w / 2 + r, y, r, Math.PI / 2, -Math.PI / 2);
-    ctx.closePath();
+  <!-- 弹窗主容器 -->
+  <div class="relative w-[340px] animate-pop mt-12">
     
-    ctx.fillStyle = color;
-    ctx.fill();
-  }
+    <!-- 背部光芒 (增加过关的成就感) -->
+    <div class="rays pointer-events-none"></div>
 
-  function render() {
-    // 清除画布
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    <!-- 顶部装饰 (奖杯/星星) -->
+    <div class="absolute -top-16 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center">
+      <div class="text-6xl drop-shadow-md">🏆</div>
+      <div class="absolute top-2 -left-8 text-3xl rotate-[-20deg]">✨</div>
+      <div class="absolute top-4 -right-6 text-2xl rotate-[15deg]">🌟</div>
+    </div>
 
-    // ==========================================
-    // 第一步：利用"同心缩小"法绘制多层边框胶囊
-    // ==========================================
-    // 1. 最外层细红边 (宽260, 高94)
-    drawPill(cx, cy, 260, 94, COLOR_RED);
-    
-    // 2. 中间层白边 (宽254, 高88 -> 意味着红边厚度为3px)
-    drawPill(cx, cy, 254, 88, COLOR_WHITE);
-    
-    // 3. 内层红底 (宽242, 高76 -> 意味着白边厚度为6px)
-    drawPill(cx, cy, 242, 76, COLOR_RED);
-
-
-    // ==========================================
-    // 第二步：绘制带厚重描边的文字
-    // ==========================================
-    // 设置字体：越粗越有游戏感
-    ctx.font = "900 48px 'PingFang SC', 'Microsoft YaHei', sans-serif";
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // 设置描边拐角为圆角 (lineJoin='round')，这是文字看起来软萌的关键！
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 10; 
-    
-    // 手动排版：为了控制字间距，将每个字单独绘制
-    const chars = ["急", "救", "间"];
-    const spacing = 64; // 字与字之间的中心距离
-    const startX = cx - spacing; // 第一个字的X坐标
-    const textY = cy + 4; // 微调Y轴让视觉绝对居中
-
-    chars.forEach((char, index) => {
-      const charX = startX + index * spacing;
+    <!-- 白色主卡片 -->
+    <div class="bg-[#FFFDF7] rounded-[32px] border-4 border-[#FFB8C6] shadow-[0_12px_0_0_#FFB8C6,0_20px_30px_rgba(0,0,0,0.15)] p-6 pt-12 relative z-10">
       
-      // 先画粗粗的深红色外边框
-      ctx.strokeStyle = COLOR_DARK_RED;
-      ctx.strokeText(char, charX, textY);
-      
-      // 再画白色的文字内芯盖在上面
-      ctx.fillStyle = COLOR_WHITE;
-      ctx.fillText(char, charX, textY);
+      <!-- 标题 -->
+      <h1 class="text-[32px] font-black text-[#D97785] text-center tracking-widest drop-shadow-sm">
+        目标达成！
+      </h1>
+
+      <!-- 分隔线 -->
+      <div class="flex items-center justify-center gap-2 my-4 opacity-50">
+        <div class="w-12 h-1 bg-[#D97785] rounded-full"></div>
+        <div class="w-2 h-2 bg-[#D97785] rounded-full"></div>
+        <div class="w-12 h-1 bg-[#D97785] rounded-full"></div>
+      </div>
+
+      <!-- 下一关目标 区域 -->
+      <div class="bg-[#F2FAFD] border-2 border-[#CDE5EF] rounded-2xl p-4 mt-2 relative">
+        <!-- 小标题 -->
+        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-[#76A5B9] text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+          下一关目标
+        </div>
+        
+        <!-- 目标数据列表 -->
+        <div class="mt-2 space-y-3">
+          <!-- 目标 1：时间 -->
+          <div class="flex justify-between items-center bg-white border border-[#E1F0F6] rounded-xl px-3 py-2 shadow-sm">
+            <div class="flex items-center gap-2 font-bold text-[#6D5D6E]">
+              <span class="text-xl">⏱️</span>
+              <span>时间</span>
+            </div>
+            <div class="font-black text-[#76A5B9] text-lg">03:30</div>
+          </div>
+          
+          <!-- 目标 2：治愈人数 -->
+          <div class="flex justify-between items-center bg-white border border-[#E1F0F6] rounded-xl px-3 py-2 shadow-sm">
+            <div class="flex items-center gap-2 font-bold text-[#6D5D6E]">
+              <span class="text-xl">💖</span>
+              <span>治愈人数</span>
+            </div>
+            <div class="font-black text-[#D97785] text-lg">15 人</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部按钮区域 -->
+      <div class="flex justify-between gap-3 mt-7">
+        
+        <!-- 升级按钮 (暖色/次要操作) -->
+        <button class="jelly-btn flex-1 bg-[#FFD56B] border-2 border-[#E5B53C] text-[#A67114] font-black text-lg py-3 rounded-2xl shadow-[0_6px_0_0_#E5B53C] flex items-center justify-center gap-1 active:shadow-[0_0px_0_0_#E5B53C]">
+          <span>⬆️</span> 升级
+        </button>
+
+        <!-- 继续按钮 (薄荷绿/主要操作) -->
+        <button class="jelly-btn flex-1 bg-[#68C287] border-2 border-[#4E9B68] text-white font-black text-lg py-3 rounded-2xl shadow-[0_6px_0_0_#4E9B68] flex items-center justify-center gap-1 active:shadow-[0_0px_0_0_#4E9B68]">
+          继续 <span>▶️</span>
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 简单的按钮点击音效反馈模拟
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // 在微信小游戏中可以调用 wx.vibrateShort() 增加震动反馈
+        console.log('Button clicked: ' + btn.innerText);
+      });
     });
-  }
-
-  // 执行渲染
-  render();
-
-</script>
+  </script>
 </body>
 </html>
