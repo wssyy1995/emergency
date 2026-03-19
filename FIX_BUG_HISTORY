@@ -83,3 +83,110 @@ bubbleY: this.y - 70 * this.scale
 3. 简单的视觉降级（移除动画效果）比崩溃要好得多
 
 ---
+
+
+---
+
+## Bug 2: 【目标达成】弹窗点击【升级】按钮后无法进入升级模式
+
+### 修复日期
+2026-03-18
+
+### Bug 现象
+- 点击【目标达成】弹窗的【升级】按钮后，弹窗没有消失
+- 页面卡在弹窗界面，奖杯旋转动画卡住
+- 疯狂打印 "绘制关卡完成弹窗" 日志
+- 升级气泡和【开始接诊】按钮没有显示
+
+### 原因分析
+
+#### 1. 渲染循环未正确处理升级模式
+`loop()` 函数的条件判断只检查了 `isRunning` 和弹窗状态，没有检查升级模式：
+```javascript
+// 修复前
+if (!this.isRunning && !hasModal) return
+
+// 修复后  
+if (!this.isRunning && !hasModal && !this.upgradeMode) {
+  requestAnimationFrame((t) => this.loop(t))
+  return
+}
+```
+
+#### 2. 升级模式与弹窗状态冲突
+点击【升级】按钮后，`enterUpgradeMode()` 被调用，但：
+- `levelCompleteModal` 被设置为 `null`
+- `upgradeMode` 被设置为 `true`
+- 但渲染循环中的条件判断导致某些情况下渲染被跳过或重复执行
+
+#### 3. 缺少升级模式的渲染保护
+`renderLevelCompleteModal()` 虽然有升级模式检查，但触发时机和条件判断存在问题
+
+### 修复方式
+
+#### 1. 修复渲染循环条件
+```javascript
+loop(timestamp) {
+  const hasModal = this.gameOverModal?.visible || 
+                   this.levelCompleteModal?.visible || 
+                   this.gameWinModal?.visible
+  
+  // 添加 upgradeMode 检查，确保升级模式下继续渲染
+  if (!this.isRunning && !hasModal && !this.upgradeMode) {
+    requestAnimationFrame((t) => this.loop(t))
+    return
+  }
+  
+  // ... 正常渲染逻辑
+}
+```
+
+#### 2. 强化升级模式检查
+```javascript
+renderLevelCompleteModal() {
+  // 【升级模式】不渲染关卡完成弹窗
+  if (this.upgradeMode) {
+    return  // 强制跳过
+  }
+  if (!this.levelCompleteModal) {
+    return
+  }
+  // ...
+}
+```
+
+#### 3. 确保升级模式状态正确设置
+```javascript
+enterUpgradeMode() {
+  // 彻底关闭所有弹窗
+  this.levelCompleteModal = null
+  
+  // 设置升级模式
+  this.upgradeMode = true
+  this.showUpgradeBubbles = true
+  this.showStartButton = true
+  this.isRunning = false
+  
+  // ...
+}
+```
+
+#### 4. 多处添加保护逻辑
+- `checkLevelComplete()` - 升级模式下跳过关卡完成检查
+- `showLevelCompleteModal()` - 升级模式下跳过创建弹窗
+- `renderLevelCompleteModal()` - 升级模式下跳过渲染
+
+### 代码变更文件
+- `js/Game.js`: 
+  - 修改 `loop()` 渲染循环条件
+  - 修改 `renderLevelCompleteModal()` 添加升级模式检查
+  - 修改 `enterUpgradeMode()` 确保状态正确设置
+  - 修改 `checkLevelComplete()` 添加升级模式保护
+
+### 经验总结
+1. 渲染循环的条件判断需要覆盖所有游戏状态（运行中、弹窗、升级模式等）
+2. `requestAnimationFrame` 的递归调用需要正确处理跳过逻辑，避免中断渲染链
+3. 状态变更（如进入升级模式）需要同步更新多个相关状态变量
+4. 添加详细的日志有助于定位渲染时序问题
+
+---

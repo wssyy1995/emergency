@@ -2892,21 +2892,27 @@ export default class Game {
       const occupiedBeds = this.bedArea.getOccupiedBeds().length
       const waitingPatients = this.waitingArea.patients.length
       
+      // 检查治愈人数是否达到目标
+      const cureTarget = levelConfig.cureTarget
+      
       console.log('检查关卡完成:', 
         '已生成:', this.spawnedPatientsCount, 
         '目标:', totalPatients,
         '等候区:', waitingPatients,
         '病床占用:', occupiedBeds,
+        '治愈:', this.curedCount,
+        '治愈目标:', cureTarget,
         'levelComplete:', this.levelComplete,
         'isRunning:', this.isRunning)
       
-      // 如果本关所有病人都已出现，且没有剩余病人在等候或治疗中
+      // 如果本关所有病人都已出现，且没有剩余病人在等候或治疗中，且治愈人数达标
       if (this.spawnedPatientsCount >= totalPatients && 
           waitingPatients === 0 &&
           occupiedBeds === 0 &&
+          this.curedCount >= cureTarget &&
           this.isRunning) {
         
-        console.log('关卡完成，准备进入下一关')
+        console.log('关卡完成，治愈人数:', this.curedCount, '/', cureTarget)
         if (this.currentLevel < GameConfig.levels.length - 1) {
           // 进入下一关
           this.showLevelCompleteModal()
@@ -3257,6 +3263,9 @@ export default class Game {
     // 标记从下一关进入，跳过【开始接诊】按钮
     this.skipStartButton = true
     
+    // 清理关卡完成弹窗，避免影响下一关
+    this.levelCompleteModal = null
+    
     // 延迟一点再启动，确保清理完成
     setTimeout(() => {
       this.start()
@@ -3360,14 +3369,13 @@ export default class Game {
   
   // 退出升级模式（点击【开始接诊】时调用）
   exitUpgradeMode() {
-    console.log('[升级模式] 退出升级模式，开始游戏')
+    console.log('[升级模式] 退出升级模式，进入下一关')
     this.upgradeMode = false
     this.showUpgradeBubbles = false
     this.showStartButton = false
-    this.isRunning = true
     
-    // 开始生成病人
-    this.startPatientSpawning()
+    // 进入下一关（而不是在当前关卡重新开始）
+    this.nextLevel()
   }
 
   // 重新开始游戏
