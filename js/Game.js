@@ -4,7 +4,7 @@ import EquipmentRoom from './EquipmentRoom.js'
 import Patient from './Patient.js'
 import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
-import { getItemById, getItemImage, preloadItemImages, preloadAreaIcons, getAreaIcon, AREA_ICONS } from './Items.js'
+import { getItemById, getItemImage, preloadItemImages } from './Items.js'
 import { audioManager } from './AudioManager.js'
 import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus, getLevelHintStatus, saveLevelHintStatus, getSelectedUpgrades, saveSelectedUpgrade, getUpgradesByType, getCurrentUpgrade, getInstanceUpgrade, saveInstanceUpgrade, getPurchasedUpgrades, isUpgradePurchased } from './GameConfig.js'
 
@@ -501,9 +501,8 @@ export default class Game {
     
     this.isRunning = true
     
-    // 预加载物品图片和区域图标
+    // 预加载物品图片
     preloadItemImages()
-    preloadAreaIcons()
     
     this.loop(0)
     
@@ -1826,25 +1825,6 @@ export default class Game {
       height: volumeSize
     }
     
-  }
-
-  // 渲染区域图标
-  renderAreaIcon(ctx, areaId, x, y, size) {
-    const iconImage = getAreaIcon(areaId)
-    if (iconImage) {
-      ctx.drawImage(iconImage, x - size/2, y - size/2, size, size)
-    } else {
-      // 使用emoji回退
-      const emojiMap = {
-        'waiting': '🪑',
-        'treatment': '🛏️',
-        'equipment': '🏥'
-      }
-      ctx.font = `${size}px cursive, sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(emojiMap[areaId] || '', x, y)
-    }
   }
 
   initTouch() {
@@ -5019,12 +4999,22 @@ export default class Game {
     ctx.fillStyle = 'rgba(22, 33, 53, 0.6)'
     ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
     
-    // 弹窗尺寸（高度不超过屏幕的4/5）
+    // 弹窗尺寸（基于屏幕高度动态计算）
     const modalWidth = 320
-    const maxModalHeight = Math.floor(this.screenHeight * 0.8)
-    const modalHeight = Math.min(480, maxModalHeight)
+    const modalHeight = Math.floor(this.screenHeight * 0.80) // 屏幕高度的80%
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // 动态布局参数
+    const headerTopOffset = 25      // 标题距离弹窗顶部的距离（恢复原始值，让上方有更多padding）
+    const btnHeight = 50            // 按钮高度
+    const btnBottomPadding = 22     // 按钮距离弹窗底部的距离（增大，让下方有更多padding）
+    const cardBottomPadding = 18    // 卡片与按钮之间的间距（增大）
+    
+    // 计算按钮位置（固定在底部）
+    const btnY = modalY + modalHeight - btnBottomPadding - btnHeight
+    const btnWidth = 200
+    const btnX = modalX + (modalWidth - btnWidth) / 2
     
     // 弹窗阴影
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
@@ -5071,7 +5061,7 @@ export default class Game {
       ivSeat: '💺 输液椅等级'
     }
     ctx.fillStyle = '#FFFFFF'
-    ctx.font = 'bold 18px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(titles[type] || '升级', headerX + headerWidth / 2, headerY + headerHeight / 2 + 2)
@@ -5124,11 +5114,12 @@ export default class Game {
       upgrades = getUpgradesByType('ivSeats')
     }
     
-    // ===== 护士卡片展示区 =====
+    // ===== 护士卡片展示区（动态计算位置和高度）=====
     const cardWidth = 160
-    const cardHeight = 180
     const cardX = modalX + (modalWidth - cardWidth) / 2
-    const cardY = modalY + 45
+    const cardY = modalY + headerTopOffset + 20  // 标题下方
+    // 卡片高度 = 按钮位置 - 卡片起始位置 - 按钮上方间距
+    const cardHeight = btnY - cardY - cardBottomPadding
     
     // 左右箭头
     if (selectedIndex > 0) {
@@ -5199,7 +5190,7 @@ export default class Game {
       ctx.lineWidth = 2
       strokeRoundRect(ctx, tagX, tagY, tagWidth, tagHeight, 12)
       ctx.fillStyle = '#FFFFFF'
-      ctx.font = 'bold 12px "PingFang SC", sans-serif'
+      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(currentUpgrade.name, tagX + tagWidth / 2, tagY + tagHeight / 2 + 1)
@@ -5217,10 +5208,11 @@ export default class Game {
         upgradeImg = null
       }
       
-      // 绘制图片（居中，保持比例）- 尺寸增大到 120x120
-      const imgMaxWidth = 120
-      const imgMaxHeight = 120
-      const imgY = cardY + 20
+      // 绘制图片（居中，保持比例）- 尺寸根据卡片高度动态计算
+      // 图片最大高度 = 卡片高度的 70%，但不超过 140px
+      const imgMaxHeight = Math.min(140, Math.floor(cardHeight * 0.68))
+      const imgMaxWidth = imgMaxHeight  // 保持正方形区域
+      const imgY = cardY + Math.floor(cardHeight * 0.12)  // 图片起始位置（卡片顶部12%处，增加上方padding）
       const imgCenterX = cardX + cardWidth / 2
       
       if (upgradeImg && upgradeImg.width > 0) {
@@ -5245,24 +5237,22 @@ export default class Game {
       
       // Skill 描述（图片下方）- 支持自动换行
       ctx.fillStyle = '#64748b'
-      ctx.font = '12px "PingFang SC", sans-serif'
+      // 使用更通用的字体栈，确保跨设备一致性
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif'
       ctx.textAlign = 'center'
       
       // 使用 wrapText 自动换行，最大宽度为卡片宽度减去 padding
-      const skillMaxWidth = cardWidth - 20
+      const skillMaxWidth = cardWidth - 24
       const skillLines = this.wrapText(ctx, currentUpgrade.skill, skillMaxWidth, 12)
-      let skillLineY = imgY + imgMaxHeight + 15
+      let skillLineY = imgY + imgMaxHeight + 12
       skillLines.forEach(line => {
         ctx.fillText(line, cardX + cardWidth / 2, skillLineY)
         skillLineY += 16 // 行高 16px
       })
     }
     
-    // ===== 升级按钮（绿色渐变）=====
-    const btnY = cardY + cardHeight + 22
-    const btnWidth = 200
-    const btnHeight = 50
-    const btnX = modalX + (modalWidth - btnWidth) / 2
+    // ===== 升级按钮 =====
+    // btnY, btnX, btnWidth, btnHeight 已在上方动态计算
     
     // 检查该等级是否已购买
     const isPurchased = isUpgradePurchased(type, currentUpgrade.id)
@@ -5292,7 +5282,7 @@ export default class Game {
       strokeRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 25)
       
       ctx.fillStyle = '#FFFFFF'
-      ctx.font = 'bold 18px "PingFang SC", sans-serif'
+      ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText('✓ 已选择', btnX + btnWidth / 2, btnY + btnHeight / 2 + 2 + pressOffset)
@@ -5326,7 +5316,7 @@ export default class Game {
       strokeRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 25)
       
       ctx.fillStyle = '#FFFFFF'
-      ctx.font = 'bold 20px "PingFang SC", sans-serif'
+      ctx.font = 'bold 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText('选择', btnX + btnWidth / 2, btnY + btnHeight / 2 + 2 + pressOffset)
@@ -5367,7 +5357,7 @@ export default class Game {
         
         // 按钮文字
         ctx.fillStyle = '#FFFFFF'
-        ctx.font = 'bold 20px "PingFang SC", sans-serif'
+        ctx.font = 'bold 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         if (!btnPressed) {
@@ -5386,7 +5376,7 @@ export default class Game {
         fillRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 25)
         
         ctx.fillStyle = '#FFFFFF'
-        ctx.font = 'bold 18px "PingFang SC", sans-serif'
+        ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(`需要 ${currentUpgrade.cost} 荣誉点`, btnX + btnWidth / 2, btnY + btnHeight / 2 + 2 + pressOffset)
