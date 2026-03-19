@@ -871,7 +871,7 @@ export default class Game {
       reason: reason,
       buttons: [
         { text: '重新开始', x: 0, y: 0, width: 120, height: 40, color: '#27AE60', action: 'restart' },
-        { text: '原地复活', x: 0, y: 0, width: 120, height: 40, color: '#3498DB', action: 'revive', disabled: true }
+        { text: '原地复活', x: 0, y: 0, width: 120, height: 40, color: '#3498DB', action: 'revive' }
       ]
     }
   }
@@ -2845,7 +2845,7 @@ export default class Game {
       animationTime: 0,
       buttons: [
         { text: '重新开始', x: 0, y: 0, width: 120, height: 40, color: '#27AE60', action: 'restart' },
-        { text: '原地复活', x: 0, y: 0, width: 120, height: 40, color: '#999999', action: 'revive', disabled: true }
+        { text: '原地复活', x: 0, y: 0, width: 120, height: 40, color: '#3498DB', action: 'revive' }
       ]
     }
     
@@ -2891,6 +2891,8 @@ export default class Game {
       const totalPatients = levelConfig.patients.length
       const occupiedBeds = this.bedArea.getOccupiedBeds().length
       const waitingPatients = this.waitingArea.patients.length
+      // 【修复】检查输液椅上是否还有病人
+      const occupiedIVSeats = this.bedArea.ivSeats.filter(seat => !seat.isEmpty()).length
       
       // 检查治愈人数是否达到目标
       const cureTarget = levelConfig.cureTarget
@@ -2900,25 +2902,33 @@ export default class Game {
         '目标:', totalPatients,
         '等候区:', waitingPatients,
         '病床占用:', occupiedBeds,
+        '输液椅占用:', occupiedIVSeats,
         '治愈:', this.curedCount,
         '治愈目标:', cureTarget,
         'levelComplete:', this.levelComplete,
         'isRunning:', this.isRunning)
       
-      // 如果本关所有病人都已出现，且没有剩余病人在等候或治疗中，且治愈人数达标
+      // 如果本关所有病人都已出现，且没有剩余病人在等候或治疗中（包括输液椅）
       if (this.spawnedPatientsCount >= totalPatients && 
           waitingPatients === 0 &&
           occupiedBeds === 0 &&
-          this.curedCount >= cureTarget &&
+          occupiedIVSeats === 0 &&
           this.isRunning) {
         
-        console.log('关卡完成，治愈人数:', this.curedCount, '/', cureTarget)
-        if (this.currentLevel < GameConfig.levels.length - 1) {
-          // 进入下一关
-          this.showLevelCompleteModal()
+        // 检查治愈人数是否达标
+        if (this.curedCount >= cureTarget) {
+          console.log('关卡完成，治愈人数:', this.curedCount, '/', cureTarget)
+          if (this.currentLevel < GameConfig.levels.length - 1) {
+            // 进入下一关
+            this.showLevelCompleteModal()
+          } else {
+            // 所有关卡完成，游戏胜利
+            this.showGameWinModal()
+          }
         } else {
-          // 所有关卡完成，游戏胜利
-          this.showGameWinModal()
+          // 治愈人数未达标，游戏失败
+          console.log('游戏失败，治愈人数:', this.curedCount, '/', cureTarget)
+          this.gameOverWithReason(`本关目标${cureTarget}人治愈，\n你只治愈了${this.curedCount}人`)
         }
       }
     }, 2000)
@@ -3047,41 +3057,39 @@ export default class Game {
   handleGameOverTouch(x, y) {
     if (!this.gameOverModal || !this.gameOverModal.visible) return false
     
-    const modalWidth = 280
-    const modalHeight = 160
-    const modalX = (this.screenWidth - modalWidth) / 2
-    const modalY = (this.screenHeight - modalHeight) / 2
-    
-    // 按钮
-    const btnY = modalY + 100
-    const btnGap = 20
-    const btnWidth = 100
-    const btnHeight = 30
-    const totalBtnWidth = btnWidth * 2 + btnGap
-    const startX = modalX + (modalWidth - totalBtnWidth) / 2
-    
-    // 检查每个按钮
+    // 检查每个按钮（使用渲染时保存的位置）
     for (let i = 0; i < this.gameOverModal.buttons.length; i++) {
       const btn = this.gameOverModal.buttons[i]
-      const btnX = startX + i * (btnWidth + btnGap)
       
-      if (x >= btnX && x <= btnX + btnWidth &&
-          y >= btnY && y <= btnY + btnHeight) {
+      // 使用按钮对象中保存的位置（由 renderGameOverModal 设置）
+      if (btn.x !== undefined && btn.y !== undefined &&
+          btn.width !== undefined && btn.height !== undefined) {
         
-        if (btn.disabled) {
-          wx.showToast({
-            title: '功能暂未开放',
-            icon: 'none',
-            duration: 1000
-          })
-          return true
-        }
-        
-        if (btn.action === 'restart') {
-          console.log('点击了重新开始按钮')
-          this.gameOverModal.visible = false
-          this.restart()
-          return true
+        if (x >= btn.x && x <= btn.x + btn.width &&
+            y >= btn.y && y <= btn.y + btn.height) {
+          
+          if (btn.disabled) {
+            wx.showToast({
+              title: '功能暂未开放',
+              icon: 'none',
+              duration: 1000
+            })
+            return true
+          }
+          
+          if (btn.action === 'restart') {
+            console.log('点击了重新开始按钮')
+            this.gameOverModal.visible = false
+            this.restart()
+            return true
+          }
+          
+          if (btn.action === 'revive') {
+            console.log('点击了原地复活按钮')
+            this.gameOverModal.visible = false
+            this.revive()
+            return true
+          }
         }
       }
     }
@@ -3425,83 +3433,323 @@ export default class Game {
     this.start()
   }
   
-  // 绘制游戏结束弹窗
+  // 原地复活 - 重新开始本关游戏，保留荣誉点和升级配置
+  revive() {
+    console.log('[原地复活] 重新开始第', this.currentLevel + 1, '关')
+    
+    // 清理所有定时器
+    clearInterval(this.timeTimer)
+    clearTimeout(this.spawnTimer)
+    if (this.initialSpawnTimer) {
+      clearTimeout(this.initialSpawnTimer)
+    }
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer)
+    }
+    
+    // 关闭弹窗
+    this.gameOverModal = null
+    this.levelCompleteModal = null
+    this.gameWinModal = null
+    this.levelToast = null
+    
+    // 重置游戏运行状态
+    this.isRunning = false
+    
+    // 【关键】不清除 score（荣誉点），保留已有的荣誉值
+    // 【关键】不清除升级配置，保留已购买的升级
+    
+    // 重置本关相关状态
+    this.gameTime = 0
+    this.curedCount = 0
+    this.timeRemaining = 0
+    this.honorEarnedThisLevel = 0  // 重置本关荣誉点
+    this.patientIdCounter = 1
+    this.doctorIdCounter = 1
+    this.levelComplete = false
+    this.hasRagingPatient = false
+    
+    // 清除所有病人
+    this.waitingArea.clear()
+    this.bedArea.clear()
+    
+    // 重置跳过按钮标志（重新开始本关需要显示【开始接诊】按钮）
+    this.skipStartButton = false
+    
+    // 重置升级模式
+    this.upgradeMode = false
+    this.showUpgradeBubbles = false
+    this.upgradeModal = null
+    
+    // 重置暴走提示
+    this.hasShownRageToast = false
+    
+    // 重新创建医生（重置医生状态）
+    this.doctors = []
+    this.createDoctors(2)
+    
+    // 重新加载已选择的升级配置（应用到新创建的医生）
+    this.loadSelectedUpgrades()
+    
+    // 开始游戏（保持当前关卡）
+    this.start()
+  }
+  
+  // 绘制游戏结束弹窗（参考 ui.txt 设计）
   renderGameOverModal() {
     if (!this.gameOverModal || !this.gameOverModal.visible) return
     
     const ctx = this.ctx
-    const modalWidth = 280
-    const modalHeight = 160
+    
+    // 弹窗尺寸（根据 ui.txt: 360px 宽）
+    // 高度限制为屏幕的 2/3，避免超出屏幕
+    const modalWidth = 320
+    const maxModalHeight = Math.floor(this.screenHeight * 2 / 3)
+    const modalHeight = Math.min(340, maxModalHeight)
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
     
-    // ===== 入场动画计算 =====
-    const { scale, opacity } = this.calculateModalAnimation(this.gameOverModal)
+    // ===== 微弱弹出动画（与目标达成弹窗一致）=====
+    const animTime = this.gameOverModal.animationTime || 0
+    const duration = 400
+    let popScale = 1
+    if (animTime < duration) {
+      const t = animTime / duration
+      // 先放大到1.07，然后回弹到1.0（微弱弹出效果）
+      if (t < 0.6) {
+        popScale = 0.95 + (t / 0.6) * 0.12 // 0.95 -> 1.07
+      } else {
+        popScale = 1.07 - ((t - 0.6) / 0.4) * 0.07 // 1.07 -> 1.0
+      }
+    }
+    this.gameOverModal.animationTime = animTime + 16
+    
+    // 背景遮罩（带淡入）
+    const fadeIn = Math.min(1, animTime / 200)
+    ctx.fillStyle = `rgba(22, 33, 53, ${0.6 * fadeIn})`
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
     
     ctx.save()
     
-    // 应用动画变换
-    this.applyModalTransform(ctx, modalX, modalY, modalWidth, modalHeight, scale)
+    // 应用弹出动画变换（中心缩放，无位移）
+    const centerX = modalX + modalWidth / 2
+    const centerY = modalY + modalHeight / 2
+    ctx.translate(centerX, centerY)
+    ctx.scale(popScale, popScale)
+    ctx.translate(-centerX, -centerY)
     
-    // 【已移除】半透明背景遮罩（屏幕不需要蒙层）
-    // ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
-    // ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
-    
-    // 弹窗背景
-    ctx.fillStyle = '#FFF'
-    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 12)
-    
-    // 弹窗阴影
+    // ===== 1. 弹窗卡片背景 =====
+    // 外层阴影
     ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
-    ctx.shadowBlur = 20
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 10
-    ctx.fill()
-    ctx.shadowColor = 'transparent'
-    ctx.shadowBlur = 0
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 0
+    ctx.shadowBlur = 40
+    ctx.shadowOffsetY = 20
     
-    // 标题
-    ctx.fillStyle = '#E74C3C'
-    ctx.font = 'bold 18px cursive, sans-serif'
+    // 白色背景
+    ctx.fillStyle = '#FFFFFF'
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 32)
+    ctx.shadowColor = 'transparent'
+    
+    // 粗边框 (#6c8ebf)
+    ctx.strokeStyle = '#6c8ebf'
+    ctx.lineWidth = 6
+    strokeRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 32)
+    
+    // 内阴影效果（底部）
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)'
+    ctx.fillRect(modalX + 10, modalY + modalHeight - 15, modalWidth - 20, 10)
+    
+    // ===== 2. 顶部徽章 💔 急救失败 =====
+    const badgeWidth = 160
+    const badgeHeight = 50
+    const badgeX = modalX + (modalWidth - badgeWidth) / 2
+    const badgeY = modalY - 25
+    
+    // 徽章阴影
+    ctx.shadowColor = 'rgba(255, 71, 87, 0.4)'
+    ctx.shadowBlur = 15
+    ctx.shadowOffsetY = 8
+    
+    // 徽章背景（渐变红色）
+    const badgeGradient = ctx.createLinearGradient(badgeX, badgeY, badgeX, badgeY + badgeHeight)
+    badgeGradient.addColorStop(0, '#ff6b81')
+    badgeGradient.addColorStop(1, '#ff4757')
+    ctx.fillStyle = badgeGradient
+    fillRoundRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, 25)
+    ctx.shadowColor = 'transparent'
+    
+    // 徽章白色边框
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 5
+    strokeRoundRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, 25)
+    
+    // 徽章文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 20px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('💔 急救失败', badgeX + badgeWidth / 2, badgeY + badgeHeight / 2)
+    
+    // ===== 3. 情绪文案 =====
+    ctx.fillStyle = '#64748b'
+    ctx.font = 'bold 16px "PingFang SC", "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText('游戏结束', modalX + modalWidth / 2, modalY + 20)
+    ctx.fillText('哎呀，病人等太久离开了... 😭', modalX + modalWidth / 2, modalY + 40)
     
-    // 内容文字（显示原因或默认文字）
-    ctx.fillStyle = '#333'
-    ctx.font = '14px cursive, sans-serif'
-    const reasonText = this.gameOverModal.reason || '恶评漫天飞，你的急诊室被迫关闭'
-    // 支持多行文字
-    const lines = reasonText.split('\n')
-    lines.forEach((line, index) => {
-      ctx.fillText(line, modalX + modalWidth / 2, modalY + 50 + index * 20)
-    })
+    // ===== 4. 数据统计面板 =====
+    const panelX = modalX + 24
+    const panelY = modalY + 85  // 再往下挪 5px（总共 15px）
+    const panelWidth = modalWidth - 48
+    const panelHeight = 90
     
-    // 按钮
-    const btnY = modalY + 100
-    const btnGap = 20
-    const totalBtnWidth = 120 * 2 + btnGap
-    const startX = modalX + (modalWidth - totalBtnWidth) / 2
+    // 面板背景 (#f1f5f9)
+    ctx.fillStyle = '#f1f5f9'
+    fillRoundRect(ctx, panelX, panelY, panelWidth, panelHeight, 20)
     
-    this.gameOverModal.buttons.forEach((btn, index) => {
-      btn.x = startX + index * (120 + btnGap)
-      btn.y = btnY
+    // 虚线边框
+    ctx.strokeStyle = '#cbd5e1'
+    ctx.lineWidth = 2
+    ctx.setLineDash([6, 4])
+    strokeRoundRect(ctx, panelX, panelY, panelWidth, panelHeight, 20)
+    ctx.setLineDash([])
+    
+    // 获取本关数据
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const cureTarget = levelConfig.cureTarget
+    const actualCured = this.curedCount || 0
+    
+    // 数据行1：本关目标
+    const row1Y = panelY + 22
+    ctx.fillStyle = '#64748b'
+    ctx.font = 'bold 16px "PingFang SC", sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('🎯 本关目标', panelX + 16, row1Y)
+    
+    ctx.fillStyle = '#10b981'  // 绿色
+    ctx.font = 'bold 18px "PingFang SC", sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(`${cureTarget} 人`, panelX + panelWidth - 16, row1Y)
+    
+    // 分割线
+    ctx.fillStyle = '#cbd5e1'
+    ctx.fillRect(panelX + 16, panelY + 45, panelWidth - 32, 1)
+    
+    // 数据行2：实际治愈
+    const row2Y = panelY + 65
+    ctx.fillStyle = '#64748b'
+    ctx.font = 'bold 16px "PingFang SC", sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText('🚑 实际治愈', panelX + 16, row2Y)
+    
+    ctx.fillStyle = '#ef4444'  // 红色
+    ctx.font = 'bold 22px "PingFang SC", sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(`${actualCured} 人`, panelX + panelWidth - 16, row2Y)
+    
+    // ===== 5. 按钮组 =====
+    // 按钮位置根据弹窗高度动态计算（距底部 25px）
+    const btnGap = 12
+    const secondaryBtnWidth = 100
+    const primaryBtnWidth = 140
+    const btnHeight = 48
+    const totalBtnWidth = secondaryBtnWidth + primaryBtnWidth + btnGap
+    const btnStartX = modalX + (modalWidth - totalBtnWidth) / 2
+    const btnGroupY = modalY + modalHeight - btnHeight - 25  // 距底部 25px
+    
+    // 呼吸动画（用于主按钮）
+    const pulseScale = 1 + Math.sin(Date.now() / 1000 * Math.PI) * 0.03
+    
+    // --- 5.1 次要按钮：重新开始（灰色）---
+    const restartBtn = this.gameOverModal.buttons.find(b => b.action === 'restart')
+    if (restartBtn) {
+      restartBtn.x = btnStartX
+      restartBtn.y = btnGroupY + 5  // 稍微下移，比主按钮矮
+      restartBtn.width = secondaryBtnWidth
+      restartBtn.height = btnHeight - 5
       
-      // 按钮背景
-      ctx.fillStyle = btn.disabled ? '#CCC' : btn.color
-      fillRoundRect(ctx, btn.x, btn.y, btn.width, btn.height, 6)
+      const btnRx = restartBtn.x
+      const btnRy = restartBtn.y
+      const btnRw = restartBtn.width
+      const btnRh = restartBtn.height
+      
+      // 按钮阴影层（厚度）
+      ctx.fillStyle = '#475569'
+      fillRoundRect(ctx, btnRx, btnRy + 6, btnRw, btnRh, 16)
+      
+      // 按钮主体（渐变灰色）
+      const grayGradient = ctx.createLinearGradient(btnRx, btnRy, btnRx, btnRy + btnRh)
+      grayGradient.addColorStop(0, '#94a3b8')
+      grayGradient.addColorStop(1, '#64748b')
+      ctx.fillStyle = grayGradient
+      fillRoundRect(ctx, btnRx, btnRy, btnRw, btnRh, 16)
+      
+      // 按钮边框
+      ctx.strokeStyle = '#cbd5e1'
+      ctx.lineWidth = 2
+      strokeRoundRect(ctx, btnRx, btnRy, btnRw, btnRh, 16)
       
       // 按钮文字
-      ctx.fillStyle = '#FFF'
-      ctx.font = 'bold 14px cursive, sans-serif'
+      ctx.fillStyle = '#FFFFFF'
+      ctx.font = 'bold 16px "PingFang SC", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(btn.text, btn.x + btn.width / 2, btn.y + btn.height / 2)
-    })
+      ctx.fillText('↺ 重玩', btnRx + btnRw / 2, btnRy + btnRh / 2)
+    }
     
-    // 恢复变换（结束动画）
+    // --- 5.2 主要按钮：原地复活（黄色，带呼吸动效）---
+    const reviveBtn = this.gameOverModal.buttons.find(b => b.action === 'revive')
+    if (reviveBtn) {
+      // 应用呼吸缩放（从按钮中心）
+      const btnPx = btnStartX + secondaryBtnWidth + btnGap
+      const btnPy = btnGroupY
+      const btnPw = primaryBtnWidth
+      const btnPh = btnHeight
+      
+      // 更新按钮位置（用于点击检测）
+      reviveBtn.x = btnPx
+      reviveBtn.y = btnPy
+      reviveBtn.width = btnPw
+      reviveBtn.height = btnPh
+      
+      ctx.save()
+      const btnCenterX = btnPx + btnPw / 2
+      const btnCenterY = btnPy + btnPh / 2
+      ctx.translate(btnCenterX, btnCenterY)
+      ctx.scale(pulseScale, pulseScale)
+      ctx.translate(-btnCenterX, -btnCenterY)
+      
+      // 按钮阴影层（更厚）
+      ctx.shadowColor = 'rgba(255, 170, 0, 0.4)'
+      ctx.shadowBlur = 20
+      ctx.shadowOffsetY = 15
+      ctx.fillStyle = '#cc7a00'
+      fillRoundRect(ctx, btnPx, btnPy + 8, btnPw, btnPh, 16)
+      ctx.shadowColor = 'transparent'
+      
+      // 按钮主体（渐变黄色）
+      const yellowGradient = ctx.createLinearGradient(btnPx, btnPy, btnPx, btnPy + btnPh)
+      yellowGradient.addColorStop(0, '#ffcd3c')
+      yellowGradient.addColorStop(1, '#ffaa00')
+      ctx.fillStyle = yellowGradient
+      fillRoundRect(ctx, btnPx, btnPy, btnPw, btnPh, 16)
+      
+      // 按钮边框（白色更粗）
+      ctx.strokeStyle = '#FFFFFF'
+      ctx.lineWidth = 3
+      strokeRoundRect(ctx, btnPx, btnPy, btnPw, btnPh, 16)
+      
+      // 按钮文字（深色字体）
+      ctx.fillStyle = '#784200'
+      ctx.font = 'bold 18px "PingFang SC", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('🎬 原地复活', btnCenterX, btnCenterY)
+      
+      ctx.restore()
+    }
+    
+    // 恢复变换
     ctx.restore()
   }
   
@@ -3928,6 +4176,12 @@ export default class Game {
         // 直接显示关卡完成弹窗
         this.showLevelCompleteModal()
       } },
+      { id: 'failLevel', text: '本关失败', color: '#7F8C8D', action: () => { 
+        // 关闭调试面板
+        this.debugModal.visible = false
+        // 触发游戏失败
+        this.gameOverWithReason('调试：强制触发游戏失败')
+      } },
       { id: 'resetGame', text: '重置游戏', color: '#F39C12', action: () => { this.start() } },
       { id: 'addScore', text: '+100分', color: '#9B59B6', action: () => { this.score += 100 } },
       { id: 'jumpLevel', text: '跳转关卡', color: '#FF6B6B', action: () => { 
@@ -4036,11 +4290,7 @@ export default class Game {
           if (btn.action === 'restart') {
             this.restart()
           } else if (btn.action === 'revive') {
-            wx.showToast({
-              title: '原地复活功能开发中',
-              icon: 'none',
-              duration: 2000
-            })
+            this.revive()
           }
           return
         }
