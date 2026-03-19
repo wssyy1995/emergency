@@ -475,24 +475,23 @@ export const UpgradeConfig = {
   // 护士升级选项
   nurses: [
     {
-      id: 'nurse_default',
+      id: 1,
       name: '实习护士',
-      imagePath: 'images/nurse.png',
+      imagePath: 'images/nurse_pro_1.png',
       skill: '基础安抚，暂停耐心减少5秒',
-      cost: 0,
-      isDefault: true
+      cost: 50
     },
     {
-      id: 'nurse_pro',
+      id: 2,
       name: '专业护士',
-      imagePath: 'images/nurse_pro.png',
+      imagePath: 'images/nurse_pro_2.png',
       skill: '安抚效果+50%，暂停耐心减少7.5秒',
       cost: 100
     },
     {
-      id: 'nurse_expert',
+      id: 3,
       name: '专家护士',
-      imagePath: 'images/nurse_pro.png', // 暂时使用相同图片
+      imagePath: 'images/nurse_pro_3.png',
       skill: '安抚效果+100%，暂停耐心减少10秒',
       cost: 250
     }
@@ -501,22 +500,21 @@ export const UpgradeConfig = {
   // 医生升级选项
   doctors: [
     {
-      id: 'doctor_default',
+      id: 1,
       name: '实习医生',
       imagePath: 'images/doctor_1_idle.png',
       skill: '基础治疗速度',
-      cost: 0,
-      isDefault: true
+      cost: 80
     },
     {
-      id: 'doctor_pro',
+      id: 2,
       name: '主治医生',
       imagePath: 'images/nurse_pro.png', // 暂时使用护士图片
       skill: '治疗速度+20%，更快治愈病人',
       cost: 150
     },
     {
-      id: 'doctor_expert',
+      id: 3,
       name: '主任医师',
       imagePath: 'images/nurse_pro.png', // 暂时使用护士图片
       skill: '治疗速度+40%，物品需求减少1个',
@@ -527,22 +525,21 @@ export const UpgradeConfig = {
   // 输液椅升级选项
   ivSeats: [
     {
-      id: 'ivseat_default',
+      id: 1,
       name: '普通输液椅',
       imagePath: 'images/seat_free.png',
       skill: '基础治疗速度',
-      cost: 0,
-      isDefault: true
+      cost: 60
     },
     {
-      id: 'ivseat_pro',
+      id: 2,
       name: '舒适输液椅',
       imagePath: 'images/seat_pro.png',
       skill: '治疗速度+15%，病人更不容易暴走',
       cost: 120
     },
     {
-      id: 'ivseat_expert',
+      id: 3,
       name: '豪华输液椅',
       imagePath: 'images/seat_pro.png', // 暂时使用相同图片
       skill: '治疗速度+30%，耐心消耗减半',
@@ -551,7 +548,75 @@ export const UpgradeConfig = {
   ]
 }
 
-// 从本地存储读取已选择的升级
+// 从本地存储读取指定实例的升级（支持每个实例独立升级）
+// instanceId: 实例ID，如 'nurse', 'doctor_0', 'doctor_1', 'ivSeat'
+export function getInstanceUpgrade(instanceId) {
+  try {
+    const data = wx.getStorageSync(UPGRADE_STORAGE_KEY)
+    if (data && data.instanceUpgrades && data.instanceUpgrades[instanceId] !== undefined) {
+      return data.instanceUpgrades[instanceId]
+    }
+  } catch (e) {
+    console.warn('[本地缓存] 读取实例升级状态失败:', e)
+  }
+  // 默认返回 null（未选择任何升级）
+  return null
+}
+
+// 保存指定实例的升级到本地缓存（同时记录到已购买列表）
+// instanceId: 实例ID，如 'nurse', 'doctor_0', 'doctor_1', 'ivSeat'
+// upgradeId: 升级等级ID（1, 2, 3）
+export function saveInstanceUpgrade(instanceId, upgradeId) {
+  try {
+    const data = wx.getStorageSync(UPGRADE_STORAGE_KEY) || {}
+    if (!data.instanceUpgrades) {
+      data.instanceUpgrades = {}
+    }
+    // 保存当前使用的等级
+    data.instanceUpgrades[instanceId] = upgradeId
+    
+    // 同时记录到已购买列表
+    if (!data.purchasedUpgrades) {
+      data.purchasedUpgrades = {}
+    }
+    if (!data.purchasedUpgrades[instanceId]) {
+      data.purchasedUpgrades[instanceId] = []
+    }
+    if (!data.purchasedUpgrades[instanceId].includes(upgradeId)) {
+      data.purchasedUpgrades[instanceId].push(upgradeId)
+    }
+    
+    wx.setStorageSync(UPGRADE_STORAGE_KEY, data)
+    console.log(`[本地缓存] 保存实例升级: ${instanceId} = ${upgradeId}`)
+    return true
+  } catch (e) {
+    console.warn('[本地缓存] 保存实例升级失败:', e)
+    return false
+  }
+}
+
+// 获取指定实例已购买的所有等级列表
+// instanceId: 实例ID
+// 返回: [1, 2, 3] 或 [1] 等
+export function getPurchasedUpgrades(instanceId) {
+  try {
+    const data = wx.getStorageSync(UPGRADE_STORAGE_KEY)
+    if (data && data.purchasedUpgrades && data.purchasedUpgrades[instanceId]) {
+      return data.purchasedUpgrades[instanceId]
+    }
+  } catch (e) {
+    console.warn('[本地缓存] 读取已购买升级失败:', e)
+  }
+  return []
+}
+
+// 检查指定等级是否已购买
+export function isUpgradePurchased(instanceId, upgradeId) {
+  const purchased = getPurchasedUpgrades(instanceId)
+  return purchased.includes(upgradeId)
+}
+
+// 兼容旧版本：从本地存储读取已选择的升级（全局）
 export function getSelectedUpgrades() {
   try {
     const data = wx.getStorageSync(UPGRADE_STORAGE_KEY)
@@ -561,15 +626,15 @@ export function getSelectedUpgrades() {
   } catch (e) {
     console.warn('[本地缓存] 读取升级状态失败:', e)
   }
-  // 默认返回初始升级
+  // 默认返回空（未选择任何升级）
   return {
-    nurse: 'nurse_default',
-    doctor: 'doctor_default',
-    ivSeat: 'ivseat_default'
+    nurse: null,
+    doctor: null,
+    ivSeat: null
   }
 }
 
-// 保存升级选择到本地缓存
+// 兼容旧版本：保存升级选择到本地缓存
 export function saveSelectedUpgrade(type, upgradeId) {
   try {
     const current = getSelectedUpgrades()

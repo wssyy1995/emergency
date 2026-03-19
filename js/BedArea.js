@@ -153,7 +153,7 @@ class IVSeat {
     this.seatOccupiedImage = getIVSeatOccupiedImage()
     
     // 【升级系统】
-    this.currentUpgradeId = 'ivseat_default'
+    this.currentUpgradeId = null
     this.upgradedFreeImage = null
     this.upgradedOccupiedImage = null
   }
@@ -164,20 +164,21 @@ class IVSeat {
     
     this.currentUpgradeId = upgradeId
     
-    // 如果不是默认升级，加载升级图片
-    if (upgradeId !== 'ivseat_default') {
+    // 如果有升级，加载对应的升级图片
+    if (upgradeId) {
       const freeImg = wx.createImage()
       freeImg.onload = () => {
         this.upgradedFreeImage = freeImg
       }
-      freeImg.src = `images/${upgradeId}.png`
+      freeImg.src = `images/seat_pro_${upgradeId}.png`
       
       const occupiedImg = wx.createImage()
       occupiedImg.onload = () => {
         this.upgradedOccupiedImage = occupiedImg
       }
-      occupiedImg.src = `images/${upgradeId}.png`
+      occupiedImg.src = `images/seat_pro_${upgradeId}.png`
     } else {
+      // 未升级状态，使用默认图片
       this.upgradedFreeImage = null
       this.upgradedOccupiedImage = null
     }

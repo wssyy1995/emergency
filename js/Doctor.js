@@ -108,7 +108,7 @@ export default class Doctor {
     this.lockedByPatient = null
     
     // 【升级系统】当前升级ID
-    this.currentUpgradeId = 'doctor_default'
+    this.currentUpgradeId = null
     this.upgradedIdleImage = null
     this.upgradedTreatImage = null
     
@@ -518,8 +518,8 @@ export default class Doctor {
     
     this.currentUpgradeId = upgradeId
     
-    // 如果不是默认升级，加载升级图片
-    if (upgradeId !== 'doctor_default') {
+    // 如果有升级，加载对应的升级图片
+    if (upgradeId) {
       // 加载空闲图片
       const idleImg = wx.createImage()
       idleImg.onload = () => {
@@ -531,15 +531,16 @@ export default class Doctor {
         this.upgradedIdleImage = null
       }
       // 所有医生使用相同的升级图片（简化处理）
-      idleImg.src = `images/${upgradeId}.png`
+      idleImg.src = `images/doctor_pro_${upgradeId}.png`
       
       // 加载治疗图片（使用相同图片）
       const treatImg = wx.createImage()
       treatImg.onload = () => {
         this.upgradedTreatImage = treatImg
       }
-      treatImg.src = `images/${upgradeId}.png`
+      treatImg.src = `images/doctor_pro_${upgradeId}.png`
     } else {
+      // 未升级状态，使用默认图片
       this.upgradedIdleImage = null
       this.upgradedTreatImage = null
     }

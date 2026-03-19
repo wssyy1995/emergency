@@ -1,181 +1,129 @@
 
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>游戏结束弹窗优化</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { background-color: #1a1a1a; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; user-select: none; }
-    
-    /* 模拟游戏背景 */
-    .game-bg { width: 800px; height: 400px; background-color: #cddced; border-radius: 24px; position: relative; overflow: hidden; background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMiIgZmlsbD0iI2ZmZiIgb3BhY2l0eT0iMC4yIi8+PC9zdmc+'); }
-    
-    /* 遮罩层 */
-    .overlay { position: absolute; inset: 0; background: rgba(22, 33, 53, 0.6); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; }
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f0f2f5;
+    margin: 0;
+    font-family: sans-serif;
+  }
+  .container {
+    position: relative;
+    text-align: center;
+  }
+  canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none; /* Allows clicks to pass through to the button */
+    z-index: 10;
+  }
+</style>
 
-    /* --- 新版弹窗核心样式 --- */
-    .modal-card {
-      width: 360px;
-      background: #fff;
-      border-radius: 32px;
-      border: 6px solid #6c8ebf; /* 粗边框增加Q版感觉 */
-      box-shadow: 0 20px 40px rgba(0,0,0,0.3), inset 0 -8px 0 rgba(0,0,0,0.05);
-      position: relative;
-      padding: 40px 24px 24px 24px;
-      text-align: center;
-      animation: modalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+<div class="container">
+  <canvas id="confettiCanvas"></canvas>
+  <button id="upgradeButton" class="px-8 py-4 bg-yellow-400 text-purple-800 font-bold rounded-full shadow-lg hover:bg-yellow-500 transition duration-300 relative z-20">
+    <span class="mr-2">⭐</span> 升级 (50)
+  </button>
+</div>
+
+<script>
+  const upgradeButton = document.getElementById('upgradeButton');
+  const confettiCanvas = document.getElementById('confettiCanvas');
+  const ctx = confettiCanvas.getContext('2d');
+
+  let animationFrameId;
+  let particles = [];
+  const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
+
+  function resizeCanvas() {
+    confettiCanvas.width = window.innerWidth;
+    confettiCanvas.height = window.innerHeight;
+  }
+
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  class ConfettiParticle {
+    constructor(x, y, color) {
+      this.x = x;
+      this.y = y;
+      this.size = Math.random() * 8 + 3;
+      this.color = color;
+      this.velocity = {
+        x: (Math.random() - 0.5) * 8,
+        y: Math.random() * -15 - 5
+      };
+      this.rotation = Math.random() * 360;
+      this.rotationSpeed = Math.random() * 10 - 5;
+      this.alpha = 1;
+      this.gravity = 0.5;
+      this.friction = 0.99;
+      this.decay = 0.02;
     }
 
-    @keyframes modalPop {
-      0% { transform: scale(0.6) translateY(50px); opacity: 0; }
-      100% { transform: scale(1) translateY(0); opacity: 1; }
+    draw() {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.rotation * Math.PI / 180);
+      ctx.fillStyle = this.color;
+      ctx.globalAlpha = this.alpha;
+      ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+      ctx.restore();
     }
 
-    /* 破形表头：心碎徽章 */
-    .modal-badge {
-      position: absolute;
-      top: -35px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: linear-gradient(180deg, #ff6b81 0%, #ff4757 100%);
-      color: white;
-      font-size: 24px;
-      font-weight: 900;
-      padding: 10px 30px;
-      border-radius: 40px;
-      border: 5px solid white;
-      box-shadow: 0 8px 15px rgba(255, 71, 87, 0.4);
-      white-space: nowrap;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    update() {
+      this.velocity.x *= this.friction;
+      this.velocity.y += this.gravity;
+      this.x += this.velocity.x;
+      this.y += this.velocity.y;
+      this.rotation += this.rotationSpeed;
+      this.alpha -= this.decay;
+    }
+  }
+
+  function createConfetti(x, y) {
+    for (let i = 0; i < 50; i++) {
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      particles.push(new ConfettiParticle(x, y, color));
+    }
+  }
+
+  function animateConfetti() {
+    ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      particles[i].update();
+      particles[i].draw();
+
+      if (particles[i].alpha <= 0 || particles[i].y > confettiCanvas.height) {
+        particles.splice(i, 1);
+      }
     }
 
-    /* 数据统计内面版 */
-    .stats-panel {
-      background: #f1f5f9;
-      border-radius: 20px;
-      padding: 16px;
-      margin-bottom: 24px;
-      border: 2px dashed #cbd5e1;
+    if (particles.length > 0) {
+      animationFrameId = requestAnimationFrame(animateConfetti);
+    } else {
+      cancelAnimationFrame(animationFrameId);
     }
+  }
 
-    .stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: bold; }
-    .stat-row:last-child { margin-bottom: 0; }
-    .stat-label { color: #64748b; font-size: 16px; display: flex; align-items: center; gap: 6px; }
-    .stat-value-good { color: #10b981; font-size: 18px; }
-    .stat-value-bad { color: #ef4444; font-size: 20px; font-weight: 900; }
+  upgradeButton.addEventListener('click', () => {
+    upgradeButton.innerHTML = '<span class="mr-2">⭐</span> 升级成功';
+    upgradeButton.classList.remove('bg-yellow-400', 'hover:bg-yellow-500');
+    upgradeButton.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white'); // Optional: change button color
 
-    /* --- 游戏化按钮通用样式 --- */
-    .btn-game {
-      width: 100%;
-      border-radius: 16px;
-      font-weight: 900;
-      font-size: 18px;
-      cursor: pointer;
-      position: relative;
-      transition: all 0.1s;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 8px;
+    // Get button position to emit confetti from it
+    const rect = upgradeButton.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    createConfetti(centerX, centerY);
+    if (!animationFrameId) { // Only start animation if not already running
+      animateConfetti();
     }
-    .btn-game:active { transform: translateY(6px); }
-
-    /* 次要按钮：重新开始 */
-    .btn-secondary {
-      background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
-      color: white;
-      height: 50px;
-      box-shadow: 0 6px 0 #475569;
-      border: 2px solid #cbd5e1;
-    }
-    .btn-secondary:active { box-shadow: 0 0 0 #475569; }
-
-    /* 主要按钮：原地复活 (带呼吸动效) */
-    .btn-primary {
-      background: linear-gradient(180deg, #ffcd3c 0%, #ffaa00 100%);
-      color: #784200; /* 深色字体在黄色底上更清晰 */
-      height: 60px; /* 主按钮比次按钮更高 */
-      box-shadow: 0 8px 0 #cc7a00, 0 15px 20px rgba(255, 170, 0, 0.4);
-      border: 3px solid #fff;
-      animation: pulse 2s infinite;
-    }
-    .btn-primary:active { box-shadow: 0 0 0 #cc7a00; transform: translateY(8px); }
-
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.03); }
-      100% { transform: scale(1); }
-    }
-
-    /* 按钮组布局 */
-    .btn-group { display: flex; gap: 15px; align-items: flex-end; }
-    .btn-group .btn-secondary { flex: 1; }
-    .btn-group .btn-primary { flex: 1.4; } /* 原地复活按钮更宽 */
-
-  </style>
-</head>
-<body>
-
-  <div class="game-bg">
-    <!-- 背景遮罩 -->
-    <div class="overlay" id="overlay">
-      
-      <!-- 弹窗本体 -->
-      <div class="modal-card">
-        
-        <!-- 1. 顶部破形徽章 (代替平平无奇的文字) -->
-        <div class="modal-badge">
-          <span>💔</span> 急救失败
-        </div>
-
-        <!-- 稍微加点情绪文案 -->
-        <p class="text-[#64748b] font-bold text-lg mt-2 mb-4">
-          哎呀，病人等太久离开了... 😭
-        </p>
-
-        <!-- 2. 数据对比区 (代替原来的一句话，更有条理) -->
-        <div class="stats-panel">
-          <div class="stat-row">
-            <div class="stat-label">🎯 本关目标</div>
-            <div class="stat-value-good">5 人</div>
-          </div>
-          <!-- 分割线 -->
-          <div class="h-[1px] w-full bg-slate-200 my-2"></div>
-          <div class="stat-row">
-            <div class="stat-label">🚑 实际治愈</div>
-            <div class="stat-value-bad">1 人</div>
-          </div>
-        </div>
-
-        <!-- 3. 按钮组 (主次分明，大小不一) -->
-        <div class="btn-group">
-          <!-- 重新开始 (降级为灰色/蓝灰色，体积较小) -->
-          <button class="btn-game btn-secondary" onclick="alert('重新开始')">
-            ↺ 重玩
-          </button>
-          
-          <!-- 原地复活 (升级为主色调，加宽加高，带图标和动画) -->
-          <button class="btn-game btn-primary" onclick="alert('播放广告，原地复活！')">
-            <span class="text-xl">🎬</span> 原地复活
-          </button>
-        </div>
-
-      </div>
-
-    </div>
-  </div>
-
-  <script>
-    // 简单的重新进入动画触发
-    setInterval(() => {
-      const overlay = document.getElementById('overlay');
-      overlay.style.display = 'none';
-      setTimeout(() => { overlay.style.display = 'flex'; }, 100);
-    }, 5000);
-  </script>
-</body>
-</html>
+  });
+</script>

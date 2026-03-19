@@ -41,8 +41,8 @@ export default class Nurse {
     // 【关卡提示】第2关及以后的灯泡提示
     this.showLevelHint = false
     
-    // 【升级系统】当前升级ID
-    this.currentUpgradeId = 'nurse_default'
+    // 【升级系统】当前升级ID（null 表示未升级）
+    this.currentUpgradeId = null
     this.upgradedImage = null  // 升级后的图片
     
     this.loadImage()
@@ -405,8 +405,8 @@ export default class Nurse {
     
     this.currentUpgradeId = upgradeId
     
-    // 如果不是默认升级，加载升级图片
-    if (upgradeId !== 'nurse_default') {
+    // 如果有升级，加载对应的升级图片
+    if (upgradeId) {
       const img = wx.createImage()
       img.onload = () => {
         this.upgradedImage = img
@@ -417,8 +417,9 @@ export default class Nurse {
         this.upgradedImage = null
       }
       // 根据升级ID确定图片路径
-      img.src = `images/${upgradeId}.png`
+      img.src = `images/nurse_pro_${upgradeId}.png`
     } else {
+      // 未升级状态，使用默认图片
       this.upgradedImage = null
     }
     
