@@ -2106,27 +2106,26 @@ export default class Game {
         return
       }
       
-      // 检查是否点击护士（显示疾病清单）
-      if (this.waitingArea.nurse.contains(x, y)) {
-        console.log('[点击检测] 点击护士')
+      // 检测点击 guide.png 图片（显示分诊指南）
+      if (this.waitingArea.containsGuide(x, y)) {
+        console.log('[点击检测] 点击 guide 图片')
         // 点击时震动（仅真机）
         this.vibrate()
         
         // 【新玩家指引】如果是新玩家，立即恢复正常护士图片（移除灯泡）
-        // 【修改】不再关闭开始接诊按钮，只是切换护士图片
         if (GameConfig.is_new_player) {
-          console.log('[新玩家指引] 护士被点击，恢复正常图片，显示分诊指南')
+          console.log('[新玩家指引] guide 被点击，恢复正常图片，显示分诊指南')
           this.waitingArea.setNewPlayerMode(false)
         }
         
-        // 【关卡提示】第2关及以后，点击护士关闭灯泡提示
+        // 【关卡提示】第2关及以后，点击 guide 关闭灯泡提示
         if (this.currentLevel >= 1 && this.waitingArea.nurse.showLevelHint) {
           saveLevelHintStatus(this.currentLevel, true)
           this.waitingArea.nurse.setLevelHint(false)
           console.log(`[关卡提示] 第${this.currentLevel + 1}关灯泡已关闭`)
         }
         
-        // 【修改】所有玩家点击护士都显示疾病清单（包括老玩家第一关）
+        // 显示疾病清单弹窗
         this.showDiseaseListModal()
         return
       }
@@ -4078,7 +4077,7 @@ export default class Game {
     this.levelCompleteModal.continueBtn.height = btnHeight
     this.levelCompleteModal.continueBtn.originalY = btnY
     
-    // 左按钮：升级（黄色，带按下动效，加大凸起）
+    // 左按钮：休诊（黄色，带按下动效，加大凸起）
     const upgradeBtnPressed = this.levelCompleteModal.upgradeBtnPressed || false
     const upgradeBtnOffset = upgradeBtnPressed ? 3 : 0  // 按下时向下偏移3px
     // 阴影层（加大凸起效果）
@@ -4102,7 +4101,7 @@ export default class Game {
     ctx.font = 'bold 14px "PingFang SC", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('⬆️ 升级', modalX + 18 + btnWidth / 2, btnY + btnHeight / 2 + upgradeBtnOffset)
+    ctx.fillText('休诊', modalX + 18 + btnWidth / 2, btnY + btnHeight / 2 + upgradeBtnOffset)
     
     // 右按钮：继续（绿色，带按下动效，加大凸起）
     const continueBtnPressed = this.levelCompleteModal.continueBtnPressed || false

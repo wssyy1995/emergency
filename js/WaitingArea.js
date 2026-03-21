@@ -46,6 +46,7 @@ export default class WaitingArea {
     this.nurseDeskImage = WaitingAreaImageCache.getImage('nurseDesk', 'images/nurse_desk.png')
     this.plantImage = WaitingAreaImageCache.getImage('plant', 'images/plant.png')
     this.bookshelfImage = WaitingAreaImageCache.getImage('bookshelf', 'images/bookshelf.png')
+    this.guideImage = WaitingAreaImageCache.getImage('guide', 'images/guide.png')
   }
   
   // 设置新玩家模式
@@ -160,6 +161,23 @@ export default class WaitingArea {
     return null
   }
 
+  // 检测点击是否在 guide.png 上
+  containsGuide(x, y) {
+    if (!this.guideImage || !this.guideImage.width > 0) return false
+    
+    // 与 render 方法中的计算完全一致
+    const guideWidth = this.width * 0.3
+    const guideHeight = guideWidth * (this.guideImage.height / this.guideImage.width)
+    const guideX = this.nurse.x - this.width * 0.5
+    const guideY = this.nurse.y - guideHeight * 0.9
+    
+    // 添加 10px 的点击容差，让点击更容易命中
+    const padding = 10
+    
+    return x >= guideX - padding && x <= guideX + guideWidth + padding &&
+           y >= guideY - padding && y <= guideY + guideHeight + padding
+  }
+
   update(deltaTime) {
     this.nurse.update(deltaTime)
   }
@@ -172,6 +190,18 @@ export default class WaitingArea {
     
     // 绘制护士
     this.nurse.render(ctx)
+    
+    // 绘制引导图片（在护士旁边）
+    if (this.guideImage && this.guideImage.width > 0) {
+      const guideWidth = this.width * 0.3
+      const guideHeight = guideWidth * (this.guideImage.height / this.guideImage.width)
+      // 在护士左侧位置
+      const guideX = this.nurse.x - this.width * 0.5
+      const guideY = this.nurse.y - guideHeight * 0.9
+      
+      ctx.drawImage(this.guideImage, guideX, guideY, guideWidth, guideHeight)
+    }
+    
     this.renderReception(ctx)
     this.renderStandingQueue(ctx)
   }
