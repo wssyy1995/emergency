@@ -151,6 +151,7 @@ export default class Game {
     this.honorImage = null
     this.curedImage = null
     this.patientIconImage = null
+    this.startButtonImage = null  // 开始接诊按钮图标
     this.loadIcons()
     
     // 浮动文字动画
@@ -205,6 +206,13 @@ export default class Game {
     this.startButtonBounds = null
     this.skipStartButton = false  // 是否跳过开始按钮（从下一关进入时为true）
     
+    // 【开始接诊】按钮消失动画
+    this.startButtonAnimation = {
+      isPlaying: false,
+      progress: 0,  // 0 ~ 1
+      duration: 300  // 动画持续时间 300ms
+    }
+    
     // 【升级模式】状态
     this.upgradeMode = false  // 是否处于升级模式
     this.upgradeModal = null  // 升级弹窗状态
@@ -253,6 +261,13 @@ export default class Game {
       this.patientIconImage = patientIconImg
     }
     patientIconImg.src = 'images/patient_icon.png'
+    
+    // 加载开始接诊按钮图标
+    const startBtnImg = wx.createImage()
+    startBtnImg.onload = () => {
+      this.startButtonImage = startBtnImg
+    }
+    startBtnImg.src = 'images/start.png'
     
     // 加载疾病图标缓存
     this.diseaseImages = {}
@@ -675,6 +690,17 @@ export default class Game {
     this.waitingArea.update(deltaTime)
     this.equipmentRoom.update(deltaTime)
     this.doctors.forEach(doctor => doctor.update(deltaTime, this.bedArea))
+    
+    // 更新【开始接诊】按钮消失动画
+    if (this.startButtonAnimation.isPlaying) {
+      this.startButtonAnimation.progress += deltaTime / this.startButtonAnimation.duration
+      if (this.startButtonAnimation.progress >= 1) {
+        this.startButtonAnimation.progress = 1
+        this.startButtonAnimation.isPlaying = false
+        // 动画完成后隐藏按钮
+        this.showStartButton = false
+      }
+    }
     
     // 更新浮动文字
     this.updateFloatingTexts(deltaTime)
@@ -1100,9 +1126,6 @@ export default class Game {
     // 【升级模式】渲染升级气泡和升级弹窗
     this.renderUpgradeBubbles()
     this.renderUpgradeModal()
-    
-    // 【开始接诊按钮】渲染
-    this.renderStartButton()
 
     // 【调试面板】放在最后渲染，确保层级最高
     if (this.debugModal && this.debugModal.visible) {
@@ -1685,12 +1708,17 @@ export default class Game {
       startX = centerX - totalWidth / 2
     }
     
-    // 3. 绘制胶囊
+    // 胶囊淡入动画（与按钮消失动画同步）
+    const capsuleAlpha = this.startButtonAnimation.progress
+    
+    // 3. 绘制胶囊（带动画效果）
+    ctx.save()
+    ctx.globalAlpha = capsuleAlpha
     
     // 关卡胶囊（左侧）
     const levelX = startX
     const levelY = titleY - levelHeight / 2
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fillStyle = `rgba(255,255,255,${0.25 * capsuleAlpha})`
     fillRoundRect(ctx, levelX, levelY, levelWidth, levelHeight, levelHeight / 2)
     ctx.fillStyle = '#FFF'
     ctx.fillText(levelText, levelX + levelWidth / 2, titleY)
@@ -1700,7 +1728,9 @@ export default class Game {
       const countdownText = `${this.timeRemaining}s`
       countdownX = levelX + levelWidth + capsuleSpacing
       countdownY = titleY - countdownHeight / 2
-      ctx.fillStyle = this.timeRemaining <= 10 ? 'rgba(231,76,60,0.4)' : 'rgba(255,255,255,0.25)'
+      ctx.fillStyle = this.timeRemaining <= 10 
+        ? `rgba(231,76,60,${0.4 * capsuleAlpha})` 
+        : `rgba(255,255,255,${0.25 * capsuleAlpha})`
       fillRoundRect(ctx, countdownX, countdownY, countdownWidth, countdownHeight, countdownHeight / 2)
       // 绘制倒计时图标
       if (this.timerImage) {
@@ -1715,7 +1745,7 @@ export default class Game {
     // 病人总数胶囊（新增，在治愈人数左边）
     const patientX = hasCountdown ? (countdownX + countdownWidth + capsuleSpacing) : (levelX + levelWidth + capsuleSpacing)
     const patientY = titleY - patientHeight / 2
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fillStyle = `rgba(255,255,255,${0.25 * capsuleAlpha})`
     fillRoundRect(ctx, patientX, patientY, patientWidth, patientHeight, patientHeight / 2)
     // 绘制病人图标（使用 patient_icon.png）
     if (this.patientIconImage) {
@@ -1729,7 +1759,7 @@ export default class Game {
     // 治愈人数胶囊（最右侧）
     const cureX = patientX + patientWidth + capsuleSpacing
     const cureY = titleY - cureHeight / 2
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fillStyle = `rgba(255,255,255,${0.25 * capsuleAlpha})`
     fillRoundRect(ctx, cureX, cureY, cureWidth, cureHeight, cureHeight / 2)
     // 绘制治愈图标
     if (this.curedImage) {
@@ -1739,6 +1769,8 @@ export default class Game {
     ctx.fillStyle = '#FFF'
     ctx.textAlign = 'left'
     ctx.fillText(cureText, cureX + 6 + cureIconSize + 4, titleY)
+    
+    ctx.restore()
     
     // 荣誉点胶囊
     const honorX = this.mapX + this.mapWidth - 160
@@ -5531,62 +5563,77 @@ export default class Game {
     return false
   }
 
-  // 【开始接诊按钮】渲染（在底部）
-  renderStartButton() {
-    if (!this.showStartButton) return
-    
-    // 如果按钮显示在header中，底部就不渲染了
-    // 由 renderStartButtonInHeader 处理
-  }
-  
   // 【开始接诊按钮】渲染在header位置
   renderStartButtonInHeader(ctx, titleY) {
-    const btnWidth = 180
-    const btnHeight = 36
+    const btnWidth = 140  // 宽度调低（从180改为140）
+    const btnHeight = 40  // 高度增加2px（从36改为38）
     const btnX = (this.screenWidth - btnWidth) / 2
     const btnY = titleY - btnHeight / 2
     
-    // 按钮样式配置（果冻风格）
+    // 按钮样式配置（白色背景 + 蓝色文字 + 天蓝色边框）
     const style = {
-      topColor: '#38BDF8',      // 顶层主色（天蓝色）
-      bottomColor: '#0284C7',   // 底层厚度色（深蓝色）
-      textColor: '#FFFFFF',     // 文字颜色（白色）
-      thickness: 5,             // 3D厚度
-      radius: 18                // 圆角半径
+      bgColor: '#FFFFFF',       // 底色（白色）
+      borderColor: 'rgba(56,189,248,0.4)',  // 边框颜色（天蓝色40%透明度）
+      textColor: '#0284C7',     // 文字颜色（深蓝）
+      thickness: 4,             // 3D厚度
+      radius: 20                // 圆角半径
     }
     
+    // 计算动画进度（缩小 + 淡出）
+    const animProgress = this.startButtonAnimation.progress
+    const btnScale = 1 - animProgress * 0.5  // 从1缩放到0.5
+    const btnAlpha = 1 - animProgress        // 从1淡出到0
+    
     // 呼吸动效：轻微缩放
-    const breathScale = 1 + Math.sin(this.lastTime / 300) * 0.03
+    const breathScale = animProgress > 0 ? 1 : (1 + Math.sin(this.lastTime / 300) * 0.015)
     const pressOffsetY = this.startButtonPressed ? style.thickness : 0
     
     ctx.save()
+    ctx.globalAlpha = btnAlpha
     ctx.translate(btnX + btnWidth / 2, btnY + btnHeight / 2)
-    ctx.scale(breathScale, breathScale)
+    ctx.scale(btnScale * breathScale, btnScale * breathScale)
     ctx.translate(-(btnX + btnWidth / 2), -(btnY + btnHeight / 2))
     
-    // 1. 绘制底层阴影/厚度（固定位置）
-    ctx.fillStyle = style.bottomColor
-    fillRoundRect(ctx, btnX, btnY + style.thickness, btnWidth, btnHeight, style.radius)
-    
-    // 2. 绘制顶层（会随按下状态移动）
-    ctx.fillStyle = style.topColor
+    // 1. 绘制天蓝色边框（加粗到3px）
+    ctx.fillStyle = style.borderColor
     fillRoundRect(ctx, btnX, btnY + pressOffsetY, btnWidth, btnHeight, style.radius)
     
-    // 3. 绘制文字（跟着顶层一起移动）
+    // 2. 绘制按钮底色（白色，内缩3px形成边框效果）
+    ctx.fillStyle = style.bgColor
+    fillRoundRect(ctx, btnX + 3, btnY + pressOffsetY + 3, btnWidth - 6, btnHeight - 6, style.radius - 3)
+    
+    // 计算图标和文字的整体宽度，用于居中
+    const iconSize = 20
+    const iconGap = 6  // 图标和文字间距
+    ctx.font = 'bold 18px "PingFang SC", "Microsoft YaHei", sans-serif'  // 文字变大（从16改为18）
+    const textWidth = ctx.measureText('开始接诊').width
+    const hasIcon = this.startButtonImage && this.startButtonImage.width > 0
+    const totalContentWidth = hasIcon ? (iconSize + iconGap + textWidth) : textWidth
+    const contentStartX = btnX + (btnWidth - totalContentWidth) / 2
+    
+    // 3. 绘制图标（start.png）
+    if (hasIcon) {
+      const iconY = btnY + (btnHeight - iconSize) / 2 + pressOffsetY
+      ctx.drawImage(this.startButtonImage, contentStartX, iconY, iconSize, iconSize)
+    }
+    
+    // 4. 绘制文字（蓝色，居中）
     ctx.fillStyle = style.textColor
-    ctx.font = 'bold 16px "PingFang SC", "Microsoft YaHei", sans-serif'
-    ctx.textAlign = 'center'
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('🩺 开始接诊', btnX + btnWidth / 2, btnY + btnHeight / 2 + pressOffsetY)
+    const textX = hasIcon ? (contentStartX + iconSize + iconGap) : contentStartX
+    ctx.fillText('开始接诊', textX, btnY + btnHeight / 2 + pressOffsetY)
     
     ctx.restore()
     
-    // 记录按钮点击区域（用于触摸检测）
-    this.startButtonBounds = {
-      x: btnX,
-      y: btnY,
-      width: btnWidth,
-      height: btnHeight + style.thickness
+    // 动画播放期间不更新点击区域（防止动画中还能点击）
+    if (animProgress === 0) {
+      this.startButtonBounds = {
+        x: btnX,
+        y: btnY,
+        width: btnWidth,
+        height: btnHeight + style.thickness
+      }
     }
   }
   
@@ -5617,8 +5664,9 @@ export default class Game {
       return
     }
     
-    // 隐藏按钮
-    this.showStartButton = false
+    // 启动按钮消失动画（而不是立即隐藏）
+    this.startButtonAnimation.isPlaying = true
+    this.startButtonAnimation.progress = 0
     
     // 显示准备气泡
     this.waitingArea.nurse.showReadyHint()

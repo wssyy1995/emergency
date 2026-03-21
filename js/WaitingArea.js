@@ -161,21 +161,28 @@ export default class WaitingArea {
     return null
   }
 
+  // 获取 guide.png 的位置和尺寸（统一计算，只改这里）
+  getGuideBounds() {
+    if (!this.guideImage || !this.guideImage.width > 0) return null
+    
+    const guideWidth = this.width * 0.24
+    const guideHeight = guideWidth * (this.guideImage.height / this.guideImage.width)
+    const guideX = this.nurse.x +35
+    const guideY = this.nurse.y - guideHeight / 1.1
+    
+    return { x: guideX, y: guideY, width: guideWidth, height: guideHeight }
+  }
+
   // 检测点击是否在 guide.png 上
   containsGuide(x, y) {
-    if (!this.guideImage || !this.guideImage.width > 0) return false
-    
-    // 与 render 方法中的计算完全一致
-    const guideWidth = this.width * 0.3
-    const guideHeight = guideWidth * (this.guideImage.height / this.guideImage.width)
-    const guideX = this.nurse.x - this.width * 0.5
-    const guideY = this.nurse.y - guideHeight * 0.9
+    const bounds = this.getGuideBounds()
+    if (!bounds) return false
     
     // 添加 10px 的点击容差，让点击更容易命中
     const padding = 10
     
-    return x >= guideX - padding && x <= guideX + guideWidth + padding &&
-           y >= guideY - padding && y <= guideY + guideHeight + padding
+    return x >= bounds.x - padding && x <= bounds.x + bounds.width + padding &&
+           y >= bounds.y - padding && y <= bounds.y + bounds.height + padding
   }
 
   update(deltaTime) {
@@ -192,14 +199,9 @@ export default class WaitingArea {
     this.nurse.render(ctx)
     
     // 绘制引导图片（在护士旁边）
-    if (this.guideImage && this.guideImage.width > 0) {
-      const guideWidth = this.width * 0.3
-      const guideHeight = guideWidth * (this.guideImage.height / this.guideImage.width)
-      // 在护士左侧位置
-      const guideX = this.nurse.x - this.width * 0.5
-      const guideY = this.nurse.y - guideHeight * 0.9
-      
-      ctx.drawImage(this.guideImage, guideX, guideY, guideWidth, guideHeight)
+    const guideBounds = this.getGuideBounds()
+    if (guideBounds) {
+      ctx.drawImage(this.guideImage, guideBounds.x, guideBounds.y, guideBounds.width, guideBounds.height)
     }
     
     this.renderReception(ctx)
