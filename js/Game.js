@@ -181,6 +181,9 @@ export default class Game {
     // 疾病清单弹窗状态（点击护士显示）
     this.diseaseListModal = null
     
+    // 本关目标弹窗状态（点击开始接诊按钮显示）
+    this.levelGoalModal = null
+    
     // 按钮轻量提示状态
     this.buttonTooltip = null
     
@@ -1119,6 +1122,7 @@ export default class Game {
     this.renderLevelCompleteModal()
     this.renderLevelToast()
     this.renderGameWinModal()
+    this.renderLevelGoalModal()
     this.renderSeatSelectionModal()
     this.renderIVPatientSelectionModal()
     this.renderDiseaseListModal()
@@ -1941,7 +1945,14 @@ export default class Game {
         }
       }
       
-      // 5. 疾病清单弹窗（点击护士显示）
+      // 5. 本关目标弹窗（点击开始接诊按钮显示）
+      if (this.levelGoalModal && this.levelGoalModal.visible) {
+        if (this.handleLevelGoalTouch(x, y)) {
+          return
+        }
+      }
+      
+      // 6. 疾病清单弹窗（点击护士显示）
       if (this.diseaseListModal && this.diseaseListModal.visible) {
         if (this.handleDiseaseListTouch(x, y)) {
           return
@@ -2303,6 +2314,17 @@ export default class Game {
         modal.closeBtnPressed = false
         modal.leftArrowPressed = false
         modal.rightArrowPressed = false
+      }
+      
+      // 【本关目标弹窗】按钮松开处理
+      if (this.levelGoalModal && this.levelGoalModal.visible) {
+        const touch = e.changedTouches[0]
+        const x = touch.clientX
+        const y = touch.clientY
+        
+        if (this.handleLevelGoalTouchEnd(x, y)) {
+          return
+        }
       }
       
       // 【开始接诊按钮】松开处理
@@ -5664,6 +5686,29 @@ export default class Game {
       return
     }
     
+    // 显示本关目标弹窗
+    this.showLevelGoalModal()
+  }
+  
+  // 显示本关目标弹窗
+  showLevelGoalModal() {
+    const levelConfig = getLevelConfig(this.currentLevel)
+    
+    this.levelGoalModal = {
+      visible: true,
+      isAnimating: true,
+      animationTime: 0,
+      pressed: false  // 按钮按下状态
+    }
+    
+    console.log('[本关目标] 显示弹窗，目标:', levelConfig.cureTarget, '荣誉点奖励:', this.honorEarnedThisLevel)
+  }
+  
+  // 真正开始游戏（点击弹窗的[开始]按钮后调用）
+  startGameAfterModal() {
+    // 关闭弹窗
+    this.levelGoalModal = null
+    
     // 启动按钮消失动画（而不是立即隐藏）
     this.startButtonAnimation.isPlaying = true
     this.startButtonAnimation.progress = 0
@@ -5994,6 +6039,287 @@ export default class Game {
     ctx.translate(centerX, centerY)
     ctx.scale(scale, scale)
     ctx.translate(-centerX, -centerY)
+  }
+
+  // ==================== 本关目标弹窗 ====================
+  
+  // 渲染本关目标弹窗（参考急救失败样式）
+  renderLevelGoalModal() {
+    if (!this.levelGoalModal || !this.levelGoalModal.visible) return
+    
+    const ctx = this.ctx
+    const modal = this.levelGoalModal
+    
+    // 弹窗尺寸 - 高度为屏幕高度的 3/4
+    const modalWidth = 320
+    const modalHeight = Math.floor(this.screenHeight * 3 / 4)
+    const modalX = (this.screenWidth - modalWidth) / 2
+    const modalY = (this.screenHeight - modalHeight) / 2
+    
+    // ===== 微弱弹出动画 =====
+    const animTime = modal.animationTime || 0
+    const duration = 400
+    let popScale = 1
+    if (animTime < duration) {
+      const t = animTime / duration
+      if (t < 0.6) {
+        popScale = 0.95 + (t / 0.6) * 0.12
+      } else {
+        popScale = 1.07 - ((t - 0.6) / 0.4) * 0.07
+      }
+    }
+    modal.animationTime = animTime + 16
+    
+    // 背景遮罩（带淡入）
+    const fadeIn = Math.min(1, animTime / 200)
+    ctx.fillStyle = `rgba(22, 33, 53, ${0.6 * fadeIn})`
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight)
+    
+    ctx.save()
+    
+    // 应用弹出动画变换
+    const centerX = modalX + modalWidth / 2
+    const centerY = modalY + modalHeight / 2
+    ctx.translate(centerX, centerY)
+    ctx.scale(popScale, popScale)
+    ctx.translate(-centerX, -centerY)
+    
+    // ===== 1. 弹窗卡片背景 =====
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
+    ctx.shadowBlur = 40
+    ctx.shadowOffsetY = 20
+    
+    ctx.fillStyle = '#FFFFFF'
+    fillRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 32)
+    ctx.shadowColor = 'transparent'
+    
+    // 粗边框
+    ctx.strokeStyle = '#6c8ebf'
+    ctx.lineWidth = 6
+    strokeRoundRect(ctx, modalX, modalY, modalWidth, modalHeight, 32)
+    
+    // 内阴影效果
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)'
+    ctx.fillRect(modalX + 10, modalY + modalHeight - 15, modalWidth - 20, 10)
+    
+    // ===== 2. 顶部徽章：本关目标 =====
+    const badgeWidth = 160
+    const badgeHeight = 50
+    const badgeX = modalX + (modalWidth - badgeWidth) / 2
+    const badgeY = modalY - 25
+    
+    // 徽章阴影
+    ctx.shadowColor = 'rgba(56, 189, 248, 0.4)'
+    ctx.shadowBlur = 15
+    ctx.shadowOffsetY = 8
+    
+    // 徽章背景（渐变蓝色）
+    const badgeGradient = ctx.createLinearGradient(badgeX, badgeY, badgeX, badgeY + badgeHeight)
+    badgeGradient.addColorStop(0, '#38bdf8')
+    badgeGradient.addColorStop(1, '#0ea5e9')
+    ctx.fillStyle = badgeGradient
+    fillRoundRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, 25)
+    ctx.shadowColor = 'transparent'
+    
+    // 徽章白色边框
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 5
+    strokeRoundRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, 25)
+    
+    // 徽章文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 20px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('🎯 本关目标', badgeX + badgeWidth / 2, badgeY + badgeHeight / 2)
+    
+    // ===== 3. 数据面板 =====
+    const panelX = modalX + 24
+    const panelY = modalY + 50
+    const panelWidth = modalWidth - 48
+    // 面板高度根据弹窗高度自适应，留出空间给按钮和边距
+    const panelHeight = modalHeight - 140
+    
+    // 面板背景
+    ctx.fillStyle = '#f1f5f9'
+    fillRoundRect(ctx, panelX, panelY, panelWidth, panelHeight, 20)
+    
+    // 虚线边框
+    ctx.strokeStyle = '#cbd5e1'
+    ctx.lineWidth = 2
+    ctx.setLineDash([6, 4])
+    strokeRoundRect(ctx, panelX, panelY, panelWidth, panelHeight, 20)
+    ctx.setLineDash([])
+    
+    // 获取本关数据
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const cureTarget = levelConfig.cureTarget
+    const totalPatients = levelConfig.patients.length
+    const baseHonor = levelConfig.baseHonor || 0
+    
+    // 根据面板高度计算行间距 - 让虚线区域远大于文字高度
+    const rowSpacing = Math.floor(panelHeight / 3.5)
+    const startY = panelY + 20
+    
+    // 数据行1：病人总数 - 文字在最顶部（整体往上移3px）
+    const row1Y = startY 
+    ctx.fillStyle = '#64748b'
+    ctx.font = 'bold 18px "PingFang SC", sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText('👥 病人总数', panelX + 20, row1Y)
+    
+    ctx.fillStyle = '#8b5cf6'
+    ctx.font = 'bold 20px "PingFang SC", sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(`${totalPatients} 人`, panelX + panelWidth - 20, row1Y)
+    
+    // 分割线1 - 在区域底部，虚线区域很大
+    ctx.fillStyle = '#cbd5e1'
+    ctx.fillRect(panelX + 20, startY + rowSpacing * 0.8, panelWidth - 40, 1)
+    
+    // 数据行2：本关目标 - 文字在区域顶部（整体往上移3px）
+    const row2Y = startY + rowSpacing + 7
+    ctx.fillStyle = '#64748b'
+    ctx.font = 'bold 18px "PingFang SC", sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText('🎮 本关目标', panelX + 20, row2Y)
+    
+    ctx.fillStyle = '#0ea5e9'
+    ctx.font = 'bold 20px "PingFang SC", sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(` ${cureTarget} 人`, panelX + panelWidth - 20, row2Y)
+    
+    // 分割线2 - 在区域底部
+    ctx.fillStyle = '#cbd5e1'
+    ctx.fillRect(panelX + 20, startY + rowSpacing * 1.9, panelWidth - 40, 1)
+    
+    // 数据行3：达成奖励 - 文字在区域顶部（整体往上移3px）
+    const row3Y = startY + rowSpacing * 2 + 10
+    ctx.fillStyle = '#64748b'
+    ctx.font = 'bold 18px "PingFang SC", sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText('🏆 达成奖励', panelX + 20, row3Y)
+    
+    // 荣誉点图标 + 数值
+    const honorX = panelX + panelWidth - 20
+    ctx.fillStyle = '#f59e0b'
+    ctx.font = 'bold 18px "PingFang SC", sans-serif'
+    ctx.textAlign = 'right'
+    const honorText = ` ${baseHonor}`
+    ctx.fillText(honorText, honorX, row3Y)
+    
+    // 绘制荣誉点图标
+    if (this.honorImage) {
+      const iconSize = 20
+      const textWidth = ctx.measureText(honorText).width
+      ctx.drawImage(this.honorImage, honorX - textWidth - iconSize - 8, row3Y - 2, iconSize, iconSize)
+    }
+    
+
+   
+    
+    // ===== 4. 底部按钮：开始 =====
+    const btnWidth = 160
+    const btnHeight = 50
+    const btnX = modalX + (modalWidth - btnWidth) / 2
+    const btnY = modalY + modalHeight - btnHeight - 30
+    
+    // 保存按钮位置用于点击检测
+    modal.btnBounds = {
+      x: btnX,
+      y: btnY,
+      width: btnWidth,
+      height: btnHeight
+    }
+    
+    // 按钮按下状态偏移
+    const pressOffset = modal.pressed ? 4 : 0
+    
+    // 呼吸动画
+    const pulseScale = 1 + Math.sin(Date.now() / 1000 * Math.PI) * 0.03
+    
+    ctx.save()
+    const btnCenterX = btnX + btnWidth / 2
+    const btnCenterY = btnY + btnHeight / 2
+    ctx.translate(btnCenterX, btnCenterY)
+    ctx.scale(pulseScale, pulseScale)
+    ctx.translate(-btnCenterX, -btnCenterY)
+    
+    // 按钮阴影层
+    ctx.shadowColor = 'rgba(56, 189, 248, 0.4)'
+    ctx.shadowBlur = 20
+    ctx.shadowOffsetY = 15
+    ctx.fillStyle = '#0284c7'
+    fillRoundRect(ctx, btnX, btnY + pressOffset + 8, btnWidth, btnHeight, 16)
+    ctx.shadowColor = 'transparent'
+    
+    // 按钮主体（渐变蓝色）
+    const btnGradient = ctx.createLinearGradient(btnX, btnY + pressOffset, btnX, btnY + pressOffset + btnHeight)
+    btnGradient.addColorStop(0, '#38bdf8')
+    btnGradient.addColorStop(1, '#0ea5e9')
+    ctx.fillStyle = btnGradient
+    fillRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 16)
+    
+    // 按钮边框
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 3
+    strokeRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 16)
+    
+    // 按钮文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 20px "PingFang SC", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('开始', btnCenterX, btnCenterY + pressOffset)
+    
+    ctx.restore()
+    ctx.restore()
+  }
+  
+  // 处理本关目标弹窗的触摸事件
+  handleLevelGoalTouch(x, y) {
+    if (!this.levelGoalModal || !this.levelGoalModal.visible) return false
+    
+    const modal = this.levelGoalModal
+    
+    // 检查是否点击了开始按钮
+    if (modal.btnBounds &&
+        x >= modal.btnBounds.x && x <= modal.btnBounds.x + modal.btnBounds.width &&
+        y >= modal.btnBounds.y && y <= modal.btnBounds.y + modal.btnBounds.height) {
+      
+      // 设置按下状态
+      modal.pressed = true
+      this.vibrate()
+      return true
+    }
+    
+    // 点击弹窗其他区域不处理
+    return true
+  }
+  
+  // 处理本关目标弹窗的触摸释放
+  handleLevelGoalTouchEnd(x, y) {
+    if (!this.levelGoalModal || !this.levelGoalModal.visible) return false
+    
+    const modal = this.levelGoalModal
+    
+    // 检查是否释放了开始按钮
+    if (modal.pressed && modal.btnBounds &&
+        x >= modal.btnBounds.x && x <= modal.btnBounds.x + modal.btnBounds.width &&
+        y >= modal.btnBounds.y && y <= modal.btnBounds.y + modal.btnBounds.height) {
+      
+      // 重置按下状态
+      modal.pressed = false
+      
+      // 真正开始游戏
+      this.startGameAfterModal()
+      return true
+    }
+    
+    // 重置按下状态
+    modal.pressed = false
+    return false
   }
 
 }

@@ -71,6 +71,7 @@ export const GameConfig = {
       hasCountdown: false,      // 是否开启倒计时（false=无倒计时，true=有倒计时）
       timeLimit: 60,            // 倒计时（秒，仅当hasCountdown为true时生效）
       cureTarget: 5,            // 治愈人数目标
+      baseHonor: 500,            // 达成奖励基础荣誉点
       doctorItemCount: 1,       // 医生请求物品数量
       patients: [1, 2, 3, 14, 15, 16]  // 本关出现的病人ID列表：病人6， 疾病123
     },
@@ -79,6 +80,7 @@ export const GameConfig = {
       hasCountdown: false,      // 是否开启倒计时
       timeLimit: 60,            // 倒计时（秒）
       cureTarget: 6,            // 治愈人数目标
+      baseHonor: 666,            // 达成奖励基础荣誉点
       doctorItemCount: 2,       // 医生请求物品数量
       patients: [4,16,15,17,18,2,1,5]  // 本关出现的病人ID列表： 病人8，疾病 123+45
     },
@@ -87,6 +89,7 @@ export const GameConfig = {
       hasCountdown: false,      // 是否开启倒计时
       timeLimit: 60,            // 倒计时（秒）
       cureTarget: 8,            // 治愈人数目标
+      baseHonor: 280,            // 达成奖励基础荣誉点
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -98,6 +101,7 @@ export const GameConfig = {
       hasCountdown: false,      // 是否开启倒计时
       timeLimit: 60,            // 倒计时（秒）
       cureTarget: 10,           // 治愈人数目标
+      baseHonor: 320,           // 达成奖励基础荣誉点
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -109,6 +113,7 @@ export const GameConfig = {
       hasCountdown: false,      // 是否开启倒计时
       timeLimit: 90,            // 倒计时（秒）
       cureTarget: 10,           // 治愈人数目标
+      baseHonor: 400,           // 达成奖励基础荣誉点
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
@@ -120,6 +125,7 @@ export const GameConfig = {
       hasCountdown: false,      // 是否开启倒计时
       timeLimit: 90,            // 倒计时（秒）
       cureTarget: 10,           // 治愈人数目标
+      baseHonor: 500,           // 达成奖励基础荣誉点
       doctorItemCount: {         // 医生请求物品数量配置
         min: 2,                  // 最少2个
         max: 3,                  // 最多3个
