@@ -4010,7 +4010,7 @@ export default class Game {
     
     // ===== 4. 绘制获得荣誉点（胶囊气泡样式）=====
     const honorEarned = this.levelCompleteModal.honorEarned || 0
-    const honorPillWidth = 170  // 宽度增加
+    const honorPillWidth = 200  // 宽度增加
     const honorPillHeight = 36  // 高度增加
     const honorPillX = modalX + (modalWidth - honorPillWidth) / 2
     const honorPillY = modalY + 65  // 整体位置，上移10px
@@ -4040,42 +4040,61 @@ export default class Game {
     const honorAnim = this.levelCompleteModal.honorAnim
     
     // 计算当前显示值和动画状态
+    // 与数据行联动的时间线：
+    // - 行1"完成"在400ms时结束落下（100ms延迟+300ms动画）
+    // - 600ms（行1完成后200ms）：+0 -> +baseHonor
+    // - 行2"完成/未达成"在1900ms时结束落下（1600ms延迟+300ms动画）
+    // - 2100ms（行2完成后200ms）：+baseHonor -> +最终值（仅当有额外奖励时）
     let displayValue = 0
     let prevValue = 0
     let isTransitioning = false
     let transitionProgress = 0
     
+    // 是否有额外奖励
+    const hasExtraBonus = extraBonus > 0
+    
     if (honorAnim && honorAnim.startTime) {
       const elapsed = Date.now() - honorAnim.startTime
       
-      // 阶段1：0-300ms，显示+0
-      if (elapsed < 300) {
+      // 阶段1：0-600ms，显示+0（等待行1"完成"落下并延迟200ms）
+      if (elapsed < 600) {
         displayValue = 0
         prevValue = 0
       }
-      // 阶段2：300-800ms，+0 -> +baseHonor（切换动画500ms）
-      else if (elapsed < 1800) {
+      // 阶段2：600-1000ms，+0 -> +baseHonor（翻牌动画400ms）
+      else if (elapsed < 1000) {
         displayValue = baseHonor
         prevValue = 0
         isTransitioning = true
-        transitionProgress = (elapsed - 300) / 500
+        transitionProgress = (elapsed - 600) / 400
       }
-
-      // 阶段4：1100-1600ms，+baseHonor -> +最终值（切换动画500ms）
-      else if (elapsed > 1900) {
-        displayValue = baseHonor + extraBonus
+      // 阶段3：1000-2100ms，保持+baseHonor（等待行2落下并延迟200ms）
+      else if (elapsed < 2100) {
+        displayValue = baseHonor
         prevValue = baseHonor
-        isTransitioning = true
-        transitionProgress = (elapsed - 1100) / 500
       }
-      // 阶段5：1600ms+，保持最终值
+      // 阶段4：2100-2500ms，+baseHonor -> +最终值（翻牌动画400ms，仅当有额外奖励时）
+      else if (elapsed < 2500) {
+        if (hasExtraBonus) {
+          // 有额外奖励，进行翻牌动画
+          displayValue = baseHonor + extraBonus
+          prevValue = baseHonor
+          isTransitioning = true
+          transitionProgress = (elapsed - 2100) / 400
+        } else {
+          // 无额外奖励，直接显示最终值（不翻牌）
+          displayValue = baseHonor
+          prevValue = baseHonor
+        }
+      }
+      // 阶段5：2500ms+，保持最终值
       else {
-        displayValue = baseHonor + extraBonus
-        prevValue = baseHonor + extraBonus
+        displayValue = hasExtraBonus ? (baseHonor + extraBonus) : baseHonor
+        prevValue = displayValue
       }
     }
     
-    const textX = honorPillX + honorPillWidth - 14
+    const textX = honorPillX + honorPillWidth-20 
     const textY = honorPillY + honorPillHeight / 2
     const textSize = 18
     
