@@ -265,7 +265,7 @@ export default class EquipmentRoom {
     const sectionX = this.x + 2 * this.scale
     const sectionW = this.width - 6 * this.scale
     // 【修复】高度基于容器高度的比例，而非固定值，确保手机端正常显示
-    const sectionH = this.height * 0.45
+    const sectionH = this.height * 0.44
     const sectionY = this.y + this.height * 0.08
     
     // 【修复】基于区域高度计算局部缩放因子，确保卡片随容器高度自适应
@@ -296,7 +296,7 @@ export default class EquipmentRoom {
     const cardW = 37 * localScale
     const cardH = 36 * localScale
     const startX = sectionX + padding
-    const startY = sectionY + 32 * localScale
+    const startY = sectionY + 30 * localScale
     
     for (let i = 0; i < allMedicineTools.length; i++) {
       const item = allMedicineTools[i]
@@ -350,7 +350,7 @@ export default class EquipmentRoom {
     const cardW = 37 * localScale
     const cardH = 36 * localScale
     const startX = sectionX + padding
-    const startY = sectionY + 32 * localScale
+    const startY = sectionY + 30 * localScale
     
     // 从 GameConfig 获取检验设备清单
     const machines = GameConfig.machine || []
@@ -397,22 +397,23 @@ export default class EquipmentRoom {
   // 绘制区域标题和操作按钮
   renderSectionHeader(ctx, sectionX, sectionY, sectionW, title, titleColor, btnType, localScale = this.scale) {
     const headerY = sectionY + 6 * localScale
-    const btnWidth = 50 * localScale
-    const btnHeight = 22 * localScale
+    // 【调整】按钮尺寸变大
+    const btnWidth = 135 * localScale
+    const btnHeight = 50 * localScale
     
     // 标题（左侧）- 字体稍小，位置上移5px
     ctx.fillStyle = titleColor
     ctx.font = `bold ${Math.max(9, 11 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    // 【调整】标题往下移动 3px
-    ctx.fillText(title, sectionX + 10 * localScale, headerY + btnHeight / 2 - 5 * localScale + 3 * localScale)
+    // 【调整】标题往上
+    ctx.fillText(title, sectionX + 10 * localScale, headerY + btnHeight / 2 - 15 * localScale )
     
     // 按钮（右侧）
-    // 【调整】按钮往右移动 10px（从 -10 改为 +10）
-    const btnX = sectionX + sectionW - btnWidth - 6 * localScale
+    // 【调整】按钮往右移动 
+    const btnX = sectionX + sectionW - btnWidth + 55 * localScale
     // 【调整】按钮往上移动 3px
-    const btnY = headerY - 3 * localScale
+    const btnY = headerY -23 * localScale
     
     // 判断按钮状态
     let hasSelected = false
@@ -437,10 +438,10 @@ export default class EquipmentRoom {
     
     // 绘制按钮图片（如果有）
     if (btnImage && btnImage.width > 0) {
-      // 未选中时降低透明度
+      // 未选中时降低透明度（颜色更深）
       ctx.save()
       if (!hasSelected) {
-        ctx.globalAlpha = 0.8
+        ctx.globalAlpha = 0.95
       }
       
       // 【修复】保持图片比例，不压扁，并放大1.2倍
@@ -512,7 +513,7 @@ export default class EquipmentRoom {
     strokeRoundRect(ctx, x, y, width, height, cornerRadius)
     
     // 图标区域（上方）- 顶部padding加大
-    const iconSize = 18 * localScale
+    const iconSize = 22 * localScale
     const iconX = x + width / 2
     const iconY = y + 13 * localScale
     
@@ -575,7 +576,7 @@ export default class EquipmentRoom {
     strokeRoundRect(ctx, x, y, width, height, cornerRadius)
     
     // 图标区域（上方）
-    const iconSize = 18 * localScale
+    const iconSize = 20 * localScale
     const iconX = x + width / 2
     const iconY = y + 13 * localScale
     

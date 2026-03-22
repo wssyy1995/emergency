@@ -6411,7 +6411,7 @@ export default class Game {
     ctx.fillStyle = '#64748b'
     ctx.font = 'bold 18px "PingFang SC", sans-serif'
     ctx.textAlign = 'left'
-    ctx.fillText('🎮 本关目标', panelX + 20, row2Y)
+    ctx.fillText('❤️ 治愈目标', panelX + 20, row2Y)
     
     ctx.fillStyle = '#0ea5e9'
     ctx.font = 'bold 20px "PingFang SC", sans-serif'
