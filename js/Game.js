@@ -4,7 +4,7 @@ import EquipmentRoom from './EquipmentRoom.js'
 import Patient from './Patient.js'
 import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
-import { getItemById, getItemImage, preloadItemImages } from './Items.js'
+import { getItemById, getItemImage, preloadItemImages, setExtraMachines } from './Items.js'
 import { audioManager } from './AudioManager.js'
 import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus, getLevelHintStatus, saveLevelHintStatus, getSelectedUpgrades, saveSelectedUpgrade, getUpgradesByType, getCurrentUpgrade, getInstanceUpgrade, saveInstanceUpgrade, getPurchasedUpgrades, isUpgradePurchased } from './GameConfig.js'
 
@@ -437,9 +437,9 @@ export default class Game {
     const availableWidth = this.mapWidth - totalGap
     
     // 调整比例：等候区 35% | 治疗区 35% | 器材室 30%
-    const waitingWidth = availableWidth * 0.35
+    const waitingWidth = availableWidth * 0.33
     const bedWidth = availableWidth * 0.35
-    const equipmentWidth = availableWidth * 0.30
+    const equipmentWidth = availableWidth * 0.32
     
     // 等候区（左侧）- 传入内层舞台坐标（加上 trayPadding）
     const waitingX = this.mapX + gap + trayPadding
@@ -519,7 +519,8 @@ export default class Game {
     
     this.isRunning = true
     
-    // 预加载物品图片
+    // 预加载物品图片（包括检验设备）
+    setExtraMachines(GameConfig.machine || [])
     preloadItemImages()
     
     this.loop(0)
@@ -2054,45 +2055,51 @@ export default class Game {
         return
       }
       
-      // 检查是否点击器材区的发送按钮
-      if (this.equipmentRoom.isClickOnEquipmentSendButton(x, y)) {
-        // 设置按下状态并显示动效
-        this.equipmentRoom.equipmentSendBtnPressed = true
+      // 检查是否点击药品工具区的配送按钮
+      if (this.equipmentRoom.isClickOnDeliveryButton(x, y)) {
+        this.equipmentRoom.setDeliveryBtnPressed(true)
         setTimeout(() => {
-          this.equipmentRoom.equipmentSendBtnPressed = false
+          this.equipmentRoom.setDeliveryBtnPressed(false)
         }, 150)
+        // 使用原来的发送逻辑配送药品工具
         this.handleSendButtonClick()
         return
       }
       
-      // 检查是否点击器材区的清空按钮
-      if (this.equipmentRoom.isClickOnEquipmentClearButton(x, y)) {
-        // 设置按下状态并显示动效
-        this.equipmentRoom.equipmentClearBtnPressed = true
+      // 检查是否点击检验设备区的启动按钮
+      if (this.equipmentRoom.isClickOnStartButton(x, y)) {
+        this.equipmentRoom.setStartBtnPressed(true)
         setTimeout(() => {
-          this.equipmentRoom.equipmentClearBtnPressed = false
+          this.equipmentRoom.setStartBtnPressed(false)
         }, 150)
-        // 清空选中的器材
-        if (this.equipmentRoom.selectedItems.size > 0) {
-          this.equipmentRoom.clearSelection()
-          console.log('已清空选中的器材')
-        }
+        // 处理启动检验设备
+        this.handleStartExamDevice()
         return
       }
       
-      // 检查是否点击器材室的物品（新的选择模式）
-      const itemId = this.equipmentRoom.getItemAt(x, y)
-      if (itemId) {
+      // 检查是否点击器材室的物品
+      const clickResult = this.equipmentRoom.getItemAt(x, y)
+      if (clickResult) {
         // 点击器材时震动（仅真机）
         this.vibrate()
-        const item = getItemById(itemId)
+        const item = getItemById(clickResult.itemId)
         if (item) {
-          // 切换选中状态
-          const isSelected = this.equipmentRoom.toggleItemSelection(itemId)
-          if (isSelected) {
-            console.log('选中器材:', item.name)
+          if (clickResult.type === 'medicineTool') {
+            // 药品工具：多选
+            const isSelected = this.equipmentRoom.toggleMedicineToolSelection(clickResult.itemId)
+            if (isSelected) {
+              console.log('选中药品工具:', item.name)
+            } else {
+              console.log('取消选中药品工具:', item.name)
+            }
           } else {
-            console.log('取消选中:', item.name)
+            // 检验设备：单选
+            const isSelected = this.equipmentRoom.toggleExamDeviceSelection(clickResult.itemId)
+            if (isSelected) {
+              console.log('选中检验设备:', item.name)
+            } else {
+              console.log('取消选中检验设备:', item.name)
+            }
           }
         }
         return
@@ -3249,13 +3256,13 @@ export default class Game {
     return false
   }
 
-  // 处理发送按钮点击
+  // 处理发送按钮点击（只配送药品工具）
   handleSendButtonClick() {
-    // 获取选中的物品
-    const selectedItems = this.equipmentRoom.getSelectedItems()
+    // 获取选中的药品工具
+    const selectedItems = this.equipmentRoom.getSelectedMedicineTools()
     if (selectedItems.length === 0) {
       wx.showToast({
-        title: '请先选择物品',
+        title: '请先选择药品或工具',
         icon: 'none',
         duration: 1200
       })
@@ -3372,8 +3379,8 @@ export default class Game {
       }
     }
     
-    // 清空选中状态（发送后重置）
-    this.equipmentRoom.clearSelection()
+    // 清空药品工具选中状态（发送后重置）
+    this.equipmentRoom.clearMedicineToolSelection()
     
     if (deliveredCount > 0) {
       const remainingRequired = targetDoctor.getRequiredItemIds()
@@ -3386,6 +3393,30 @@ export default class Game {
         })
       }
     }
+  }
+  
+  // 处理检验设备启动按钮点击
+  handleStartExamDevice() {
+    const selectedDevice = this.equipmentRoom.getSelectedExamDevice()
+    if (!selectedDevice) {
+      wx.showToast({
+        title: '请先选择检验设备',
+        icon: 'none',
+        duration: 1200
+      })
+      return
+    }
+    
+    // TODO: 实现检验设备启动逻辑
+    // 例如：为病人进行检查、生成检查报告等
+    wx.showToast({
+      title: `已启动: ${selectedDevice.name}`,
+      icon: 'none',
+      duration: 1500
+    })
+    
+    // 清空选中状态
+    this.equipmentRoom.clearExamDeviceSelection()
   }
   
   // 进入下一关

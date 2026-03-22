@@ -1,0 +1,193 @@
+import React, { useMemo, useState } from "react";
+import {
+  Syringe,
+  Pill,
+  Bandage,
+  Scissors,
+  Stethoscope,
+  HeartPulse,
+  Monitor,
+  Microscope,
+  Radiation,
+  Scan,
+} from "lucide-react";
+
+const EquipmentRoomPanel = () => {
+  const medicineTools = useMemo(
+    () => [
+      { name: "抗生素", icon: Syringe },
+      { name: "止痛药", icon: Pill },
+      { name: "肾上腺素", icon: Syringe },
+      { name: "注射液", icon: Syringe },
+      { name: "医用绷带", icon: Bandage },
+      { name: "手术夹", icon: Scissors },
+      { name: "麻醉计", icon: Stethoscope },
+      { name: "输液器", icon: Syringe },
+    ],
+    []
+  );
+
+  const inspectionEquipment = useMemo(
+    () => [
+      { name: "AED", icon: HeartPulse },
+      { name: "X光机", icon: Radiation },
+      { name: "CT", icon: Scan },
+      { name: "血浆机", icon: Syringe },
+      { name: "心电图", icon: Monitor },
+      { name: "显微镜", icon: Microscope },
+    ],
+    []
+  );
+
+  // 药品工具：多选
+  const [selectedMedicine, setSelectedMedicine] = useState(() => new Set());
+  // 检验设备：单选（只能选一个）
+  const [selectedInspection, setSelectedInspection] = useState(() => null);
+
+  const [toast, setToast] = useState("");
+
+  const setToastWithTimeout = (msg) => {
+    setToast(msg);
+    window.clearTimeout((setToastWithTimeout)._t);
+    (setToastWithTimeout)._t = window.setTimeout(() => setToast(""), 2200);
+  };
+
+  const toggleItem = (kind, name) => {
+    if (kind === "medicine") {
+      setSelectedMedicine((prev) => {
+        const next = new Set(prev);
+        if (next.has(name)) next.delete(name);
+        else next.add(name);
+        return next;
+      });
+    } else {
+      // inspection 单选：再次点击同一项则取消
+      setSelectedInspection((prev) => (prev === name ? null : name));
+    }
+  };
+
+  const ItemCard = ({ name, Icon, kind, isSelected }) => (
+    <button
+      type="button"
+      onClick={() => toggleItem(kind, name)}
+      className={
+        "flex flex-col items-center p-2 rounded-lg shadow-sm w-20 h-20 justify-center transition border " +
+        (isSelected
+          ? "bg-blue-600/10 border-blue-500/50"
+          : "bg-white/70 border-transparent hover:bg-white/90")
+      }
+      aria-pressed={isSelected}
+    >
+      <Icon className="text-blue-600 mb-1" size={28} />
+      <span className="text-xs text-gray-700 text-center leading-tight">
+        {name}
+      </span>
+    </button>
+  );
+
+  const medicineRow1 = medicineTools.slice(0, 4);
+  const medicineRow2 = medicineTools.slice(4);
+
+  const handleDelivery = () => {
+    if (selectedMedicine.size === 0) {
+      setToastWithTimeout("请选择要配送的药品工具");
+      return;
+    }
+    setToastWithTimeout(`已配送：${Array.from(selectedMedicine).join("、")}`);
+    setSelectedMedicine(new Set());
+  };
+
+  const handleStart = () => {
+    if (!selectedInspection) {
+      setToastWithTimeout("请选择要启动的检验设备");
+      return;
+    }
+    setToastWithTimeout(`已启动：${selectedInspection}`);
+    setSelectedInspection(null);
+  };
+
+  return (
+    <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl shadow-lg w-96 font-sans">
+      <h2 className="text-xl font-bold text-center text-gray-800 mb-4">器材室</h2>
+
+      {/* 药品工具 section */}
+      <div className="bg-orange-50/70 p-4 rounded-lg mb-4 shadow-inner">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-center text-orange-700">药品工具</h3>
+          <button
+            type="button"
+            onClick={handleDelivery}
+            className="px-3 py-1.5 rounded-full bg-orange-600 text-white text-sm font-medium shadow hover:bg-orange-700 transition"
+          >
+            配送
+          </button>
+        </div>
+
+        {/* Strict two-row horizontal grid */}
+        <div className="grid grid-cols-4 gap-3 justify-items-center">
+          {medicineRow1.map((item) => (
+            <ItemCard
+              key={item.name}
+              name={item.name}
+              Icon={item.icon}
+              kind="medicine"
+              isSelected={selectedMedicine.has(item.name)}
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-4 gap-3 justify-items-center mt-3">
+          {medicineRow2.map((item) => (
+            <ItemCard
+              key={item.name}
+              name={item.name}
+              Icon={item.icon}
+              kind="medicine"
+              isSelected={selectedMedicine.has(item.name)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Separator */}
+      <div className="h-4" />
+
+      {/* 检验设备 section（单选） */}
+      <div className="bg-green-50/70 p-4 rounded-lg shadow-inner">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-center text-green-700">检验设备</h3>
+          <button
+            type="button"
+            onClick={handleStart}
+            className="px-3 py-1.5 rounded-full bg-green-600 text-white text-sm font-medium shadow hover:bg-green-700 transition"
+          >
+            启动
+          </button>
+        </div>
+
+        <div className="grid grid-cols-4 gap-3 justify-items-center">
+          {inspectionEquipment.map((item) => (
+            <ItemCard
+              key={item.name}
+              name={item.name}
+              Icon={item.icon}
+              kind="inspection"
+              isSelected={selectedInspection === item.name}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Feedback / placeholder for "发送/清空" buttons area */}
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <div className="text-center text-gray-500 text-sm">
+          下方为“发送/清空”按钮区域
+        </div>
+        {toast ? (
+          <div className="mt-2 text-center text-sm font-medium text-gray-700">{toast}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+export default EquipmentRoomPanel;

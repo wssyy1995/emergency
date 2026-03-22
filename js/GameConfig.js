@@ -344,7 +344,50 @@ export const GameConfig = {
       unlockLevel: 1,
       durability: 100
     }
-  ]
+  ],
+    // ==================== 检验设备清单 ====================
+    machine: [
+      {
+        id: 'x',
+        name: 'X光机',
+        icon: '⭐️',
+        imagePath: 'images/machine_x.png',
+        unlockLevel: 2,
+        durability: 10
+      },
+      {
+        id: 'ct',
+        name: 'CT',
+        icon: '🖨',
+        imagePath: 'images/machine_ct.png',
+        price: 15,
+        unlockLevel: 1,
+        durability: 20
+      },
+      {
+        id: 'blood',
+        name: '血常规',
+        icon: '🩸',
+        imagePath: 'images/machine_blood.png',
+        unlockLevel: 2,
+        durability: 50
+      },
+      {
+        id: 'heart',
+        name: '心电图',
+        icon: '🫀',
+        imagePath: 'images/machine_heart.png',
+        unlockLevel: 1,
+        durability: 100
+      },  {
+        id: 'brain',
+        name: '心电图',
+        icon: '🫀',
+        imagePath: 'images/machine_brain.png',
+        unlockLevel: 1,
+        durability: 100
+      }
+    ]
 }
 
 // 获取指定关卡配置

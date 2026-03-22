@@ -104,9 +104,17 @@ export const EXAM_DEVICES = [
 // 图片缓存
 const imageCache = {}
 
+// 额外的机器设备图片（由 Game.js 在初始化时设置）
+let extraMachines = []
+
+// 设置额外的机器设备（用于预加载）
+export function setExtraMachines(machines) {
+  extraMachines = machines || []
+}
+
 // 预加载所有物品图片
 export function preloadItemImages(callback) {
-  const allItems = [...MEDICINES, ...TOOLS, ...EXAM_DEVICES]
+  const allItems = [...MEDICINES, ...TOOLS, ...EXAM_DEVICES, ...extraMachines]
   let loadedCount = 0
   const totalCount = allItems.length
 
