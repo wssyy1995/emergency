@@ -73,14 +73,8 @@ class Bed {
     patient.y = this.y + this.height * 0.55  // 往下挪，让病人躺在病床上
     patient.inBed = true
     
-    // 为病人随机分配一个检验设备
-    const machines = GameConfig.machine || []
-    if (machines.length > 0) {
-      const randomMachine = machines[Math.floor(Math.random() * machines.length)]
-      patient.requiredMachineId = randomMachine.id
-      patient.showMachineBubble = true
-      console.log(`病人 ${patient.name} 申请设备: ${randomMachine.name}`)
-    }
+    // 注意：急救间病床上的病人不需要申请检验设备
+    // 他们由医生使用药品工具治疗
   }
 
   clear() {
@@ -214,6 +208,13 @@ class IVSeat {
     patient.state = 'seated'
     patient.seatedAt = Date.now()
     
+    // 【修复】急症病人（priority === 1）不申请设备
+    const isEmergency = patient.disease && patient.disease.diseases_priority === 1
+    if (isEmergency) {
+      console.log(`病人 ${patient.name} 是急症病人，不申请设备`)
+      return
+    }
+    
     // 为病人随机分配一个检验设备
     const machines = GameConfig.machine || []
     if (machines.length > 0) {
@@ -225,6 +226,11 @@ class IVSeat {
   }
 
   clear() {
+    // 重置病人设备相关状态
+    if (this.patient) {
+      this.patient.machineReady = false
+      this.patient.machineCheckComplete = false
+    }
     this.patient = null
   }
 
@@ -432,10 +438,8 @@ export default class BedArea {
     // ctx.stroke()
     // ctx.restore()
     
-    // 绘制输液椅（底部1/3区域）
-    this.ivSeats.forEach(seat => seat.render(ctx, curedImage))
-    
     // ========== 【治疗椅】胶囊形标签 ==========
+    // 注意：在治疗椅和病人渲染之前绘制，让病人气泡显示在标签之上
     // 治疗椅使用蓝色系配色（加深版本，80%不透明）
     const treatmentColors = {
       bgColor: '#3498DB',          // 内部蓝色底色（加深）
@@ -446,6 +450,9 @@ export default class BedArea {
       alpha: 0.8                   // 80%不透明度
     }
     this.drawPillLabel(ctx, this.x + this.width / 2, this.y + this.height * 0.65, '治疗椅', treatmentColors)
+    
+    // 绘制输液椅（底部1/3区域）
+    this.ivSeats.forEach(seat => seat.render(ctx, curedImage))
     
     // 【治疗椅】下方虚线（暂时隐藏）
     // ctx.save()

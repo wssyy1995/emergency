@@ -1,5 +1,6 @@
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import Nurse from './Nurse.js'
+import { getNewPlayerStatus } from './GameConfig.js'
 
 // ==================== 全局等候区图片缓存 ====================
 const WaitingAreaImageCache = {
@@ -54,11 +55,6 @@ export default class WaitingArea {
   // 设置新玩家模式
   setNewPlayerMode(isNewPlayer) {
     this.nurse.setNewPlayerMode(isNewPlayer)
-  }
-  
-  // 标记 guide 已被点击（点击后不再显示手指指向）
-  markGuideClicked() {
-    this.guideClicked = true
   }
 
   initStandingQueue() {
@@ -216,8 +212,8 @@ export default class WaitingArea {
     if (guideBounds) {
       ctx.drawImage(this.guideImage, guideBounds.x, guideBounds.y, guideBounds.width, guideBounds.height)
       
-      // 欢迎气泡消失后，在 guide 左边显示手指指向图标（点击 guide 后不再显示）
-      if (!this.nurse.isNewPlayer && !this.nurse.showReadyBubble && !this.guideClicked && this.fingerImage && this.fingerImage.width > 0) {
+      // 欢迎气泡消失后，在 guide 左边显示手指指向图标（已完成新手引导后不再显示）
+      if (!this.nurse.isNewPlayer && !this.nurse.showReadyBubble && getNewPlayerStatus() && this.fingerImage && this.fingerImage.width > 0) {
         // 手指大小
         const fingerWidth = 32 * (this.width / 400)
         const fingerHeight = fingerWidth * (this.fingerImage.height / this.fingerImage.width)

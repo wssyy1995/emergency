@@ -1,5 +1,6 @@
 import { drawStar, fillRoundRect, strokeRoundRect } from './utils.js'
 import { GameConfig, getDiseaseById } from './GameConfig.js'
+import { getItemImage } from './Items.js'
 
 // ==================== 全局病人图片缓存 ====================
 const PatientImageCache = {
@@ -242,6 +243,7 @@ export default class Patient {
     this.requiredMachineId = null   // 申请的检验设备ID
     this.boundMachineId = null      // 当前绑定的设备ID
     this.machineCheckComplete = false  // 设备检查是否完成
+    this.machineReady = false       // 设备就绪（进度完成，有绿色勾号）
     this.showMachineBubble = false  // 是否显示设备申请气泡
     
     // 病人图片编号（使用 patientDetail.id，直接对应图片编号 1-26）
@@ -583,18 +585,26 @@ export default class Patient {
         // 【非紧急疾病】治疗完成：显示绿色圆圈 + 对勾（带上下跳动动画）
         // 上下跳动动画：周期约0.8秒，跳动幅度 3px
         const bounceOffset = Math.sin(this.animationTime / 160) * 3 * scale
-        // 绿色圆圈 + 对勾
-        ctx.fillStyle = '#27AE60'
+        // 绿色圆圈 + 对勾（与检验设备卡片样式一致）
+        const checkSize = 20 * scale
+        const checkX = centerX - checkSize / 2
+        const checkY = barY - 3 * scale + bounceOffset
+        
+        // 绿色圆形背景
+        ctx.fillStyle = '#22C55E'
         ctx.beginPath()
-        ctx.arc(centerX, barY + 5 * scale + bounceOffset, 14 * scale, 0, Math.PI * 2)
+        ctx.arc(checkX + checkSize / 2, checkY + checkSize / 2, checkSize / 2, 0, Math.PI * 2)
         ctx.fill()
+        
+        // 白色对勾
         ctx.strokeStyle = '#FFF'
-        ctx.lineWidth = 2 * scale
+        ctx.lineWidth = 2.5 * scale
         ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
         ctx.beginPath()
-        ctx.moveTo(centerX - 4 * scale, barY + 5 * scale + bounceOffset)
-        ctx.lineTo(centerX - 1 * scale, barY + 8 * scale + bounceOffset)
-        ctx.lineTo(centerX + 5 * scale, barY + 2 * scale + bounceOffset)
+        ctx.moveTo(checkX + 4 * scale, checkY + checkSize / 2 + 1 * scale)
+        ctx.lineTo(checkX + checkSize / 2 - 1 * scale, checkY + checkSize - 4 * scale)
+        ctx.lineTo(checkX + checkSize - 4 * scale, checkY + 4 * scale)
         ctx.stroke()
       } else if (this.machineCheckComplete) {
         // 【检查完成】显示蓝色治疗进度条
@@ -737,11 +747,10 @@ export default class Patient {
       ctx.restore()
     }
     
-    // 绘制设备申请气泡（在治疗椅上且需要设备检查时）
+    // 绘制设备申请气泡（在治疗椅上且需要设备检查时，检查完成后显示绿色背景）
     if ((this.inBed || (this.seat && this.state === 'seated')) && 
         this.showMachineBubble && 
-        this.requiredMachineId && 
-        !this.machineCheckComplete) {
+        this.requiredMachineId) {
       this.renderMachineBubble(ctx, scale)
     }
   }
@@ -750,7 +759,8 @@ export default class Patient {
   renderMachineBubble(ctx, scale) {
     const centerX = this.x + this.width / 2
     const bubbleY = this.y - 95 * scale + this.bounceOffset
-    const bubbleSize = 36 * scale
+    // 【调整】气泡变大一点
+    const bubbleSize = 48 * scale
     const now = Date.now()
     
     // 获取设备信息
@@ -769,9 +779,12 @@ export default class Patient {
     
     ctx.save()
     
-    // 气泡背景
-    ctx.fillStyle = '#FFF'
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)'
+    // 【新增】设备就绪（有绿色勾号）或检查完成：气泡背景变绿色（透明度0.8）
+    if (this.machineReady || this.machineCheckComplete) {
+      ctx.fillStyle = 'rgba(134, 239, 172, 0.8)'  // 绿色背景，透明度0.8
+    } else {
+      ctx.fillStyle = '#FFF'  // 默认白色背景
+    }
     ctx.shadowBlur = 6 * scale
     ctx.shadowOffsetY = 2 * scale
     ctx.beginPath()
@@ -791,16 +804,28 @@ export default class Patient {
     }
     ctx.stroke()
     
-    // 绘制设备图标
-    const iconSize = 20 * scale
-    ctx.font = `${iconSize}px "PingFang SC", sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillStyle = '#4B5563'
-    ctx.fillText(machine.icon, centerX, bubbleY)
+    // 绘制设备图标（优先使用图片）
+    // 【调整】图标变大一点
+    const iconSize = 26 * scale
+    const itemImage = getItemImage(machine.id)
+    if (itemImage) {
+      ctx.drawImage(itemImage, centerX - iconSize / 2, bubbleY - iconSize / 2, iconSize, iconSize)
+    } else {
+      // 备用：使用 emoji
+      ctx.font = `${iconSize}px "PingFang SC", sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#4B5563'
+      ctx.fillText(machine.icon, centerX, bubbleY)
+    }
     
     // 气泡小三角（指向病人）
-    ctx.fillStyle = '#FFF'
+    // 【新增】设备就绪或检查完成：小三角背景也变绿色（透明度0.8）
+    if (this.machineReady || this.machineCheckComplete) {
+      ctx.fillStyle = 'rgba(134, 239, 172, 0.8)'
+    } else {
+      ctx.fillStyle = '#FFF'
+    }
     ctx.beginPath()
     ctx.moveTo(centerX - 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
     ctx.lineTo(centerX + 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)

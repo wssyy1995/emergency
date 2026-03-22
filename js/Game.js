@@ -14,8 +14,8 @@ const UI_COLORS = {
   background: '#E6E6FA',      // 浅薰衣草紫
   
   // 顶部状态栏
-  header: '#B496C4',          // 香芋紫色背景
-  headerBorder: '#C5B4E0',    // 顶部状态栏边框色（稍深）
+  header: '#B394BF',          // 香芋紫色背景
+  headerBorder: '#f1e3f0',    // 顶部状态栏边框色（稍深）
   
   // 等候区托盘
   waiting: {
@@ -270,7 +270,7 @@ export default class Game {
     startBtnImg.onload = () => {
       this.startButtonImage = startBtnImg
     }
-    startBtnImg.src = 'images/start.png'
+    startBtnImg.src = 'images/start_level.png'
     
     // 加载疾病图标缓存
     this.diseaseImages = {}
@@ -437,9 +437,9 @@ export default class Game {
     const availableWidth = this.mapWidth - totalGap
     
     // 调整比例：等候区 35% | 治疗区 35% | 器材室 30%
-    const waitingWidth = availableWidth * 0.33
-    const bedWidth = availableWidth * 0.35
-    const equipmentWidth = availableWidth * 0.32
+    const waitingWidth = availableWidth * 0.34
+    const bedWidth = availableWidth * 0.36
+    const equipmentWidth = availableWidth * 0.30
     
     // 等候区（左侧）- 传入内层舞台坐标（加上 trayPadding）
     const waitingX = this.mapX + gap + trayPadding
@@ -747,8 +747,9 @@ export default class Game {
           return
         }
         
-        // 输液治疗进度更新（只有完成设备检查后才能开始治疗）
-        if (!seat.patient.ivTreatmentComplete && seat.patient.machineCheckComplete) {
+        // 输液治疗进度更新（只有完成设备检查后才能开始治疗，急症病人无需设备检查）
+        const needsMachineCheck = seat.patient.requiredMachineId && !seat.patient.machineCheckComplete
+        if (!seat.patient.ivTreatmentComplete && !needsMachineCheck) {
           // 初始化总治疗时间（只需要一次）
           if (seat.patient.ivTotalTreatmentTime === 0) {
             seat.patient.ivTotalTreatmentTime = getAutoTreatTimeByDisease(seat.patient.condition.name)
@@ -861,8 +862,9 @@ export default class Game {
     // 如果达到治愈目标，关卡完成
     if (this.curedCount >= levelConfig.cureTarget) {
       this.levelComplete = true
-      this.checkLevelComplete()
     }
+    // 【修复】无论是否达标，都检查关卡完成状态（处理所有病人已处理但未达标的情况）
+    this.checkLevelComplete()
   }
 
   // 游戏结束（带原因）
@@ -1087,12 +1089,6 @@ export default class Game {
     // 渲染医生气泡（在最上层，不被病人遮挡）
     this.doctors.forEach(doctor => doctor.renderBubble(this.ctx))
     
-    // 【新玩家指引】聚光灯效果（在所有元素之后绘制，只影响背景）
-    // 只在欢迎气泡显示时生效（气泡消失后取消聚光灯）
-    if (this.currentLevel === 0 && this.waitingArea.nurse.isNewPlayer) {
-      this.renderNewPlayerSpotlight()
-    }
-    
     this.renderUI()
     this.renderFloatingTexts()
     this.renderGameOverModal()
@@ -1107,6 +1103,12 @@ export default class Game {
     // 【升级模式】渲染升级气泡和升级弹窗
     this.renderUpgradeBubbles()
     this.renderUpgradeModal()
+    
+    // 【新玩家指引】聚光灯效果（在所有UI元素之后绘制，遮住【开始接诊】按钮）
+    // 只在欢迎气泡显示时生效（气泡消失后取消聚光灯）
+    if (this.currentLevel === 0 && this.waitingArea.nurse.isNewPlayer) {
+      this.renderNewPlayerSpotlight()
+    }
 
     // 【调试面板】放在最后渲染，确保层级最高
     if (this.debugModal && this.debugModal.visible) {
@@ -1444,7 +1446,7 @@ export default class Game {
       30,          // 圆角
       6,           // padding
       this.bedAreaBgImage,  // 背景图（如果有）
-      15           // 背景图Y轴偏移：往下
+      22           // 背景图Y轴偏移：往下
     )
     
     // ===== 器材室：双层托盘效果 =====
@@ -2106,17 +2108,24 @@ export default class Game {
                 console.log('取消选中检验设备:', item.name)
               }
             } else if (machineState.state === 'ready') {
-              // 就绪状态（有勾号）：触发治疗
-              const patient = this.equipmentRoom.useMachineForTreatment(clickResult.itemId)
-              if (patient) {
-                console.log('设备治疗完成，病人开始正式治疗:', patient.name)
-                // 标记病人可以开始自动治疗
-                patient.canStartAutoTreatment = true
-                wx.showToast({
-                  title: '检查完成，开始治疗',
-                  icon: 'none',
-                  duration: 1500
-                })
+              // 就绪状态（有勾号）：触发飞行动画
+              // 找到被点击的卡片位置
+              const card = this.equipmentRoom.examDeviceCards.find(c => c.itemId === clickResult.itemId)
+              if (card) {
+                const result = this.equipmentRoom.useMachineForTreatment(clickResult.itemId, card.x, card.y)
+                if (result) {
+                  // 开始飞行动画，到达后延迟1秒才开始治疗
+                  result.startFlying((patient) => {
+                    console.log('报告到达病人，开始正式治疗:', patient.name)
+                    // 延迟1秒后标记病人可以开始自动治疗
+                    patient.machineCheckComplete = true
+                    wx.showToast({
+                      title: '检查完成，开始治疗',
+                      icon: 'none',
+                      duration: 1500
+                    })
+                  })
+                }
               }
             } else if (machineState.state === 'starting') {
               // 启动中：不可点击
@@ -2160,12 +2169,10 @@ export default class Game {
         // 点击时震动（仅真机）
         this.vibrate()
         
-        // 标记 guide 已被点击（不再显示手指指向图标）
-        this.waitingArea.markGuideClicked()
-        
-        // 【新玩家指引】如果是新玩家，立即恢复正常护士图片（移除灯泡）
+        // 【新玩家指引】如果是新玩家，保存状态并恢复正常护士图片（移除灯泡）
         if (GameConfig.is_new_player) {
-          console.log('[新玩家指引] guide 被点击，恢复正常图片，显示分诊指南')
+          console.log('[新玩家指引] guide 被点击，保存状态并恢复正常图片，显示分诊指南')
+          saveNewPlayerStatus(false)
           this.waitingArea.setNewPlayerMode(false)
         }
         
@@ -5815,21 +5822,13 @@ export default class Game {
     return false
   }
 
-  // 【开始接诊按钮】渲染在header位置
+  // 【开始接诊按钮】渲染在header位置（直接绘制，不依赖图片）
   renderStartButtonInHeader(ctx, titleY) {
-    const btnWidth = 140  // 宽度调低（从180改为140）
-    const btnHeight = 40  // 高度增加2px（从36改为38）
+    // 按钮尺寸
+    const btnWidth = 140
+    const btnHeight = 44
     const btnX = (this.screenWidth - btnWidth) / 2
     const btnY = titleY - btnHeight / 2
-    
-    // 按钮样式配置（白色背景 + 蓝色文字 + 天蓝色边框）
-    const style = {
-      bgColor: '#FFFFFF',       // 底色（白色）
-      borderColor: 'rgba(56,189,248,0.4)',  // 边框颜色（天蓝色40%透明度）
-      textColor: '#0284C7',     // 文字颜色（深蓝）
-      thickness: 4,             // 3D厚度
-      radius: 20                // 圆角半径
-    }
     
     // 计算动画进度（缩小 + 淡出）
     const animProgress = this.startButtonAnimation.progress
@@ -5838,45 +5837,41 @@ export default class Game {
     
     // 呼吸动效：轻微缩放
     const breathScale = animProgress > 0 ? 1 : (1 + Math.sin(this.lastTime / 300) * 0.015)
-    const pressOffsetY = this.startButtonPressed ? style.thickness : 0
+    // 按下偏移：按下时向下偏移3px
+    const pressOffsetY = this.startButtonPressed ? 3 : 0
     
     ctx.save()
     ctx.globalAlpha = btnAlpha
+    
+    // 应用缩放动画
     ctx.translate(btnX + btnWidth / 2, btnY + btnHeight / 2)
     ctx.scale(btnScale * breathScale, btnScale * breathScale)
     ctx.translate(-(btnX + btnWidth / 2), -(btnY + btnHeight / 2))
     
-    // 1. 绘制天蓝色边框（加粗到3px）
-    ctx.fillStyle = style.borderColor
-    fillRoundRect(ctx, btnX, btnY + pressOffsetY, btnWidth, btnHeight, style.radius)
+    // 【绘制按钮主体】参考【本关目标】弹窗的【开始】按钮样式：蓝色渐变+白色边框
+    const cornerRadius = 16
     
-    // 2. 绘制按钮底色（白色，内缩3px形成边框效果）
-    ctx.fillStyle = style.bgColor
-    fillRoundRect(ctx, btnX + 3, btnY + pressOffsetY + 3, btnWidth - 6, btnHeight - 6, style.radius - 3)
+    // 按钮按下状态偏移
+    const pressOffset = this.startButtonPressed ? 2 : 0
     
-    // 计算图标和文字的整体宽度，用于居中
-    const iconSize = 20
-    const iconGap = 6  // 图标和文字间距
-    ctx.font = 'bold 18px "PingFang SC", "Microsoft YaHei", sans-serif'  // 文字变大（从16改为18）
-    const textWidth = ctx.measureText('开始接诊').width
-    const hasIcon = this.startButtonImage && this.startButtonImage.width > 0
-    const totalContentWidth = hasIcon ? (iconSize + iconGap + textWidth) : textWidth
-    const contentStartX = btnX + (btnWidth - totalContentWidth) / 2
+    // 【开始接诊】按钮主体（渐变蓝色）
+    const btnGradient = ctx.createLinearGradient(btnX, btnY + pressOffset, btnX, btnY + pressOffset + btnHeight)
+    btnGradient.addColorStop(0, '#38bdf8')
+    btnGradient.addColorStop(1, '#0ea5e9')
+    ctx.fillStyle = btnGradient
+    fillRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, cornerRadius)
     
-    // 3. 绘制图标（start.png）
-    if (hasIcon) {
-      const iconY = btnY + (btnHeight - iconSize) / 2 + pressOffsetY
-      ctx.drawImage(this.startButtonImage, contentStartX, iconY, iconSize, iconSize)
-    }
+    // 3. 按钮边框（白色3px）
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 3
+    strokeRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, cornerRadius)
     
-    // 4. 绘制文字（蓝色，居中）
-    ctx.fillStyle = style.textColor
-    ctx.textAlign = 'left'
+    // 4. 绘制按钮文字
+    ctx.fillStyle = '#FFFFFF'
+    ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    const textX = hasIcon ? (contentStartX + iconSize + iconGap) : contentStartX
-    ctx.fillText('开始接诊', textX, btnY + btnHeight / 2 + pressOffsetY)
-    
-    ctx.restore()
+    ctx.font = 'bold 16px "PingFang SC", "Microsoft YaHei", sans-serif'
+    ctx.fillText('开始接诊', btnX + btnWidth / 2, btnY + btnHeight / 2 + pressOffset)
     
     // 动画播放期间不更新点击区域（防止动画中还能点击）
     if (animProgress === 0) {
@@ -5884,9 +5879,11 @@ export default class Game {
         x: btnX,
         y: btnY,
         width: btnWidth,
-        height: btnHeight + style.thickness
+        height: btnHeight
       }
     }
+    
+    ctx.restore()
   }
   
   // 【荣誉点胶囊】单独渲染荣誉点胶囊
@@ -6477,12 +6474,12 @@ export default class Game {
     ctx.scale(pulseScale, pulseScale)
     ctx.translate(-btnCenterX, -btnCenterY)
     
-    // 按钮阴影层
-    ctx.shadowColor = 'rgba(56, 189, 248, 0.4)'
-    ctx.shadowBlur = 20
-    ctx.shadowOffsetY = 15
+    // 按钮阴影层（变细）
+    ctx.shadowColor = 'rgba(56, 189, 248, 0.35)'
+    ctx.shadowBlur = 12
+    ctx.shadowOffsetY = 8
     ctx.fillStyle = '#0284c7'
-    fillRoundRect(ctx, btnX, btnY + pressOffset + 8, btnWidth, btnHeight, 16)
+    fillRoundRect(ctx, btnX, btnY + pressOffset + 4, btnWidth, btnHeight, 16)
     ctx.shadowColor = 'transparent'
     
     // 按钮主体（渐变蓝色）

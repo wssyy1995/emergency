@@ -13,6 +13,11 @@ export default class EquipmentRoom {
     const sysInfo = wx.getSystemInfoSync()
     this.platform = sysInfo.platform
     
+    // 计算屏幕缩放因子（以 375px 宽度为基准）
+    this.scale = sysInfo.windowWidth / 375
+    // 限制缩放范围，避免过大或过小
+    this.scale = Math.max(0.85, Math.min(1.15, this.scale))
+    
     // 可点击区域 - 物品卡片
     this.medicineToolCards = [] // 药品工具卡片数组
     this.examDeviceCards = [] // 检验设备卡片数组
@@ -52,9 +57,40 @@ export default class EquipmentRoom {
     })
     this.machineStartDuration = 3000  // 设备启动时间（毫秒）
     
+    // ==================== 报告飞行动画 ====================
+    this.flyingReports = [] // 正在飞行的报告图标数组
+    
     // 加载检查报告图片
     this.machineReportImage = null
     this.loadMachineReportImage()
+    
+    // 加载按钮图片
+    this.deliveryBtnImage = null
+    this.startMachineBtnImage = null
+    this.loadButtonImages()
+  }
+  
+  // 加载按钮图片
+  loadButtonImages() {
+    // 配送按钮
+    const deliveryImg = wx.createImage()
+    deliveryImg.onload = () => {
+      this.deliveryBtnImage = deliveryImg
+    }
+    deliveryImg.onerror = () => {
+      console.warn('Failed to load deliver.png')
+    }
+    deliveryImg.src = 'images/deliver.png'
+    
+    // 启动按钮
+    const startImg = wx.createImage()
+    startImg.onload = () => {
+      this.startMachineBtnImage = startImg
+    }
+    startImg.onerror = () => {
+      console.warn('Failed to load start_machine.png')
+    }
+    startImg.src = 'images/start_machine.png'
   }
   
   // 加载检查报告图片
@@ -88,8 +124,61 @@ export default class EquipmentRoom {
           // 启动完成
           state.state = 'ready'
           state.hasCheckMark = true
+          // 【新增】给绑定的病人设置就绪标记，气泡背景变绿色
+          if (state.boundPatient) {
+            state.boundPatient.machineReady = true
+          }
         }
       }
+    })
+    
+    // 更新报告飞行动画
+    this.updateFlyingReports(deltaTime)
+  }
+  
+  // 更新报告飞行动画
+  updateFlyingReports(deltaTime) {
+    for (let i = this.flyingReports.length - 1; i >= 0; i--) {
+      const report = this.flyingReports[i]
+      report.progress += deltaTime / report.duration
+      
+      if (report.progress >= 1) {
+        // 飞行完成，延迟600ms后通知病人开始治疗
+        if (!report.notified) {
+          report.notified = true
+          setTimeout(() => {
+            if (report.onArrive) {
+              report.onArrive(report.patient)
+            }
+          }, 600) // 延迟600ms
+        }
+        this.flyingReports.splice(i, 1)
+      }
+    }
+  }
+  
+  // 添加报告飞行动画（弧形路径）
+  addFlyingReport(startX, startY, endX, endY, patient, onArrive) {
+    // 计算弧形路径的控制点（在起始点上方，形成向上的抛物线）
+    const midX = (startX + endX) / 2
+    const midY = (startY + endY) / 2
+    // 控制点向上偏移，形成弧形
+    const controlY = Math.min(startY, endY) - 80
+    
+    this.flyingReports.push({
+      x: startX,
+      y: startY,
+      startX,
+      startY,
+      endX,
+      endY,
+      controlX: midX,      // 贝塞尔曲线控制点X
+      controlY: controlY,  // 贝塞尔曲线控制点Y（向上弧形）
+      patient,
+      progress: 0,
+      duration: 800, // 飞行时间800ms
+      notified: false,
+      onArrive
     })
   }
 
@@ -126,6 +215,40 @@ export default class EquipmentRoom {
       this.renderSendButton(ctx)
       this.renderClearButton(ctx)
     }
+    
+    // 绘制报告飞行动画（在最上层）
+    this.renderFlyingReports(ctx)
+  }
+  
+  // 绘制报告飞行动画
+  renderFlyingReports(ctx) {
+    for (const report of this.flyingReports) {
+      // 计算当前位置（二次贝塞尔曲线 - 弧形路径）
+      const t = report.progress
+      // 使用缓动函数使动画更自然
+      const easeT = 1 - Math.pow(1 - t, 3) // easeOutCubic
+      
+      // 二次贝塞尔曲线公式：B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+      const oneMinusT = 1 - easeT
+      const currentX = oneMinusT * oneMinusT * report.startX + 
+                       2 * oneMinusT * easeT * report.controlX + 
+                       easeT * easeT * report.endX
+      const currentY = oneMinusT * oneMinusT * report.startY + 
+                       2 * oneMinusT * easeT * report.controlY + 
+                       easeT * easeT * report.endY
+      
+      // 图标大小（飞行过程中稍微缩小）
+      const iconSize = 24 * (1 - t * 0.3) // 从24px逐渐缩小到16px
+      
+      // 绘制报告图标
+      if (this.machineReportImage && this.machineReportImage.width > 0) {
+        ctx.drawImage(this.machineReportImage, currentX - iconSize / 2, currentY - iconSize / 2, iconSize, iconSize)
+      } else {
+        // 备用：绘制绿色方块
+        ctx.fillStyle = '#22C55E'
+        fillRoundRect(ctx, currentX - iconSize / 2, currentY - iconSize / 2, iconSize, iconSize, 4)
+      }
+    }
   }
   
   // 绘制标题
@@ -139,22 +262,26 @@ export default class EquipmentRoom {
   
   // 绘制药品工具区域
   renderMedicineToolsSection(ctx) {
-    const sectionX = this.x + 6
-    const sectionY = this.y + this.height * 0.1
-    const sectionW = this.width - 12
-    const sectionH = 125
+    const sectionX = this.x + 2 * this.scale
+    const sectionW = this.width - 6 * this.scale
+    // 【修复】高度基于容器高度的比例，而非固定值，确保手机端正常显示
+    const sectionH = this.height * 0.45
+    const sectionY = this.y + this.height * 0.08
+    
+    // 【修复】基于区域高度计算局部缩放因子，确保卡片随容器高度自适应
+    const localScale = sectionH / 115  // 以设计高度115为基准
     
     // 区域背景（橙色/暖黄色）
     ctx.fillStyle = '#FFF7ED'
-    fillRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10)
+    fillRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
     // 区域边框
     ctx.strokeStyle = '#FED7AA'
-    ctx.lineWidth = 1.5
-    strokeRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10)
+    ctx.lineWidth = 1.5 * localScale
+    strokeRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
     // 标题和配送按钮行
-    this.renderSectionHeader(ctx, sectionX, sectionY, sectionW, '药品工具', '#C2410C', 'delivery')
+    this.renderSectionHeader(ctx, sectionX, sectionY, sectionW, '药品工具', '#C2410C', 'delivery', localScale)
     
     // 清空卡片数组
     this.medicineToolCards = []
@@ -162,14 +289,14 @@ export default class EquipmentRoom {
     // 合并药品和工具
     const allMedicineTools = [...MEDICINES, ...TOOLS]
     
-    // 网格布局：2行×4列，卡片46×44，间距5px
+    // 网格布局：2行×4列，卡片尺寸根据区域高度自适应
     const cols = 4
-    const padding = 6
-    const gap = 5
-    const cardW = 44
-    const cardH = 42
+    const padding = 8 * localScale
+    const gap = 6 * localScale
+    const cardW = 37 * localScale
+    const cardH = 36 * localScale
     const startX = sectionX + padding
-    const startY = sectionY + 32
+    const startY = sectionY + 32 * localScale
     
     for (let i = 0; i < allMedicineTools.length; i++) {
       const item = allMedicineTools[i]
@@ -179,7 +306,7 @@ export default class EquipmentRoom {
       const cardY = startY + row * (cardH + gap)
       
       const isSelected = this.selectedMedicineTools.has(item.id)
-      this.renderItemCard(ctx, cardX, cardY, cardW, cardH, item, isSelected)
+      this.renderItemCard(ctx, cardX, cardY, cardW, cardH, item, isSelected, localScale)
       
       this.medicineToolCards.push({
         x: cardX,
@@ -193,33 +320,37 @@ export default class EquipmentRoom {
   
   // 绘制检验设备区域
   renderExamDevicesSection(ctx) {
-    const sectionX = this.x + 6
-    const sectionY = this.y + this.height * 0.1 + 125 + 10
-    const sectionW = this.width - 12
-    const sectionH = 125
+    const sectionX = this.x + 2 * this.scale
+    const sectionW = this.width - 6 * this.scale
+    // 【修复】高度基于容器高度的比例，而非固定值，确保手机端正常显示
+    const sectionH = this.height * 0.45
+    const sectionY = this.y + this.height * 0.54
+    
+    // 【修复】基于区域高度计算局部缩放因子，确保卡片随容器高度自适应
+    const localScale = sectionH / 110  // 以设计高度110为基准
     
     // 区域背景（绿色）
     ctx.fillStyle = '#F0FDF4'
-    fillRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10)
+    fillRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
     // 区域边框
     ctx.strokeStyle = '#BBF7D0'
-    ctx.lineWidth = 1.5
-    strokeRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10)
+    ctx.lineWidth = 1.5 * localScale
+    strokeRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
     // 标题和启动按钮行
-    this.renderSectionHeader(ctx, sectionX, sectionY, sectionW, '检验设备', '#15803D', 'start')
+    this.renderSectionHeader(ctx, sectionX, sectionY, sectionW, '检验设备', '#15803D', 'start', localScale)
     
     // 清空卡片数组
     this.examDeviceCards = []
     
-    // 网格布局：2行，第一行4个，第二行1个居左，卡片46×44，间距5px
-    const padding = 6
-    const gap = 5
-    const cardW = 44
-    const cardH = 42
+    // 网格布局：2行，第一行4个，第二行1个居左，卡片尺寸根据区域高度自适应
+    const padding = 8 * localScale
+    const gap = 5 * localScale
+    const cardW = 37 * localScale
+    const cardH = 36 * localScale
     const startX = sectionX + padding
-    const startY = sectionY + 32
+    const startY = sectionY + 32 * localScale
     
     // 从 GameConfig 获取检验设备清单
     const machines = GameConfig.machine || []
@@ -232,7 +363,7 @@ export default class EquipmentRoom {
       const state = this.machineStates[machine.id]
       const isSelected = this.selectedExamDevice === machine.id && state.state === 'idle'
       
-      this.renderMachineCard(ctx, cardX, cardY, cardW, cardH, machine, state, isSelected)
+      this.renderMachineCard(ctx, cardX, cardY, cardW, cardH, machine, state, isSelected, localScale)
       
       this.examDeviceCards.push({
         x: cardX,
@@ -251,7 +382,7 @@ export default class EquipmentRoom {
       const state = this.machineStates[machine.id]
       const isSelected = this.selectedExamDevice === machine.id && state.state === 'idle'
       
-      this.renderMachineCard(ctx, cardX, cardY, cardW, cardH, machine, state, isSelected)
+      this.renderMachineCard(ctx, cardX, cardY, cardW, cardH, machine, state, isSelected, localScale)
       
       this.examDeviceCards.push({
         x: cardX,
@@ -264,21 +395,24 @@ export default class EquipmentRoom {
   }
   
   // 绘制区域标题和操作按钮
-  renderSectionHeader(ctx, sectionX, sectionY, sectionW, title, titleColor, btnType) {
-    const headerY = sectionY + 6
-    const btnWidth = 50
-    const btnHeight = 20
+  renderSectionHeader(ctx, sectionX, sectionY, sectionW, title, titleColor, btnType, localScale = this.scale) {
+    const headerY = sectionY + 6 * localScale
+    const btnWidth = 50 * localScale
+    const btnHeight = 22 * localScale
     
-    // 标题（左侧）
+    // 标题（左侧）- 字体稍小，位置上移5px
     ctx.fillStyle = titleColor
-    ctx.font = `bold 12px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.font = `bold ${Math.max(9, 11 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText(title, sectionX + 10, headerY + btnHeight / 2)
+    // 【调整】标题往下移动 3px
+    ctx.fillText(title, sectionX + 10 * localScale, headerY + btnHeight / 2 - 5 * localScale + 3 * localScale)
     
     // 按钮（右侧）
-    const btnX = sectionX + sectionW - btnWidth - 10
-    const btnY = headerY
+    // 【调整】按钮往右移动 10px（从 -10 改为 +10）
+    const btnX = sectionX + sectionW - btnWidth - 6 * localScale
+    // 【调整】按钮往上移动 3px
+    const btnY = headerY - 3 * localScale
     
     // 判断按钮状态
     let hasSelected = false
@@ -295,26 +429,54 @@ export default class EquipmentRoom {
       isPressed = this.startBtnPressed
     }
     
-    // 按钮样式
-    const isEnabled = hasSelected
-    const btnColor = btnType === 'delivery' ? '#F97316' : '#22C55E'
-    // 未激活状态：透明度高的橙色/绿色
-    const btnDisabledColor = btnType === 'delivery' ? 'rgba(249, 115, 22, 0.35)' : 'rgba(34, 197, 94, 0.35)'
-    const textColor = isEnabled ? '#FFFFFF' : (btnType === 'delivery' ? '#9A3412' : '#166534')
+    // 按下后的偏移量
+    const pressOffset = (isPressed && hasSelected) ? 2 * localScale : 0
     
-    // 按钮背景
-    ctx.fillStyle = isEnabled ? btnColor : btnDisabledColor
-    if (isPressed && isEnabled) {
-      ctx.fillStyle = btnType === 'delivery' ? '#EA580C' : '#16A34A'
+    // 获取对应按钮图片
+    const btnImage = btnType === 'delivery' ? this.deliveryBtnImage : this.startMachineBtnImage
+    
+    // 绘制按钮图片（如果有）
+    if (btnImage && btnImage.width > 0) {
+      // 未选中时降低透明度
+      ctx.save()
+      if (!hasSelected) {
+        ctx.globalAlpha = 0.8
+      }
+      
+      // 【修复】保持图片比例，不压扁，并放大1.2倍
+      const imgRatio = btnImage.width / btnImage.height
+      const btnRatio = btnWidth / btnHeight
+      const scaleFactor = 1.2  // 图片放大系数
+      let drawWidth, drawHeight
+      if (imgRatio > btnRatio) {
+        // 图片更宽，以按钮宽度为基准
+        drawWidth = btnWidth * scaleFactor
+        drawHeight = (btnWidth / imgRatio) * scaleFactor
+      } else {
+        // 图片更高，以按钮高度为基准
+        drawHeight = btnHeight * scaleFactor
+        drawWidth = (btnHeight * imgRatio) * scaleFactor
+      }
+      // 居中绘制
+      const drawX = btnX + (btnWidth - drawWidth) / 2
+      const drawY = btnY + pressOffset + (btnHeight - drawHeight) / 2
+      ctx.drawImage(btnImage, drawX, drawY, drawWidth, drawHeight)
+      
+      ctx.restore()
+    } else {
+      // 备用：绘制简单按钮
+      const btnColor = btnType === 'delivery' ? '#F97316' : '#22C55E'
+      const btnDisabledColor = btnType === 'delivery' ? 'rgba(249, 115, 22, 0.5)' : 'rgba(34, 197, 94, 0.5)'
+      ctx.fillStyle = hasSelected ? btnColor : btnDisabledColor
+      fillRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 10 * localScale)
+      
+      // 按钮文字
+      ctx.fillStyle = '#FFFFFF'
+      ctx.font = `bold ${Math.max(9, 10 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2 + pressOffset)
     }
-    fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 10)
-    
-    // 按钮文字
-    ctx.fillStyle = textColor
-    ctx.font = `bold 10px "PingFang SC", "Microsoft YaHei", sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2)
     
     // 记录按钮区域
     const bounds = { x: btnX, y: btnY, width: btnWidth, height: btnHeight }
@@ -326,8 +488,8 @@ export default class EquipmentRoom {
   }
   
   // 绘制单个物品卡片（药品工具用）
-  renderItemCard(ctx, x, y, width, height, item, isSelected) {
-    const cornerRadius = 5
+  renderItemCard(ctx, x, y, width, height, item, isSelected, localScale = this.scale) {
+    const cornerRadius = 5 * localScale
     
     // 卡片背景
     if (isSelected) {
@@ -342,17 +504,17 @@ export default class EquipmentRoom {
     // 卡片边框
     if (isSelected) {
       ctx.strokeStyle = '#3B82F6'
-      ctx.lineWidth = 1.5
+      ctx.lineWidth = 1.5 * localScale
     } else {
       ctx.strokeStyle = '#E5E7EB'
-      ctx.lineWidth = 1
+      ctx.lineWidth = 1 * localScale
     }
     strokeRoundRect(ctx, x, y, width, height, cornerRadius)
     
     // 图标区域（上方）- 顶部padding加大
-    const iconSize = 20
+    const iconSize = 18 * localScale
     const iconX = x + width / 2
-    const iconY = y + 14
+    const iconY = y + 13 * localScale
     
     // 绘制图标（优先使用图片）
     const itemImage = getItemImage(item.id)
@@ -368,15 +530,15 @@ export default class EquipmentRoom {
     
     // 物品名称（下方）- 与icon距离缩小
     ctx.fillStyle = '#374151'
-    ctx.font = `10px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.font = `${Math.max(9, 8 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(item.name, x + width / 2, y + 28)
+    ctx.fillText(item.name, x + width / 2, y + 25 * localScale)
   }
   
   // 绘制检验设备卡片（带进度条和状态）
-  renderMachineCard(ctx, x, y, width, height, machine, state, isSelected) {
-    const cornerRadius = 5
+  renderMachineCard(ctx, x, y, width, height, machine, state, isSelected, localScale = this.scale) {
+    const cornerRadius = 5 * localScale
     const now = Date.now()
     
     // 计算呼吸效果透明度（用于starting和ready状态）
@@ -402,20 +564,20 @@ export default class EquipmentRoom {
     if (state.state === 'starting' || state.state === 'ready') {
       // 绿色呼吸边框
       ctx.strokeStyle = `rgba(34, 197, 94, ${breatheAlpha})`
-      ctx.lineWidth = 2
+      ctx.lineWidth = 2 * localScale
     } else if (isSelected) {
       ctx.strokeStyle = '#3B82F6'
-      ctx.lineWidth = 1.5
+      ctx.lineWidth = 1.5 * localScale
     } else {
       ctx.strokeStyle = '#E5E7EB'
-      ctx.lineWidth = 1
+      ctx.lineWidth = 1 * localScale
     }
     strokeRoundRect(ctx, x, y, width, height, cornerRadius)
     
     // 图标区域（上方）
-    const iconSize = 20
+    const iconSize = 18 * localScale
     const iconX = x + width / 2
-    const iconY = y + 12
+    const iconY = y + 13 * localScale
     
     // 绘制图标
     const itemImage = getItemImage(machine.id)
@@ -431,32 +593,32 @@ export default class EquipmentRoom {
     
     // 设备名称（下方）
     ctx.fillStyle = '#374151'
-    ctx.font = `9px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.font = `${Math.max(8, 8 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(machine.name, x + width / 2, y + 26)
+    ctx.fillText(machine.name, x + width / 2, y + 25 * localScale)
     
     // 启动中：显示绿色进度条
     if (state.state === 'starting') {
-      const barHeight = 3
-      const barY = y + height - barHeight - 2
-      const barWidth = width - 6
+      const barHeight = 3 * localScale
+      const barY = y + height - barHeight - 2 * localScale
+      const barWidth = width - 6 * localScale
       
       // 背景条
       ctx.fillStyle = '#E5E7EB'
-      fillRoundRect(ctx, x + 3, barY, barWidth, barHeight, barHeight / 2)
+      fillRoundRect(ctx, x + 3 * localScale, barY, barWidth, barHeight, barHeight / 2)
       
       // 进度条
       const progressWidth = barWidth * state.progress
       ctx.fillStyle = '#22C55E'
-      fillRoundRect(ctx, x + 3, barY, progressWidth, barHeight, barHeight / 2)
+      fillRoundRect(ctx, x + 3 * localScale, barY, progressWidth, barHeight, barHeight / 2)
     }
     
     // 就绪状态：显示绿色勾号
     if (state.hasCheckMark) {
-      const checkSize = 16
-      const checkX = x - 4
-      const checkY = y - 4
+      const checkSize = 16 * localScale
+      const checkX = x - 4 * localScale
+      const checkY = y - 4 * localScale
       
       // 绿色圆形背景
       ctx.fillStyle = '#22C55E'
@@ -466,13 +628,13 @@ export default class EquipmentRoom {
       
       // 白色对勾
       ctx.strokeStyle = '#FFF'
-      ctx.lineWidth = 2.5
+      ctx.lineWidth = 2.5 * localScale
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       ctx.beginPath()
-      ctx.moveTo(checkX + 4, checkY + checkSize / 2 + 1)
-      ctx.lineTo(checkX + checkSize / 2 - 1, checkY + checkSize - 4)
-      ctx.lineTo(checkX + checkSize - 4, checkY + 4)
+      ctx.moveTo(checkX + 4 * localScale, checkY + checkSize / 2 + 1 * localScale)
+      ctx.lineTo(checkX + checkSize / 2 - 1 * localScale, checkY + checkSize - 4 * localScale)
+      ctx.lineTo(checkX + checkSize - 4 * localScale, checkY + 4 * localScale)
       ctx.stroke()
     }
   }
@@ -601,25 +763,42 @@ export default class EquipmentRoom {
   }
   
   // 使用设备开始治疗（点击有勾号的设备）
-  useMachineForTreatment(machineId) {
+  // 返回 { patient, startFlying } 对象，需要调用 startFlying 才开始飞行动画
+  useMachineForTreatment(machineId, cardX, cardY) {
     const state = this.machineStates[machineId]
     if (!state || state.state !== 'ready' || !state.hasCheckMark) return null
     
     const patient = state.boundPatient
     if (!patient) return null
     
-    // 标记病人检查完成，可以开始正式治疗
-    patient.machineCheckComplete = true
+    // 获取病人位置（用于飞行动画目标）
+    const patientX = patient.x + patient.width / 2
+    const patientY = patient.y - 20 // 气泡位置
+    
+    // 【修复】点击绿色勾号后立即隐藏病人气泡
     patient.showMachineBubble = false
     
-    // 重置设备状态
-    state.state = 'idle'
-    state.progress = 0
-    state.hasCheckMark = false
-    state.boundPatient = null
-    patient.boundMachineId = null
-    
-    return patient
+    // 返回对象，包含病人和开始飞行动画的回调
+    return {
+      patient,
+      startFlying: (onArrive) => {
+        // 添加飞行动画（从设备卡片飞到病人）
+        this.addFlyingReport(
+          cardX, cardY,      // 起始位置（设备卡片）
+          patientX, patientY, // 目标位置（病人头上）
+          patient,
+          onArrive           // 到达后的回调
+        )
+        
+        // 立即重置设备状态（绿色勾号消失）
+        state.state = 'idle'
+        state.progress = 0
+        state.hasCheckMark = false
+        state.boundPatient = null
+        patient.boundMachineId = null
+        patient.machineReady = false
+      }
+    }
   }
   
   // 获取设备状态

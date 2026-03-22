@@ -251,10 +251,10 @@ export default class Doctor {
             this.requiredItems.push(item)
           }
           this.requiredItem = this.requiredItems[0]
-        } else if (!this.targetBed.patient.machineCheckComplete) {
-          // 等待设备检查完成
+        } else if (this.targetBed.patient.requiredMachineId && !this.targetBed.patient.machineCheckComplete) {
+          // 病人申请了设备且检查未完成，等待设备检查完成
         } else {
-          // 设备检查完成，开始自动治疗
+          // 病人未申请设备，或设备检查完成，开始自动治疗
           const treatTime = getTreatTimeByDisease(this.targetBed.patient.condition.name)
           this.targetBed.treatmentProgress += deltaTime / treatTime
           if (this.targetBed.treatmentProgress >= 1) {

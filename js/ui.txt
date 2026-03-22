@@ -1,193 +1,338 @@
-import React, { useMemo, useState } from "react";
-import {
-  Syringe,
-  Pill,
-  Bandage,
-  Scissors,
-  Stethoscope,
-  HeartPulse,
-  Monitor,
-  Microscope,
-  Radiation,
-  Scan,
-} from "lucide-react";
-
-const EquipmentRoomPanel = () => {
-  const medicineTools = useMemo(
-    () => [
-      { name: "抗生素", icon: Syringe },
-      { name: "止痛药", icon: Pill },
-      { name: "肾上腺素", icon: Syringe },
-      { name: "注射液", icon: Syringe },
-      { name: "医用绷带", icon: Bandage },
-      { name: "手术夹", icon: Scissors },
-      { name: "麻醉计", icon: Stethoscope },
-      { name: "输液器", icon: Syringe },
-    ],
-    []
-  );
-
-  const inspectionEquipment = useMemo(
-    () => [
-      { name: "AED", icon: HeartPulse },
-      { name: "X光机", icon: Radiation },
-      { name: "CT", icon: Scan },
-      { name: "血浆机", icon: Syringe },
-      { name: "心电图", icon: Monitor },
-      { name: "显微镜", icon: Microscope },
-    ],
-    []
-  );
-
-  // 药品工具：多选
-  const [selectedMedicine, setSelectedMedicine] = useState(() => new Set());
-  // 检验设备：单选（只能选一个）
-  const [selectedInspection, setSelectedInspection] = useState(() => null);
-
-  const [toast, setToast] = useState("");
-
-  const setToastWithTimeout = (msg) => {
-    setToast(msg);
-    window.clearTimeout((setToastWithTimeout)._t);
-    (setToastWithTimeout)._t = window.setTimeout(() => setToast(""), 2200);
-  };
-
-  const toggleItem = (kind, name) => {
-    if (kind === "medicine") {
-      setSelectedMedicine((prev) => {
-        const next = new Set(prev);
-        if (next.has(name)) next.delete(name);
-        else next.add(name);
-        return next;
-      });
-    } else {
-      // inspection 单选：再次点击同一项则取消
-      setSelectedInspection((prev) => (prev === name ? null : name));
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Canvas凸起按钮</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f5f7fb;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
     }
-  };
-
-  const ItemCard = ({ name, Icon, kind, isSelected }) => (
-    <button
-      type="button"
-      onClick={() => toggleItem(kind, name)}
-      className={
-        "flex flex-col items-center p-2 rounded-lg shadow-sm w-20 h-20 justify-center transition border " +
-        (isSelected
-          ? "bg-blue-600/10 border-blue-500/50"
-          : "bg-white/70 border-transparent hover:bg-white/90")
-      }
-      aria-pressed={isSelected}
-    >
-      <Icon className="text-blue-600 mb-1" size={28} />
-      <span className="text-xs text-gray-700 text-center leading-tight">
-        {name}
-      </span>
-    </button>
-  );
-
-  const medicineRow1 = medicineTools.slice(0, 4);
-  const medicineRow2 = medicineTools.slice(4);
-
-  const handleDelivery = () => {
-    if (selectedMedicine.size === 0) {
-      setToastWithTimeout("请选择要配送的药品工具");
-      return;
+    .wrap {
+      width: min(980px, 94vw);
+      display: grid;
+      gap: 18px;
+      justify-items: center;
     }
-    setToastWithTimeout(`已配送：${Array.from(selectedMedicine).join("、")}`);
-    setSelectedMedicine(new Set());
-  };
-
-  const handleStart = () => {
-    if (!selectedInspection) {
-      setToastWithTimeout("请选择要启动的检验设备");
-      return;
+    .row {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
-    setToastWithTimeout(`已启动：${selectedInspection}`);
-    setSelectedInspection(null);
-  };
-
-  return (
-    <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl shadow-lg w-96 font-sans">
-      <h2 className="text-xl font-bold text-center text-gray-800 mb-4">器材室</h2>
-
-      {/* 药品工具 section */}
-      <div className="bg-orange-50/70 p-4 rounded-lg mb-4 shadow-inner">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-center text-orange-700">药品工具</h3>
-          <button
-            type="button"
-            onClick={handleDelivery}
-            className="px-3 py-1.5 rounded-full bg-orange-600 text-white text-sm font-medium shadow hover:bg-orange-700 transition"
-          >
-            配送
-          </button>
-        </div>
-
-        {/* Strict two-row horizontal grid */}
-        <div className="grid grid-cols-4 gap-3 justify-items-center">
-          {medicineRow1.map((item) => (
-            <ItemCard
-              key={item.name}
-              name={item.name}
-              Icon={item.icon}
-              kind="medicine"
-              isSelected={selectedMedicine.has(item.name)}
-            />
-          ))}
-        </div>
-        <div className="grid grid-cols-4 gap-3 justify-items-center mt-3">
-          {medicineRow2.map((item) => (
-            <ItemCard
-              key={item.name}
-              name={item.name}
-              Icon={item.icon}
-              kind="medicine"
-              isSelected={selectedMedicine.has(item.name)}
-            />
-          ))}
-        </div>
+    canvas {
+      width: 820px;
+      max-width: 94vw;
+      height: 220px;
+      border-radius: 16px;
+      background: transparent;
+    }
+    .hint {
+      font-size: 14px;
+      color: #667085;
+    }
+    .pill {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(16,24,40,0.08);
+      border-radius: 999px;
+      box-shadow: 0 6px 20px rgba(16,24,40,0.05);
+      user-select: none;
+    }
+    .pill input {
+      width: 180px;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 14px;
+      color: #344054;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row">
+      <div class="pill">
+        <span style="color:#344054;font-weight:700;">按钮文案</span>
+        <input id="label" value="开始接诊" />
       </div>
-
-      {/* Separator */}
-      <div className="h-4" />
-
-      {/* 检验设备 section（单选） */}
-      <div className="bg-green-50/70 p-4 rounded-lg shadow-inner">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-center text-green-700">检验设备</h3>
-          <button
-            type="button"
-            onClick={handleStart}
-            className="px-3 py-1.5 rounded-full bg-green-600 text-white text-sm font-medium shadow hover:bg-green-700 transition"
-          >
-            启动
-          </button>
-        </div>
-
-        <div className="grid grid-cols-4 gap-3 justify-items-center">
-          {inspectionEquipment.map((item) => (
-            <ItemCard
-              key={item.name}
-              name={item.name}
-              Icon={item.icon}
-              kind="inspection"
-              isSelected={selectedInspection === item.name}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Feedback / placeholder for "发送/清空" buttons area */}
-      <div className="mt-6 pt-4 border-t border-gray-200">
-        <div className="text-center text-gray-500 text-sm">
-          下方为“发送/清空”按钮区域
-        </div>
-        {toast ? (
-          <div className="mt-2 text-center text-sm font-medium text-gray-700">{toast}</div>
-        ) : null}
+      <div class="pill">
+        <span style="color:#344054;font-weight:700;">颜色风格</span>
+        <select id="theme" style="border:none;outline:none;background:transparent;font-size:14px;color:#344054;">
+          <option value="blue" selected>蓝色</option>
+          <option value="teal">青色</option>
+          <option value="purple">紫色</option>
+        </select>
       </div>
     </div>
-  );
-};
 
-export default EquipmentRoomPanel;
+    <canvas id="c" width="820" height="220"></canvas>
+    <div class="hint">点击按钮：高光与阴影会反转，产生“按下/弹起”的凹凸反馈。</div>
+  </div>
+
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  const labelEl = document.getElementById('label');
+  const themeEl = document.getElementById('theme');
+
+  // HiDPI适配
+  function resizeCanvasToDisplaySize() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function roundRectPath(x, y, w, h, r) {
+    r = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  const state = {
+    pressed: false,
+    hover: false,
+    hit: { x: 0, y: 0, w: 0, h: 0, r: 22 }
+  };
+
+  function getTheme() {
+    const t = themeEl.value;
+    if (t === 'teal') {
+      return { top: '#66E0FF', bottom: '#1494C7', edge: 'rgba(8,64,110,0.35)' };
+    }
+    if (t === 'purple') {
+      return { top: '#9B8CFF', bottom: '#5B45D6', edge: 'rgba(46,18,120,0.30)' };
+    }
+    return { top: '#6FD6FF', bottom: '#1F8FD1', edge: 'rgba(8,64,110,0.35)' };
+  }
+
+  function draw() {
+    resizeCanvasToDisplaySize();
+    const cssW = canvas.getBoundingClientRect().width;
+    const cssH = canvas.getBoundingClientRect().height;
+
+    ctx.clearRect(0, 0, cssW, cssH);
+
+    // 画布居中按钮
+    const w = Math.min(780, cssW - 26);
+    const h = Math.min(170, cssH - 24);
+    const x = (cssW - w) / 2;
+    const y = (cssH - h) / 2 + 6;
+    const r = Math.min(32, h * 0.22);
+
+    state.hit = { x, y, w, h, r };
+
+    const { top, bottom, edge } = getTheme();
+
+    // 外部底座/投影（按下时更“凹”）
+    const shadowY = state.pressed ? 2 : 10;
+    const shadowBlur = state.pressed ? 10 : 18;
+    const shadowAlpha = state.pressed ? 0.16 : 0.22;
+
+    ctx.save();
+    ctx.shadowColor = `rgba(0,0,0,${shadowAlpha})`;
+    ctx.shadowBlur = shadowBlur;
+    ctx.shadowOffsetY = shadowY;
+
+    // 外白描边底座
+    roundRectPath(x, y, w, h, r);
+    ctx.fillStyle = '#F7FBFF';
+    ctx.fill();
+    ctx.restore();
+
+    // 内部主体
+    const pad = 9;
+    const bx = x + pad;
+    const by = y + pad;
+    const bw = w - pad*2;
+    const bh = h - pad*2;
+    const br = Math.max(10, r - pad);
+
+    // 天蓝色底色：不使用渐变（保持纯色，同时通过高光/阴影做立体感）
+    roundRectPath(bx, by, bw, bh, br);
+    ctx.fillStyle = top; // top 作为天蓝色
+    ctx.fill();
+
+    // 内部高光（按下时移动反向）
+    ctx.save();
+    roundRectPath(bx, by, bw, bh, br);
+    ctx.clip();
+
+    const gloss = ctx.createLinearGradient(0, by, 0, by + bh);
+    if (!state.pressed) {
+      gloss.addColorStop(0, 'rgba(255,255,255,0.55)');
+      gloss.addColorStop(0.25, 'rgba(255,255,255,0.18)');
+      gloss.addColorStop(0.62, 'rgba(255,255,255,0.00)');
+    } else {
+      gloss.addColorStop(0, 'rgba(255,255,255,0.25)');
+      gloss.addColorStop(0.20, 'rgba(255,255,255,0.40)');
+      gloss.addColorStop(0.65, 'rgba(255,255,255,0.00)');
+    }
+    ctx.fillStyle = gloss;
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.restore();
+
+    // 边缘描边
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = edge;
+    roundRectPath(bx, by, bw, bh, br);
+    ctx.stroke();
+
+    // 字体大小自适应（粗体描边）
+    const text = String(labelEl.value || '').trim();
+    const maxTextW = bw * 0.92;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let fontSize = Math.floor(bh * 0.46);
+    fontSize = Math.max(22, fontSize);
+
+    // 如果太长则递减
+    function measureSize(sz) {
+      ctx.font = `900 ${sz}px "PingFang SC","Microsoft YaHei",sans-serif`;
+      return ctx.measureText(text).width;
+    }
+
+    while (measureSize(fontSize) > maxTextW && fontSize > 18) fontSize -= 2;
+
+    // 文本描边深色 + 白色填充 + 轻微白描边
+    const tx = bx + bw/2;
+    const ty = by + bh/2 + (state.pressed ? 1 : 0);
+
+    ctx.save();
+    // 深色描边
+    ctx.lineWidth = Math.max(6, fontSize * 0.10);
+    ctx.strokeStyle = 'rgba(12,70,120,0.55)';
+    ctx.font = `900 ${fontSize}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    ctx.strokeText(text, tx, ty);
+
+    // 白色填充
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(text, tx, ty);
+
+    // 细白描边（增强跳出）
+    ctx.lineWidth = Math.max(2, fontSize * 0.035);
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.strokeText(text, tx, ty);
+    ctx.restore();
+
+    // 外圈薄白描边（更像参考图）
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    roundRectPath(x + 2, y + 2, w - 4, h - 4, r - 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Hover提示（仅轻微）
+    if (state.hover && !state.pressed) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 3;
+      roundRectPath(bx, by, bw, bh, br);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function pointInRoundedRect(px, py, rect) {
+    const { x, y, w, h, r } = rect;
+    if (px < x || px > x + w || py < y || py > y + h) return false;
+    // 粗略：使用圆角近似判定足够用于UI交互
+    // 通过检查四角圆形区域实现
+    const cx1 = x + r, cy1 = y + r;
+    const cx2 = x + w - r, cy1b = y + r;
+    const cx1b = x + r, cy2 = y + h - r;
+    const cx2b = x + w - r, cy2b = y + h - r;
+
+    const inLeftTop = (px - cx1)**2 + (py - cy1)**2 <= r**2;
+    const inRightTop = (px - cx2)**2 + (py - cy1b)**2 <= r**2;
+    const inLeftBottom = (px - cx1b)**2 + (py - cy2)**2 <= r**2;
+    const inRightBottom = (px - cx2b)**2 + (py - cy2b)**2 <= r**2;
+
+    const inMiddleX = px >= x + r && px <= x + w - r;
+    const inMiddleY = py >= y + r && py <= y + h - r;
+
+    // 如果在“主体中间矩形”，则一定在
+    if (inMiddleX && py >= y && py <= y + h) return true;
+    if (inMiddleY && px >= x && px <= x + w) return true;
+
+    // 否则只能落在四角圆内之一
+    return inLeftTop || inRightTop || inLeftBottom || inRightBottom;
+  }
+
+  function toCanvasCSSPoint(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = toCanvasCSSPoint(e);
+    state.hover = pointInRoundedRect(p.x, p.y, state.hit);
+    draw();
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    state.hover = false;
+    state.pressed = false;
+    draw();
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    const p = toCanvasCSSPoint(e);
+    if (pointInRoundedRect(p.x, p.y, state.hit)) {
+      state.pressed = true;
+      draw();
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    const wasPressed = state.pressed;
+    state.pressed = false;
+    draw();
+
+    // 触发点击
+    if (wasPressed && state.hover) {
+      const text = String(labelEl.value || '').trim();
+      // 这里仅做演示：你可把它替换成你按钮的业务回调
+      console.log('Canvas按钮点击：', text);
+      alert(`点击：${text}`);
+    }
+  });
+
+  // 文案/主题变更重绘
+  labelEl.addEventListener('input', () => draw());
+  themeEl.addEventListener('change', () => draw());
+
+  // 初次绘制
+  // 等一帧拿到正确尺寸
+  requestAnimationFrame(draw);
+  window.addEventListener('resize', () => requestAnimationFrame(draw));
+</script>
+</body>
+</html>

@@ -8,7 +8,6 @@ export function getNewPlayerStatus() {
   try {
     const data = wx.getStorageSync(STORAGE_KEY)
     if (data && data.is_new_player !== undefined) {
-      console.log('[本地缓存] 读取新玩家状态:', data.is_new_player)
       return data.is_new_player
     }
   } catch (e) {
@@ -348,18 +347,18 @@ export const GameConfig = {
     // ==================== 检验设备清单 ====================
     machine: [
       {
-        id: 'x',
-        name: 'X光机',
+        id: 'ct',
+        name: 'CT',
         icon: '⭐️',
-        imagePath: 'images/machine_x.png',
+        imagePath: 'images/machine_ct.png',
         unlockLevel: 2,
         durability: 10
       },
       {
-        id: 'ct',
-        name: 'CT',
+        id: 'super',
+        name: '超声',
         icon: '🖨',
-        imagePath: 'images/machine_ct.png',
+        imagePath: 'images/machine_super.png',
         price: 15,
         unlockLevel: 1,
         durability: 20
@@ -381,7 +380,7 @@ export const GameConfig = {
         durability: 100
       },  {
         id: 'brain',
-        name: '心电图',
+        name: '脑电图',
         icon: '😁',
         imagePath: 'images/machine_brain.png',
         unlockLevel: 1,
