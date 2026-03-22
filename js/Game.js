@@ -747,8 +747,8 @@ export default class Game {
           return
         }
         
-        // 输液治疗进度更新
-        if (!seat.patient.ivTreatmentComplete) {
+        // 输液治疗进度更新（只有完成设备检查后才能开始治疗）
+        if (!seat.patient.ivTreatmentComplete && seat.patient.machineCheckComplete) {
           // 初始化总治疗时间（只需要一次）
           if (seat.patient.ivTotalTreatmentTime === 0) {
             seat.patient.ivTotalTreatmentTime = getAutoTreatTimeByDisease(seat.patient.condition.name)
@@ -2093,12 +2093,34 @@ export default class Game {
               console.log('取消选中药品工具:', item.name)
             }
           } else {
-            // 检验设备：单选
-            const isSelected = this.equipmentRoom.toggleExamDeviceSelection(clickResult.itemId)
-            if (isSelected) {
-              console.log('选中检验设备:', item.name)
-            } else {
-              console.log('取消选中检验设备:', item.name)
+            // 检验设备：根据状态执行不同操作
+            const machineState = this.equipmentRoom.getMachineState(clickResult.itemId)
+            if (!machineState) return
+            
+            if (machineState.state === 'idle') {
+              // 空闲状态：选中/取消选中
+              const isSelected = this.equipmentRoom.toggleExamDeviceSelection(clickResult.itemId)
+              if (isSelected) {
+                console.log('选中检验设备:', item.name)
+              } else {
+                console.log('取消选中检验设备:', item.name)
+              }
+            } else if (machineState.state === 'ready') {
+              // 就绪状态（有勾号）：触发治疗
+              const patient = this.equipmentRoom.useMachineForTreatment(clickResult.itemId)
+              if (patient) {
+                console.log('设备治疗完成，病人开始正式治疗:', patient.name)
+                // 标记病人可以开始自动治疗
+                patient.canStartAutoTreatment = true
+                wx.showToast({
+                  title: '检查完成，开始治疗',
+                  icon: 'none',
+                  duration: 1500
+                })
+              }
+            } else if (machineState.state === 'starting') {
+              // 启动中：不可点击
+              console.log('设备启动中，请稍候...')
             }
           }
         }
@@ -3397,8 +3419,8 @@ export default class Game {
   
   // 处理检验设备启动按钮点击
   handleStartExamDevice() {
-    const selectedDevice = this.equipmentRoom.getSelectedExamDevice()
-    if (!selectedDevice) {
+    const selectedDeviceId = this.equipmentRoom.selectedExamDevice
+    if (!selectedDeviceId) {
       wx.showToast({
         title: '请先选择检验设备',
         icon: 'none',
@@ -3407,16 +3429,65 @@ export default class Game {
       return
     }
     
-    // TODO: 实现检验设备启动逻辑
-    // 例如：为病人进行检查、生成检查报告等
-    wx.showToast({
-      title: `已启动: ${selectedDevice.name}`,
-      icon: 'none',
-      duration: 1500
-    })
+    // 获取设备状态
+    const machineState = this.equipmentRoom.getMachineState(selectedDeviceId)
+    if (!machineState || machineState.state !== 'idle') {
+      wx.showToast({
+        title: '设备不可用',
+        icon: 'none',
+        duration: 1200
+      })
+      return
+    }
+    
+    // 查找申请该设备的病人（在治疗椅上，且未绑定其他设备）
+    const targetPatient = this.findPatientByRequiredMachine(selectedDeviceId)
+    if (!targetPatient) {
+      wx.showToast({
+        title: '没有病人需要该设备',
+        icon: 'none',
+        duration: 1500
+      })
+      return
+    }
+    
+    // 启动设备
+    const success = this.equipmentRoom.startSelectedMachine(targetPatient)
+    if (success) {
+      wx.showToast({
+        title: '设备启动中...',
+        icon: 'none',
+        duration: 1500
+      })
+    }
     
     // 清空选中状态
     this.equipmentRoom.clearExamDeviceSelection()
+  }
+  
+  // 查找申请指定设备的病人（在床位或输液椅上，未绑定其他设备，按申请时间优先）
+  findPatientByRequiredMachine(machineId) {
+    // 先在普通床位查找
+    for (const bed of this.bedArea.beds) {
+      if (bed.patient && 
+          bed.patient.requiredMachineId === machineId && 
+          !bed.patient.boundMachineId &&
+          !bed.patient.machineCheckComplete) {
+        return bed.patient
+      }
+    }
+    
+    // 再在输液椅查找
+    for (const seat of this.bedArea.ivSeats) {
+      if (seat.patient && 
+          seat.patient.requiredMachineId === machineId && 
+          !seat.patient.boundMachineId &&
+          !seat.patient.machineCheckComplete) {
+        return seat.patient
+      }
+    }
+    
+    return null
   }
   
   // 进入下一关

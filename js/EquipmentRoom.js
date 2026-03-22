@@ -35,6 +35,38 @@ export default class EquipmentRoom {
     this.equipmentSendBtnPressed = false
     this.equipmentClearBtnBounds = null
     this.equipmentClearBtnPressed = false
+    
+    // ==================== 检验设备状态管理 ====================
+    // 设备状态: 'idle'(空闲), 'selected'(已选中), 'starting'(启动中), 'ready'(完成/有勾号)
+    this.machineStates = {}
+    // 初始化设备状态
+    const machines = GameConfig.machine || []
+    machines.forEach(machine => {
+      this.machineStates[machine.id] = {
+        state: 'idle',        // 设备状态
+        progress: 0,          // 启动进度 (0-1)
+        boundPatient: null,   // 绑定的病人
+        startTime: 0,         // 启动开始时间
+        hasCheckMark: false   // 是否有绿色勾号
+      }
+    })
+    this.machineStartDuration = 3000  // 设备启动时间（毫秒）
+    
+    // 加载检查报告图片
+    this.machineReportImage = null
+    this.loadMachineReportImage()
+  }
+  
+  // 加载检查报告图片
+  loadMachineReportImage() {
+    const img = wx.createImage()
+    img.onload = () => {
+      this.machineReportImage = img
+    }
+    img.onerror = () => {
+      console.warn('Failed to load machine_report.png')
+    }
+    img.src = 'images/machine_report.png'
   }
   
   // 触发震动（仅在真机上生效，开发者工具中不震动）
@@ -45,7 +77,20 @@ export default class EquipmentRoom {
   }
 
   update(deltaTime) {
-    // 无需更新
+    // 更新设备启动进度
+    const machines = GameConfig.machine || []
+    machines.forEach(machine => {
+      const state = this.machineStates[machine.id]
+      if (state.state === 'starting') {
+        const elapsed = Date.now() - state.startTime
+        state.progress = Math.min(1, elapsed / this.machineStartDuration)
+        if (state.progress >= 1) {
+          // 启动完成
+          state.state = 'ready'
+          state.hasCheckMark = true
+        }
+      }
+    })
   }
 
   // 检测点击位置是哪个物品
@@ -181,37 +226,39 @@ export default class EquipmentRoom {
     
     // 第一行：4个
     for (let i = 0; i < 4 && i < machines.length; i++) {
-      const item = machines[i]
+      const machine = machines[i]
       const cardX = startX + i * (cardW + gap)
       const cardY = startY
+      const state = this.machineStates[machine.id]
+      const isSelected = this.selectedExamDevice === machine.id && state.state === 'idle'
       
-      const isSelected = this.selectedExamDevice === item.id
-      this.renderItemCard(ctx, cardX, cardY, cardW, cardH, item, isSelected)
+      this.renderMachineCard(ctx, cardX, cardY, cardW, cardH, machine, state, isSelected)
       
       this.examDeviceCards.push({
         x: cardX,
         y: cardY,
         width: cardW,
         height: cardH,
-        itemId: item.id
+        itemId: machine.id
       })
     }
     
     // 第二行：1个居左对齐
     if (machines.length > 4) {
-      const item = machines[4]
+      const machine = machines[4]
       const cardX = startX
       const cardY = startY + cardH + gap
+      const state = this.machineStates[machine.id]
+      const isSelected = this.selectedExamDevice === machine.id && state.state === 'idle'
       
-      const isSelected = this.selectedExamDevice === item.id
-      this.renderItemCard(ctx, cardX, cardY, cardW, cardH, item, isSelected)
+      this.renderMachineCard(ctx, cardX, cardY, cardW, cardH, machine, state, isSelected)
       
       this.examDeviceCards.push({
         x: cardX,
         y: cardY,
         width: cardW,
         height: cardH,
-        itemId: item.id
+        itemId: machine.id
       })
     }
   }
@@ -278,7 +325,7 @@ export default class EquipmentRoom {
     }
   }
   
-  // 绘制单个物品卡片
+  // 绘制单个物品卡片（药品工具用）
   renderItemCard(ctx, x, y, width, height, item, isSelected) {
     const cornerRadius = 5
     
@@ -325,6 +372,109 @@ export default class EquipmentRoom {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
     ctx.fillText(item.name, x + width / 2, y + 28)
+  }
+  
+  // 绘制检验设备卡片（带进度条和状态）
+  renderMachineCard(ctx, x, y, width, height, machine, state, isSelected) {
+    const cornerRadius = 5
+    const now = Date.now()
+    
+    // 计算呼吸效果透明度（用于starting和ready状态）
+    let breatheAlpha = 1
+    if (state.state === 'starting' || state.state === 'ready') {
+      breatheAlpha = 0.5 + 0.5 * Math.sin(now / 200)  // 呼吸动画
+    }
+    
+    // 卡片背景
+    if (state.state === 'starting' || state.state === 'ready') {
+      // 启动中或就绪：淡绿色背景
+      ctx.fillStyle = `rgba(220, 252, 231, ${0.3 + 0.2 * breatheAlpha})`
+    } else if (isSelected) {
+      // 选中状态：蓝色背景
+      ctx.fillStyle = '#DBEAFE'
+    } else {
+      // 默认状态：白色背景
+      ctx.fillStyle = '#FFFFFF'
+    }
+    fillRoundRect(ctx, x, y, width, height, cornerRadius)
+    
+    // 卡片边框
+    if (state.state === 'starting' || state.state === 'ready') {
+      // 绿色呼吸边框
+      ctx.strokeStyle = `rgba(34, 197, 94, ${breatheAlpha})`
+      ctx.lineWidth = 2
+    } else if (isSelected) {
+      ctx.strokeStyle = '#3B82F6'
+      ctx.lineWidth = 1.5
+    } else {
+      ctx.strokeStyle = '#E5E7EB'
+      ctx.lineWidth = 1
+    }
+    strokeRoundRect(ctx, x, y, width, height, cornerRadius)
+    
+    // 图标区域（上方）
+    const iconSize = 20
+    const iconX = x + width / 2
+    const iconY = y + 12
+    
+    // 绘制图标
+    const itemImage = getItemImage(machine.id)
+    if (itemImage) {
+      ctx.drawImage(itemImage, iconX - iconSize / 2, iconY - iconSize / 2, iconSize, iconSize)
+    } else {
+      ctx.font = `${iconSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#4B5563'
+      ctx.fillText(machine.icon, iconX, iconY)
+    }
+    
+    // 设备名称（下方）
+    ctx.fillStyle = '#374151'
+    ctx.font = `9px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText(machine.name, x + width / 2, y + 26)
+    
+    // 启动中：显示绿色进度条
+    if (state.state === 'starting') {
+      const barHeight = 3
+      const barY = y + height - barHeight - 2
+      const barWidth = width - 6
+      
+      // 背景条
+      ctx.fillStyle = '#E5E7EB'
+      fillRoundRect(ctx, x + 3, barY, barWidth, barHeight, barHeight / 2)
+      
+      // 进度条
+      const progressWidth = barWidth * state.progress
+      ctx.fillStyle = '#22C55E'
+      fillRoundRect(ctx, x + 3, barY, progressWidth, barHeight, barHeight / 2)
+    }
+    
+    // 就绪状态：显示绿色勾号
+    if (state.hasCheckMark) {
+      const checkSize = 16
+      const checkX = x - 4
+      const checkY = y - 4
+      
+      // 绿色圆形背景
+      ctx.fillStyle = '#22C55E'
+      ctx.beginPath()
+      ctx.arc(checkX + checkSize / 2, checkY + checkSize / 2, checkSize / 2, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // 白色对勾
+      ctx.strokeStyle = '#FFF'
+      ctx.lineWidth = 2.5
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      ctx.moveTo(checkX + 4, checkY + checkSize / 2 + 1)
+      ctx.lineTo(checkX + checkSize / 2 - 1, checkY + checkSize - 4)
+      ctx.lineTo(checkX + checkSize - 4, checkY + 4)
+      ctx.stroke()
+    }
   }
 
   // ==================== 点击检测 ====================
@@ -398,6 +548,7 @@ export default class EquipmentRoom {
 
   // 切换检验设备选中状态（单选）
   toggleExamDeviceSelection(itemId) {
+    // 如果点击已选中的，取消选择；否则选中新的（自动取消旧的）
     if (this.selectedExamDevice === itemId) {
       this.selectedExamDevice = null
       return false
@@ -425,6 +576,55 @@ export default class EquipmentRoom {
   // 清空检验设备选择
   clearExamDeviceSelection() {
     this.selectedExamDevice = null
+  }
+  
+  // ==================== 检验设备操作 ====================
+  
+  // 启动选中的设备
+  startSelectedMachine(patient) {
+    if (!this.selectedExamDevice) return false
+    
+    const state = this.machineStates[this.selectedExamDevice]
+    if (!state || state.state !== 'idle') return false
+    
+    // 检查该病人是否申请了此设备
+    if (patient.requiredMachineId !== this.selectedExamDevice) return false
+    
+    // 启动设备
+    state.state = 'starting'
+    state.startTime = Date.now()
+    state.progress = 0
+    state.boundPatient = patient
+    patient.boundMachineId = this.selectedExamDevice
+    
+    return true
+  }
+  
+  // 使用设备开始治疗（点击有勾号的设备）
+  useMachineForTreatment(machineId) {
+    const state = this.machineStates[machineId]
+    if (!state || state.state !== 'ready' || !state.hasCheckMark) return null
+    
+    const patient = state.boundPatient
+    if (!patient) return null
+    
+    // 标记病人检查完成，可以开始正式治疗
+    patient.machineCheckComplete = true
+    patient.showMachineBubble = false
+    
+    // 重置设备状态
+    state.state = 'idle'
+    state.progress = 0
+    state.hasCheckMark = false
+    state.boundPatient = null
+    patient.boundMachineId = null
+    
+    return patient
+  }
+  
+  // 获取设备状态
+  getMachineState(machineId) {
+    return this.machineStates[machineId] || null
   }
 
   // 清空所有选择（兼容旧接口）

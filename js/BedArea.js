@@ -1,4 +1,5 @@
 import { fillRoundRect, strokeRoundRect } from './utils.js'
+import { GameConfig } from './GameConfig.js'
 
 // ==================== 全局病床图片缓存 ====================
 let bedImageCache = null
@@ -71,6 +72,15 @@ class Bed {
     patient.x = this.x + this.width / 2 - patient.width / 2
     patient.y = this.y + this.height * 0.55  // 往下挪，让病人躺在病床上
     patient.inBed = true
+    
+    // 为病人随机分配一个检验设备
+    const machines = GameConfig.machine || []
+    if (machines.length > 0) {
+      const randomMachine = machines[Math.floor(Math.random() * machines.length)]
+      patient.requiredMachineId = randomMachine.id
+      patient.showMachineBubble = true
+      console.log(`病人 ${patient.name} 申请设备: ${randomMachine.name}`)
+    }
   }
 
   clear() {
@@ -203,6 +213,15 @@ class IVSeat {
     patient.seat = this
     patient.state = 'seated'
     patient.seatedAt = Date.now()
+    
+    // 为病人随机分配一个检验设备
+    const machines = GameConfig.machine || []
+    if (machines.length > 0) {
+      const randomMachine = machines[Math.floor(Math.random() * machines.length)]
+      patient.requiredMachineId = randomMachine.id
+      patient.showMachineBubble = true
+      console.log(`病人 ${patient.name} 申请设备: ${randomMachine.name}`)
+    }
   }
 
   clear() {

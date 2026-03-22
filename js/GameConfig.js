@@ -201,9 +201,9 @@ export const GameConfig = {
   // ==================== 病人配置 ====================
   patient: {
     spawnFirstCount: 4,         // 前N个病人进场固定间隔
-    spawnFirstInterval: 3500,   // 前N个病人进场的间隔（毫秒）
-    spawnRandomMin: 2000,       // 随机间隔最小值（毫秒）
-    spawnRandomMax: 5000       // 随机间隔最大值（毫秒）
+    spawnFirstInterval: 2000,   // 前N个病人进场的间隔（毫秒）
+    spawnRandomMin: 1000,       // 随机间隔最小值（毫秒）
+    spawnRandomMax: 4000       // 随机间隔最大值（毫秒）
   },
 
   // ==================== 托盘配置 ====================
@@ -382,7 +382,7 @@ export const GameConfig = {
       },  {
         id: 'brain',
         name: '心电图',
-        icon: '🫀',
+        icon: '😁',
         imagePath: 'images/machine_brain.png',
         unlockLevel: 1,
         durability: 100

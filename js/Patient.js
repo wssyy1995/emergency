@@ -238,6 +238,12 @@ export default class Patient {
     this.patiencePaused = false     // 耐心值是否暂停减少
     this.patiencePauseTime = 0      // 暂停剩余时间（毫秒）
     
+    // ==================== 检验设备相关 ====================
+    this.requiredMachineId = null   // 申请的检验设备ID
+    this.boundMachineId = null      // 当前绑定的设备ID
+    this.machineCheckComplete = false  // 设备检查是否完成
+    this.showMachineBubble = false  // 是否显示设备申请气泡
+    
     // 病人图片编号（使用 patientDetail.id，直接对应图片编号 1-26）
     this.patientType = patientDetail ? patientDetail.id : id
     
@@ -590,12 +596,12 @@ export default class Patient {
         ctx.lineTo(centerX - 1 * scale, barY + 8 * scale + bounceOffset)
         ctx.lineTo(centerX + 5 * scale, barY + 2 * scale + bounceOffset)
         ctx.stroke()
-      } else {
-        // 【非紧急疾病】治疗中：显示蓝色圆角进度条
+      } else if (this.machineCheckComplete) {
+        // 【检查完成】显示蓝色治疗进度条
         const barWidth = 40 * scale
         const barHeight = 8 * scale
         const barX = centerX - barWidth / 2
-        const radius = barHeight / 2  // 圆角半径为高度的一半，形成圆润的胶囊形状
+        const radius = barHeight / 2
         
         // 进度条背景（灰色圆角）
         ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
@@ -613,6 +619,8 @@ export default class Patient {
           const iconSize = 18 * scale
           ctx.drawImage(this.curingImage, barX - iconSize - 3 * scale, barY + (barHeight - iconSize) / 2, iconSize, iconSize)
         }
+      } else {
+        // 【等待检查中】不显示进度条，只显示设备气泡（在renderMachineBubble中处理）
       }
       
       ctx.restore()
@@ -728,6 +736,90 @@ export default class Patient {
       
       ctx.restore()
     }
+    
+    // 绘制设备申请气泡（在治疗椅上且需要设备检查时）
+    if ((this.inBed || (this.seat && this.state === 'seated')) && 
+        this.showMachineBubble && 
+        this.requiredMachineId && 
+        !this.machineCheckComplete) {
+      this.renderMachineBubble(ctx, scale)
+    }
+  }
+  
+  // 渲染设备申请气泡
+  renderMachineBubble(ctx, scale) {
+    const centerX = this.x + this.width / 2
+    const bubbleY = this.y - 95 * scale + this.bounceOffset
+    const bubbleSize = 36 * scale
+    const now = Date.now()
+    
+    // 获取设备信息
+    const machines = GameConfig.machine || []
+    const machine = machines.find(m => m.id === this.requiredMachineId)
+    if (!machine) return
+    
+    // 计算呼吸效果（如果设备正在启动中）
+    let borderAlpha = 1
+    let borderWidth = 2
+    if (this.boundMachineId) {
+      // 设备启动中，绿色呼吸边框
+      borderAlpha = 0.5 + 0.5 * Math.sin(now / 200)
+      borderWidth = 3
+    }
+    
+    ctx.save()
+    
+    // 气泡背景
+    ctx.fillStyle = '#FFF'
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)'
+    ctx.shadowBlur = 6 * scale
+    ctx.shadowOffsetY = 2 * scale
+    ctx.beginPath()
+    ctx.arc(centerX, bubbleY, bubbleSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowColor = 'transparent'
+    
+    // 气泡边框
+    if (this.boundMachineId) {
+      // 设备启动中：绿色呼吸边框
+      ctx.strokeStyle = `rgba(34, 197, 94, ${borderAlpha})`
+      ctx.lineWidth = borderWidth * scale
+    } else {
+      // 等待中：灰色边框
+      ctx.strokeStyle = '#E5E7EB'
+      ctx.lineWidth = 2 * scale
+    }
+    ctx.stroke()
+    
+    // 绘制设备图标
+    const iconSize = 20 * scale
+    ctx.font = `${iconSize}px "PingFang SC", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#4B5563'
+    ctx.fillText(machine.icon, centerX, bubbleY)
+    
+    // 气泡小三角（指向病人）
+    ctx.fillStyle = '#FFF'
+    ctx.beginPath()
+    ctx.moveTo(centerX - 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+    ctx.lineTo(centerX + 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+    ctx.lineTo(centerX, bubbleY + bubbleSize / 2 + 5 * scale)
+    ctx.fill()
+    
+    // 三角边框
+    if (this.boundMachineId) {
+      ctx.strokeStyle = `rgba(34, 197, 94, ${borderAlpha})`
+    } else {
+      ctx.strokeStyle = '#E5E7EB'
+    }
+    ctx.lineWidth = (this.boundMachineId ? borderWidth : 2) * scale
+    ctx.beginPath()
+    ctx.moveTo(centerX - 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+    ctx.lineTo(centerX + 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+    ctx.stroke()
+    
+    ctx.restore()
   }
 
   contains(x, y) {

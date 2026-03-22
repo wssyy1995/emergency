@@ -167,7 +167,20 @@ export function getRandomItem() {
 // 根据ID获取物品
 export function getItemById(id) {
   const allItems = [...MEDICINES, ...TOOLS, ...EXAM_DEVICES]
-  return allItems.find(item => item.id === id)
+  const item = allItems.find(item => item.id === id)
+  if (item) return item
+  
+  // 也搜索 GameConfig.machine 中的设备
+  // 使用动态导入避免循环依赖
+  try {
+    const GameConfig = require('./GameConfig.js').GameConfig
+    if (GameConfig && GameConfig.machine) {
+      return GameConfig.machine.find(m => m.id === id)
+    }
+  } catch (e) {
+    // 如果导入失败，返回 null
+  }
+  return null
 }
 
 // 判断是否是药品
