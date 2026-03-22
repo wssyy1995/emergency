@@ -3096,8 +3096,11 @@ export default class Game {
     // 停止游戏运行（等待用户点击继续）
     this.isRunning = false
     
-    // 结算本关荣誉点
-    const honorEarned = this.honorEarnedThisLevel || 0
+    // 获取关卡配置
+    const levelConfig = getLevelConfig(this.currentLevel)
+    
+    // 结算本关荣誉点（使用关卡固定baseHonor，不再使用累加的随机值）
+    const honorEarned = levelConfig.baseHonor || 0
     
     console.log('[关卡完成] 创建弹窗, 实例ID:', this._instanceId)
     // 显示自定义确认弹窗
@@ -3110,6 +3113,9 @@ export default class Game {
     const btnWidth = 100
     const btnHeight = 38
     
+    // 计算额外奖励：(实际治愈人数 - 治愈目标人数) * 100
+    const extraBonus = Math.max(0, (this.curedCount - levelConfig.cureTarget) * 100)
+    
     this.levelCompleteModal = {
       visible: true,
       isAnimating: true,
@@ -3117,9 +3123,15 @@ export default class Game {
       title: '本关目标达成',
       content: '迎接下一波病人吧！',
       buttonText: '继续',
-      honorEarned: honorEarned,  // 保存本关获得的荣誉点
+      honorEarned: honorEarned,  // 基础荣誉点
+      honorBonus: extraBonus,    // 额外奖励荣誉点
       upgradeBtnPressed: false,   // 升级按钮按下状态
       continueBtnPressed: false,  // 继续按钮按下状态
+      // 荣誉点数值动画状态
+      honorAnim: {
+        startTime: Date.now(),   // 动画开始时间
+        phase: 0                 // 动画阶段
+      },
       // 预先初始化按钮位置，避免渲染前点击失败
       upgradeBtn: {
         x: modalX + 18,
@@ -3380,8 +3392,9 @@ export default class Game {
   nextLevel() {
     console.log('进入下一关:', this.currentLevel + 1)
     
-    // 结算本关荣誉点到总荣誉点
-    const honorEarned = this.honorEarnedThisLevel || 0
+    // 结算本关荣誉点到总荣誉点（使用关卡固定baseHonor）
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const honorEarned = levelConfig ? (levelConfig.baseHonor || 0) : 0
     this.score += honorEarned
     console.log(`[荣誉点结算] 本关获得: ${honorEarned}, 总荣誉点: ${this.score}`)
     
@@ -4021,13 +4034,84 @@ export default class Game {
     ctx.font = 'bold 15px "PingFang SC", sans-serif'
     ctx.fillText('获得荣誉点', honorPillX + 36, honorPillY + honorPillHeight / 2)
     
-    // 数值 +X
-    ctx.fillStyle = '#B45309'
-    ctx.font = 'bold 18px "PingFang SC", sans-serif'
-    ctx.textAlign = 'right'
-    ctx.fillText(`+${honorEarned}`, honorPillX + honorPillWidth - 14, honorPillY + honorPillHeight / 2)
+    // 数值 +X（带两次跳跃动画：+0 -> +baseHonor -> +最终值）
+    const baseHonor = this.levelCompleteModal.honorEarned || 0
+    const extraBonus = this.levelCompleteModal.honorBonus || 0
+    const honorAnim = this.levelCompleteModal.honorAnim
     
-    // ===== 5. 绘制下一关目标卡片 =====
+    // 计算当前显示值和动画状态
+    let displayValue = 0
+    let prevValue = 0
+    let isTransitioning = false
+    let transitionProgress = 0
+    
+    if (honorAnim && honorAnim.startTime) {
+      const elapsed = Date.now() - honorAnim.startTime
+      
+      // 阶段1：0-300ms，显示+0
+      if (elapsed < 300) {
+        displayValue = 0
+        prevValue = 0
+      }
+      // 阶段2：300-800ms，+0 -> +baseHonor（切换动画500ms）
+      else if (elapsed < 1800) {
+        displayValue = baseHonor
+        prevValue = 0
+        isTransitioning = true
+        transitionProgress = (elapsed - 300) / 500
+      }
+
+      // 阶段4：1100-1600ms，+baseHonor -> +最终值（切换动画500ms）
+      else if (elapsed > 1900) {
+        displayValue = baseHonor + extraBonus
+        prevValue = baseHonor
+        isTransitioning = true
+        transitionProgress = (elapsed - 1100) / 500
+      }
+      // 阶段5：1600ms+，保持最终值
+      else {
+        displayValue = baseHonor + extraBonus
+        prevValue = baseHonor + extraBonus
+      }
+    }
+    
+    const textX = honorPillX + honorPillWidth - 14
+    const textY = honorPillY + honorPillHeight / 2
+    const textSize = 18
+    
+    if (isTransitioning) {
+      // 缓动函数
+      const t = Math.max(0, Math.min(1, transitionProgress))
+      const easeOut = 1 - Math.pow(1 - t, 3)
+      
+      ctx.save()
+      
+      // 旧数字向上飘起消失
+      const oldOffsetY = -textSize * easeOut
+      const oldAlpha = 1 - easeOut
+      ctx.fillStyle = `rgba(180, 83, 9, ${oldAlpha})`
+      ctx.font = `bold ${textSize}px "PingFang SC", sans-serif`
+      ctx.textAlign = 'right'
+      ctx.fillText(`+${prevValue}`, textX, textY + oldOffsetY)
+      
+      // 新数字从下方升起
+      const newOffsetY = textSize * (1 - easeOut)
+      const newAlpha = easeOut
+      ctx.fillStyle = `rgba(180, 83, 9, ${newAlpha})`
+      ctx.font = `bold ${textSize}px "PingFang SC", sans-serif`
+      ctx.textAlign = 'right'
+      ctx.fillText(`+${displayValue}`, textX, textY + newOffsetY)
+      
+      ctx.restore()
+    } else {
+      // 无动画时直接显示
+      ctx.fillStyle = '#B45309'
+      ctx.font = `bold ${textSize}px "PingFang SC", sans-serif`
+      ctx.textAlign = 'right'
+      ctx.fillText(`+${displayValue}`, textX, textY)
+    }
+    
+    // ===== 5. 绘制本关成就卡片 =====
     const targetAreaX = modalX + 18
     const targetAreaY = modalY + 125  // 增加与荣誉点胶囊的间距
     const targetAreaW = modalWidth - 36
@@ -4042,8 +4126,8 @@ export default class Game {
     ctx.lineWidth = 2
     strokeRoundRect(ctx, targetAreaX, targetAreaY, targetAreaW, targetAreaH, 16)
     
-    // 悬浮标题 "下一关"
-    const tagWidth = 86
+    // 悬浮标题 "本关成就计算"
+    const tagWidth = 110
     const tagHeight = 22
     ctx.fillStyle = '#7AAEB8'
     fillRoundRect(ctx, modalX + modalWidth / 2 - tagWidth / 2, targetAreaY - 11, tagWidth, tagHeight, tagHeight / 2)
@@ -4052,50 +4136,84 @@ export default class Game {
     ctx.font = 'bold 12px "PingFang SC", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('下一关', modalX + modalWidth / 2, targetAreaY - 1)
+    ctx.fillText('本关成就计算', modalX + modalWidth / 2, targetAreaY - 1)
     
-    // 获取下一关数据
-    const nextLevel = this.currentLevel + 1
-    const nextLevelConfig = nextLevel < GameConfig.levels.length ? GameConfig.levels[nextLevel] : null
+    // 获取当前关卡数据
+    const currentLevelConfig = GameConfig.levels[this.currentLevel]
+    const totalPatients = currentLevelConfig ? currentLevelConfig.patients.length : 0
     
-    // 数据行1：病人总数
+    // 获取动画经过时间（用于行文字的延迟动画）
+    const modalAnimElapsed = (this.levelCompleteModal.honorAnim && this.levelCompleteModal.honorAnim.startTime) 
+      ? (Date.now() - this.levelCompleteModal.honorAnim.startTime) 
+      : 0
+    
+    // 数据行1：治愈目标
     const row1Y = targetAreaY + 20
     // 左侧图标和标签
-    ctx.font = '16px sans-serif'
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('👥', targetAreaX + 12, row1Y + 16)
+    if (this.curedImage && this.curedImage.width > 0) {
+      const curedIconSize = 20
+      ctx.drawImage(this.curedImage, targetAreaX + 10, row1Y + 6, curedIconSize, curedIconSize)
+    }
     ctx.fillStyle = '#57748E'
     ctx.font = 'bold 13px "PingFang SC", sans-serif'
-    ctx.fillText('病人总数', targetAreaX + 36, row1Y + 16)
-    // 右侧数值
-    const patientCountText = nextLevelConfig ? `${nextLevelConfig.patients.length} 人` : '未知'
-    ctx.fillStyle = '#57748E'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('治愈目标', targetAreaX + 36, row1Y + 16)
+    // 右侧状态 - 延迟100ms落下出现
+    const row1Delay = 100
+    const row1Duration = 300
+    let row1TextY = row1Y + 16
+    let row1Alpha = 1
+    if (modalAnimElapsed < row1Delay) {
+      row1Alpha = 0  // 延迟期间不显示
+    } else if (modalAnimElapsed < row1Delay + row1Duration) {
+      const row1Progress = (modalAnimElapsed - row1Delay) / row1Duration
+      const row1Ease = 1 - Math.pow(1 - row1Progress, 3)  // easeOutCubic
+      row1TextY = row1Y + 16 - 15 * (1 - row1Ease)  // 从上方15px落下
+      row1Alpha = row1Ease
+    }
+    ctx.fillStyle = `rgba(39, 174, 96, ${row1Alpha})`  // 绿色表示完成
     ctx.font = 'bold 16px "PingFang SC", sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(patientCountText, targetAreaX + targetAreaW - 12, row1Y + 16)
+    if (row1Alpha > 0) {
+      ctx.fillText('完成！', targetAreaX + targetAreaW - 12, row1TextY)
+    }
     
     // 分割线
     ctx.fillStyle = '#E2E8F0'
     ctx.fillRect(targetAreaX + 8, row1Y + 32, targetAreaW - 16, 1)
     
-    // 数据行2：治愈人数
+    // 数据行2：完美治愈
     const row2Y = row1Y + 36
-    // 左侧图标（cured.png）和标签
-    if (this.curedImage && this.curedImage.width > 0) {
-      const curedIconSize = 20
-      ctx.drawImage(this.curedImage, targetAreaX + 10, row2Y + 6, curedIconSize, curedIconSize)
-    }
+    // 左侧图标和标签
+    ctx.font = '16px sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('🏆', targetAreaX + 12, row2Y + 16)
     ctx.fillStyle = '#57748E'
     ctx.font = 'bold 13px "PingFang SC", sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText('治愈目标', targetAreaX + 36, row2Y + 16)
-    // 右侧数值
-    const cureText = nextLevelConfig ? `${nextLevelConfig.cureTarget} 人` : '15 人'
-    ctx.fillStyle = '#57748E'  // 灰蓝色，与病人总数保持一致
+    ctx.fillText('完美治愈', targetAreaX + 36, row2Y + 16)
+    // 右侧状态 - 延迟1600ms落下出现
+    const row2Delay = 1600
+    const row2Duration = 300
+    const isPerfectCure = this.curedCount >= totalPatients
+    let row2TextY = row2Y + 16
+    let row2Alpha = 1
+    let row2Color = isPerfectCure ? [39, 174, 96] : [148, 163, 184]  // 绿色或灰色
+    if (modalAnimElapsed < row2Delay) {
+      row2Alpha = 0  // 延迟期间不显示
+    } else if (modalAnimElapsed < row2Delay + row2Duration) {
+      const row2Progress = (modalAnimElapsed - row2Delay) / row2Duration
+      const row2Ease = 1 - Math.pow(1 - row2Progress, 3)  // easeOutCubic
+      row2TextY = row2Y + 16 - 15 * (1 - row2Ease)  // 从上方15px落下
+      row2Alpha = row2Ease
+    }
+    ctx.fillStyle = `rgba(${row2Color[0]}, ${row2Color[1]}, ${row2Color[2]}, ${row2Alpha})`
     ctx.font = 'bold 16px "PingFang SC", sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(cureText, targetAreaX + targetAreaW - 12, row2Y + 16)
+    if (row2Alpha > 0) {
+      ctx.fillText(isPerfectCure ? '完成！' : '未达成', targetAreaX + targetAreaW - 12, row2TextY)
+    }
     
     // ===== 7. 绘制底部按钮 =====
     const btnY = modalY + 245  // 整体下移
