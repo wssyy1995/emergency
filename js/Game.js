@@ -207,7 +207,7 @@ export default class Game {
     this.showStartButton = false
     this.startButtonPressed = false
     this.startButtonBounds = null
-    this.skipStartButton = false  // 是否跳过开始按钮（从下一关进入时为true）
+    this.waitingForLevelGoal = false  // 是否正在等待【本关目标】弹窗点击
     
     // 【开始接诊】按钮消失动画
     this.startButtonAnimation = {
@@ -533,59 +533,34 @@ export default class Game {
     this.levelComplete = false
     this.curedCount = 0
     
-    // 【新玩家指引】第一关检查是否为新玩家（优先从本地缓存读取）
-    if (this.currentLevel === 0) {
-      // 从本地缓存读取，没有缓存则使用 GameConfig 默认值
-      const isNewPlayer = getNewPlayerStatus()
-      GameConfig.is_new_player = isNewPlayer
-      this.waitingArea.setNewPlayerMode(isNewPlayer)
-      console.log(`[新玩家指引] 当前模式: ${isNewPlayer ? '新玩家' : '正常流程'}`)
-    } else {
-      // 非第一关，关闭新玩家模式
-      this.waitingArea.setNewPlayerMode(false)
-      
-      // 【关卡提示】第2关及以后，显示灯泡提示（如果本关未点击过）
-      if (this.currentLevel >= 1) {
-        const hasClicked = getLevelHintStatus(this.currentLevel)
-        const showHint = !hasClicked
-        this.waitingArea.nurse.setLevelHint(showHint)
-        console.log(`[关卡提示] 第${this.currentLevel + 1}关灯泡状态: ${showHint ? '显示' : '已关闭'}`)
-      }
+    // 获取新玩家状态
+    const isNewPlayer = (this.currentLevel === 0) ? getNewPlayerStatus() : false
+    GameConfig.is_new_player = isNewPlayer
+    this.waitingArea.setNewPlayerMode(isNewPlayer)
+    console.log(`[新玩家指引] 当前模式: ${isNewPlayer ? '新玩家' : '正常流程'}`)
+    
+    // 【关卡提示】第2关及以后，显示灯泡提示
+    if (this.currentLevel >= 1) {
+      const hasClicked = getLevelHintStatus(this.currentLevel)
+      const showHint = !hasClicked
+      this.waitingArea.nurse.setLevelHint(showHint)
     }
     
-    // 初始化倒计时（仅当关卡配置开启倒计时）
+    // 初始化倒计时
     const levelConfig = getLevelConfig(this.currentLevel)
-    this.hasCountdown = levelConfig.hasCountdown || false  // 是否开启倒计时
+    this.hasCountdown = levelConfig.hasCountdown || false
     this.timeRemaining = levelConfig.timeLimit || 60
-    this.countdownTimer = null  // 倒计时定时器，等第一个病人生成后启动（仅当hasCountdown为true时）
+    this.countdownTimer = null
     
-    // 初始化当前关卡的病人池（不重复的病人）
+    // 初始化病人池
     this.initCurrentLevelPatientPool()
     
     // 清除之前的定时器
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
     if (this.spawnTimer) clearTimeout(this.spawnTimer)
     
-    // 【开始接诊按钮】根据是否新玩家决定是否显示
-    // 新玩家：先不显示按钮，等关闭疾病清单后再显示
-    // 老玩家：直接显示按钮
-    // 从下一关进入：不显示按钮，直接开始
-    if (this.skipStartButton) {
-      // 从【继续】按钮进入下一关，直接开始游戏
-      this.showStartButton = false
-      console.log('[下一关] 直接开始游戏，不显示【开始接诊】按钮')
-      // 直接开始生成病人（不需要点击按钮）
-      setTimeout(() => {
-        console.log('[自动开始] 直接开始生成病人')
-        this.startPatientSpawning()
-      }, 500)
-    } else if (GameConfig.is_new_player) {
-      this.showStartButton = false
-      console.log('[新玩家指引] 游戏启动，暂不显示【开始接诊】按钮')
-    } else {
-      this.showStartButton = true
-      console.log('[游戏开始] 显示【开始接诊】按钮')
-    }
+    // 统一显示【开始接诊】按钮（点击后再显示【本关目标】弹窗）
+    this.showStartButton = true
   }
   
   // 开始生成病人（提取为独立方法）
@@ -1112,7 +1087,8 @@ export default class Game {
     this.doctors.forEach(doctor => doctor.renderBubble(this.ctx))
     
     // 【新玩家指引】聚光灯效果（在所有元素之后绘制，只影响背景）
-    if (GameConfig.is_new_player && this.currentLevel === 0) {
+    // 只在欢迎气泡显示时生效（气泡消失后取消聚光灯）
+    if (this.currentLevel === 0 && this.waitingArea.nurse.isNewPlayer) {
       this.renderNewPlayerSpotlight()
     }
     
@@ -2155,6 +2131,9 @@ export default class Game {
         // 点击时震动（仅真机）
         this.vibrate()
         
+        // 标记 guide 已被点击（不再显示手指指向图标）
+        this.waitingArea.markGuideClicked()
+        
         // 【新玩家指引】如果是新玩家，立即恢复正常护士图片（移除灯泡）
         if (GameConfig.is_new_player) {
           console.log('[新玩家指引] guide 被点击，恢复正常图片，显示分诊指南')
@@ -2242,7 +2221,9 @@ export default class Game {
             wx.vibrateShort({ type: 'light' })
           }
           this.levelCompleteModal.visible = false
+          // 先进入下一关，然后显示本关目标弹窗
           this.nextLevel()
+          this.showLevelGoalModal()
           return
         }
         
@@ -3203,12 +3184,9 @@ export default class Game {
         x >= modal.continueBtn.x && x <= modal.continueBtn.x + modal.continueBtn.width &&
         y >= modal.continueBtn.y && y <= modal.continueBtn.y + modal.continueBtn.height) {
       console.log('点击了继续按钮')
-      // 震动反馈
-      if (this.platform === 'ios' || this.platform === 'android') {
-        wx.vibrateShort({ type: 'light' })
-      }
-      this.levelCompleteModal.visible = false
-      this.nextLevel()
+      // 设置按下状态，在 onTouchEnd 中处理继续
+      modal.continueBtnPressed = true
+      modal.upgradeBtnPressed = false
       return true
     }
     
@@ -3430,8 +3408,8 @@ export default class Game {
       clearInterval(this.countdownTimer)
     }
     
-    // 标记从下一关进入，跳过【开始接诊】按钮
-    this.skipStartButton = true
+    // 标记正在等待【本关目标】弹窗点击
+    this.waitingForLevelGoal = true
     
     // 清理关卡完成弹窗，避免影响下一关
     this.levelCompleteModal = null
@@ -3439,8 +3417,9 @@ export default class Game {
     // 延迟一点再启动，确保清理完成
     setTimeout(() => {
       this.start()
-      // 直接开始生成病人（不需要点击【开始接诊】按钮）
-      this.startPatientSpawning()
+      // 隐藏【开始接诊】按钮，显示【本关目标】弹窗
+      this.showStartButton = false
+      this.showLevelGoalModal()
     }, 100)
   }
   
@@ -3488,6 +3467,14 @@ export default class Game {
     console.log('[升级模式] upgradeMode 已设置为:', this.upgradeMode)
     this.showUpgradeBubbles = true
     this.showStartButton = true  // 显示【开始接诊】按钮
+    
+    // 重置开始按钮动画，确保按钮能正确显示和点击
+    this.startButtonAnimation = {
+      isPlaying: false,
+      progress: 0,
+      duration: 300
+    }
+    
     this.isRunning = false  // 停止游戏运行（停止生成病人）
     
     // 清除病人生成定时器
@@ -3576,8 +3563,8 @@ export default class Game {
     this.waitingArea.clear()
     this.bedArea.clear()
     
-    // 重置跳过按钮标志（重新开始游戏需要显示按钮）
-    this.skipStartButton = false
+    // 重置等待标志
+    this.waitingForLevelGoal = false
     
     // 重置升级模式
     this.upgradeMode = false
@@ -3631,8 +3618,8 @@ export default class Game {
     this.waitingArea.clear()
     this.bedArea.clear()
     
-    // 重置跳过按钮标志（原地复活后直接开始，不需要显示【开始接诊】按钮）
-    this.skipStartButton = true
+    // 原地复活后，确保显示【本关目标】弹窗（不再是新玩家流程）
+    GameConfig.is_new_player = false
     
     // 重置升级模式
     this.upgradeMode = false
@@ -3651,6 +3638,10 @@ export default class Game {
     
     // 开始游戏（保持当前关卡）
     this.start()
+    
+    // 隐藏【开始接诊】按钮，显示【本关目标】弹窗
+    this.showStartButton = false
+    this.showLevelGoalModal()
   }
   
   // 绘制游戏结束弹窗（参考 ui.txt 设计）
@@ -5709,6 +5700,9 @@ export default class Game {
     // 关闭弹窗
     this.levelGoalModal = null
     
+    // 重置等待标志
+    this.waitingForLevelGoal = false
+    
     // 启动按钮消失动画（而不是立即隐藏）
     this.startButtonAnimation.isPlaying = true
     this.startButtonAnimation.progress = 0
@@ -5756,16 +5750,14 @@ export default class Game {
   handleNewPlayerGuideComplete() {
     // 如果还是新玩家模式（未开始生成病人）
     if (GameConfig.is_new_player) {
-      console.log('[新玩家指引] 分诊指南已关闭，显示【开始接诊】按钮')
+      console.log('[新玩家指引] 分诊指南已关闭')
       // 更新为新玩家状态为 false
       GameConfig.is_new_player = false
       // 保存到本地缓存（下次游戏不再显示新玩家指引）
       saveNewPlayerStatus(false)
       
-      // 【修改】不再直接开始游戏，而是显示【开始接诊】按钮
-      this.showStartButton = true
+      // 注意：不自动显示【本关目标】弹窗，让用户自己点击【开始接诊】按钮
     }
-    // 如果 is_new_player 已经是 false，不做任何处理
   }
 
   // 处理疾病清单弹窗的点击

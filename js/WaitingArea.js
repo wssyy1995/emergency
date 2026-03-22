@@ -47,11 +47,18 @@ export default class WaitingArea {
     this.plantImage = WaitingAreaImageCache.getImage('plant', 'images/plant.png')
     this.bookshelfImage = WaitingAreaImageCache.getImage('bookshelf', 'images/bookshelf.png')
     this.guideImage = WaitingAreaImageCache.getImage('guide', 'images/guide.png')
+    this.fingerImage = WaitingAreaImageCache.getImage('finger', 'images/finger.png')
+    this.lightbulbImage = WaitingAreaImageCache.getImage('lightbulb', 'images/lightbulb.png')
   }
   
   // 设置新玩家模式
   setNewPlayerMode(isNewPlayer) {
     this.nurse.setNewPlayerMode(isNewPlayer)
+  }
+  
+  // 标记 guide 已被点击（点击后不再显示手指指向）
+  markGuideClicked() {
+    this.guideClicked = true
   }
 
   initStandingQueue() {
@@ -187,6 +194,12 @@ export default class WaitingArea {
 
   update(deltaTime) {
     this.nurse.update(deltaTime)
+    
+    // 更新手指指向动效计时器
+    if (!this.fingerAnimationTime) {
+      this.fingerAnimationTime = 0
+    }
+    this.fingerAnimationTime += deltaTime
   }
 
   render(ctx) {
@@ -202,6 +215,36 @@ export default class WaitingArea {
     const guideBounds = this.getGuideBounds()
     if (guideBounds) {
       ctx.drawImage(this.guideImage, guideBounds.x, guideBounds.y, guideBounds.width, guideBounds.height)
+      
+      // 欢迎气泡消失后，在 guide 左边显示手指指向图标（点击 guide 后不再显示）
+      if (!this.nurse.isNewPlayer && !this.nurse.showReadyBubble && !this.guideClicked && this.fingerImage && this.fingerImage.width > 0) {
+        // 手指大小
+        const fingerWidth = 32 * (this.width / 400)
+        const fingerHeight = fingerWidth * (this.fingerImage.height / this.fingerImage.width)
+        // 手指位置：guide 左边，稍微偏下
+        const fingerX = guideBounds.x - fingerWidth * 0.7
+        const fingerY = guideBounds.y + guideBounds.height * 0.3
+        
+        // 左右摇摆动效（周期 0.6 秒，幅度 8 像素）- 指向 guide
+        const bounceOffset = Math.sin(this.fingerAnimationTime / 300) * 5
+        
+        // 绘制手指图片
+        ctx.drawImage(this.fingerImage, fingerX + bounceOffset, fingerY, fingerWidth, fingerHeight)
+      }
+      
+      // 【关卡提示】第2关及以后，在 guide 右上方显示灯泡
+      if (this.nurse.showLevelHint && this.lightbulbImage && this.lightbulbImage.width > 0) {
+        const baseBulbSize = 48 * (this.width / 400)
+        // 位置：guide 右上方
+        const bulbX = guideBounds.x + guideBounds.width + baseBulbSize * 0.2
+        const bulbY = guideBounds.y - baseBulbSize * 0.1
+        
+        // 呼吸动效（缩放 0.9 ~ 1.1，周期 1.2 秒）
+        const breathScale = 1 + Math.sin(this.fingerAnimationTime / 200) * 0.1
+        const bulbSize = baseBulbSize * breathScale
+        
+        ctx.drawImage(this.lightbulbImage, bulbX - bulbSize / 2, bulbY - bulbSize / 2, bulbSize, bulbSize)
+      }
     }
     
     this.renderReception(ctx)

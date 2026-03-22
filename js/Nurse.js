@@ -23,14 +23,17 @@ export default class Nurse {
     // 加载护士图片
     this.nurseImage = null
     this.nurseHelloImage = null
-    this.lightbulbImage = null
     this.isNewPlayer = false
     
     // 逐字显示文字
-    this.welcomeText = '早上好！我是护士小美，给第一天上班的你准备了一份"工作秘籍"，点我看看！'
+    this.welcomeText = '早上好！我是护士小美，给第一天上班的你准备了一份指南，快看看！'
     this.textDisplayProgress = 0  // 当前显示到的字符位置
     this.textDisplayTimer = 0     // 文字显示计时器
     this.textDisplayInterval = 100 // 每个字间隔（毫秒），更慢
+    
+    // 文字显示完成后自动消失计时器
+    this.welcomeCompleteTimer = 0  // 显示完成后的计时器
+    this.welcomeCompleteDelay = 2000 // 显示完成后延迟2秒自动消失
     
     // 准备提示气泡
     this.readyText = '请准备，病人马上到来！'
@@ -69,15 +72,6 @@ export default class Nurse {
     }
     helloImg.src = 'images/nurse_hello.png'
     
-    // 加载灯泡图标
-    const bulbImg = wx.createImage()
-    bulbImg.onload = () => {
-      this.lightbulbImage = bulbImg
-    }
-    bulbImg.onerror = () => {
-      console.warn('Failed to load lightbulb image: images/lightbulb.png')
-    }
-    bulbImg.src = 'images/lightbulb.png'
   }
   
   // 设置新玩家模式
@@ -112,6 +106,14 @@ export default class Nurse {
         this.textDisplayTimer = 0
         if (this.textDisplayProgress < this.welcomeText.length) {
           this.textDisplayProgress++
+        }
+      }
+      
+      // 文字显示完全后，延迟2秒自动消失
+      if (this.textDisplayProgress >= this.welcomeText.length) {
+        this.welcomeCompleteTimer += deltaTime
+        if (this.welcomeCompleteTimer >= this.welcomeCompleteDelay) {
+          this.isNewPlayer = false  // 隐藏欢迎气泡
         }
       }
     }
@@ -175,17 +177,7 @@ export default class Nurse {
       this.renderWelcomeBubble(ctx)
     }
     
-    // 【关卡提示】第2关及以后，在头部右侧显示灯泡
-    if (this.showLevelHint && this.lightbulbImage && this.lightbulbImage.width > 0) {
-      const bulbSize = 32 * this.scale
-      const bulbX = this.x + 35 * this.scale  // 头部右侧
-      const bulbY = this.y - 45 * this.scale  // 头部上方
-      
-      // 添加上下浮动动画
-      const bulbBounce = Math.sin(this.animationTime / 300) * 4
-      
-      ctx.drawImage(this.lightbulbImage, bulbX - bulbSize / 2, bulbY - bulbSize / 2 + bulbBounce, bulbSize, bulbSize)
-    }
+    // 注意：【关卡提示】灯泡已移到 WaitingArea 中，在 guide.png 右上方显示
   }
   
   // 【iOS 兼容】绘制简单圆角矩形（不使用复杂贝塞尔曲线）
