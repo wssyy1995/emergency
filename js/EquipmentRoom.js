@@ -408,12 +408,12 @@ export default class EquipmentRoom {
     
     // 网格布局：2行×4列，卡片尺寸根据区域高度自适应
     const cols = 4
-    const padding = 8 * localScale
-    const gap = 6 * localScale
-    const cardW = 39 * localScale
-    const cardH = 38 * localScale
+    const padding = 10 * localScale
+    const gap = 5 * localScale
+    const cardW = 44 * localScale
+    const cardH = 40 * localScale
     const startX = sectionX + padding
-    const startY = sectionY + 28 * localScale
+    const startY = sectionY + 27 * localScale
     
     for (let i = 0; i < allMedicineTools.length; i++) {
       const item = allMedicineTools[i]
@@ -462,12 +462,12 @@ export default class EquipmentRoom {
     this.examDeviceCards = []
     
     // 网格布局：2行，第一行4个，第二行1个居左，卡片尺寸根据区域高度自适应
-    const padding = 8 * localScale
-    const gap = 6 * localScale
-    const cardW = 37 * localScale
-    const cardH = 36 * localScale
+    const padding = 10 * localScale
+    const gap =  5* localScale
+    const cardW = 40 * localScale
+    const cardH = 39 * localScale
     const startX = sectionX + padding
-    const startY = sectionY + 30 * localScale
+    const startY = sectionY + 25 * localScale
     
     // 从 GameConfig 获取检验设备清单
     const machines = GameConfig.machine || []
@@ -513,17 +513,15 @@ export default class EquipmentRoom {
   
   // 绘制区域标题（仅标题，按钮已移除）
   renderSectionTitle(ctx, sectionX, sectionY, sectionW, title, titleColor, localScale = this.scale) {
-    const headerY = sectionY + 10 * localScale
+    const headerY = sectionY + 15 * localScale  // 往下移动5px（原来10px）
     
-    // 标题居中
+    // 标题居左对齐
     ctx.fillStyle = titleColor
-    ctx.font = `bold ${Math.max(11, 13 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-    ctx.textAlign = 'center'
+    ctx.font = `bold ${Math.max(9.5, 11.5 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText(title, sectionX + sectionW / 2, headerY)
+    ctx.fillText(title, sectionX + 10 * localScale, headerY)
   }
-  
-  // 【已移除】renderSectionHeader 方法，按钮功能改为直接点击医生/病人
   
   // 绘制单个物品卡片（药品工具用）
   renderItemCard(ctx, x, y, width, height, item, isSelected, localScale = this.scale) {
@@ -550,9 +548,9 @@ export default class EquipmentRoom {
     strokeRoundRect(ctx, x, y, width, height, cornerRadius)
     
     // 药品工具图标区域（上方）- 顶部padding加大
-    const iconSize = 22 * localScale
+    const iconSize = 23 * localScale
     const iconX = x + width / 2
-    const iconY = y + 13 * localScale
+    const iconY = y + 15 * localScale
     
     // 绘制图标（优先使用图片）
     const itemImage = getItemImage(item.id)
@@ -571,7 +569,7 @@ export default class EquipmentRoom {
     ctx.font = `${Math.max(9, 8 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(item.name, x + width / 2, y + 25 * localScale)
+    ctx.fillText(item.name, x + width / 2, y + 28 * localScale)
   }
   
   // 绘制检验设备卡片（带进度条和状态）
@@ -622,7 +620,7 @@ export default class EquipmentRoom {
     // 检验设备图标区域（上方）
     const iconSize = 22 * localScale
     const iconX = x + width / 2
-    const iconY = y + 13 * localScale
+    const iconY = y + 14 * localScale
     
     // 绘制图标
     const itemImage = getItemImage(machine.id)
@@ -641,7 +639,7 @@ export default class EquipmentRoom {
     ctx.font = `${Math.max(8, 8 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(machine.name, x + width / 2, y + 25 * localScale)
+    ctx.fillText(machine.name, x + width / 2, y + 26 * localScale)
     
     // 启动中：显示黄色进度条和灰色遮罩
     if (state.state === 'starting') {

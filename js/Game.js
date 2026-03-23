@@ -1172,6 +1172,79 @@ export default class Game {
     })
   }
   
+  // 【新增】尝试将选中的设备绑定给病人（全匹配机制）
+  tryBindMachineToPatient(patient) {
+    // 获取选中的设备
+    const selectedMachine = this.equipmentRoom.selectedExamDevice
+    
+    // 如果没有选中设备，不做任何操作（返回false表示未处理）
+    if (!selectedMachine) {
+      return false
+    }
+    
+    // 【优化1】点击震动反馈（真机震动 + 病人跳动动画）
+    this.vibrate()
+    patient.triggerShake()
+    
+    // 急症病人不需要设备检查
+    if (patient.disease?.diseases_priority === 1) {
+      this.showToast('急症病人无需设备检查')
+      this.equipmentRoom.clearExamDeviceSelection()
+      return true
+    }
+    
+    // 病人必须需要设备且未完成检查
+    if (!patient.requiredMachineId) {
+      this.showToast('该病人无需设备检查')
+      this.equipmentRoom.clearExamDeviceSelection()
+      return true
+    }
+    
+    if (patient.machineCheckComplete) {
+      this.showToast('设备检查已完成')
+      this.equipmentRoom.clearExamDeviceSelection()
+      return true
+    }
+    
+    if (patient.boundMachineId) {
+      this.showToast('设备检查中，请稍候')
+      this.equipmentRoom.clearExamDeviceSelection()
+      return true
+    }
+    
+    // 【全匹配检查】选中的设备必须等于病人需要的设备
+    if (selectedMachine !== patient.requiredMachineId) {
+      // ❌ 匹配失败：清空选中 + 病人气泡红闪 + 提示
+      this.equipmentRoom.clearExamDeviceSelection()
+      patient.triggerMachineError()
+      
+      // 显示需要的设备提示
+      const machines = GameConfig.machine || []
+      const needMachine = machines.find(m => m.id === patient.requiredMachineId)
+      const needName = needMachine ? needMachine.name : '未知设备'
+      this.showToast(`需要：${needName}`)
+      return true
+    }
+    
+    // ✅ 匹配成功：绑定设备（直接绑定，无飞行动画）
+    const machineState = this.equipmentRoom.machineStates[selectedMachine]
+    if (machineState && machineState.state === 'idle') {
+      // 启动设备
+      machineState.state = 'starting'
+      machineState.startTime = Date.now()
+      machineState.progress = 0
+      machineState.boundPatient = patient
+      patient.boundMachineId = selectedMachine
+      
+      this.showToast('开始设备检查')
+    }
+    
+    // 清空选中
+    this.equipmentRoom.clearExamDeviceSelection()
+    
+    return true
+  }
+  
   // 显示暴走提示（只显示一次）
   showRageToastOnce() {
     // 检查本地存储，是否已显示过
@@ -2403,10 +2476,16 @@ export default class Game {
       const ivSeatPatient = this.findIVSeatPatientAt(x, y)
       if (ivSeatPatient) {
         console.log('[点击检测] 点击输液椅上病人:', ivSeatPatient.name)
-        this.vibrate()
+        
+        // 【新增】先尝试绑定设备（如果有选中设备）
+        const handled = this.tryBindMachineToPatient(ivSeatPatient)
+        if (handled) {
+          return  // 如果处理了设备绑定，结束点击流程
+        }
         
         // 如果治疗已完成，点击触发治愈
         if (ivSeatPatient.ivTreatmentComplete) {
+          this.vibrate()
           this.completeIVTreatment(ivSeatPatient)
         }
         // 治疗未完成时，不再显示急救弹窗

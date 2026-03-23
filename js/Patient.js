@@ -246,6 +246,17 @@ export default class Patient {
     this.machineReady = false       // 设备就绪（进度完成，有绿色勾号）
     this.showMachineBubble = false  // 是否显示设备申请气泡
     
+    // 【新增】错误提示动画（设备不匹配时红闪）
+    this.showMachineError = false
+    this.machineErrorStartTime = 0
+    this.machineErrorDuration = 600  // 红闪持续600ms
+    
+    // 【新增】点击跳动动画（被点击时上下跳动）
+    this.isShaking = false
+    this.shakeStartTime = 0
+    this.shakeDuration = 600  // 跳动持续600ms
+    this.shakeIntensity = 3   // 跳动幅度（像素）
+    
     // 病人图片编号（使用 patientDetail.id，直接对应图片编号 1-26）
     this.patientType = patientDetail ? patientDetail.id : id
     
@@ -292,6 +303,9 @@ export default class Patient {
 
   update(deltaTime) {
     this.animationTime += deltaTime
+    
+    // 【新增】更新错误动画状态
+    this.updateMachineErrorAnimation()
     
     // 安抚状态更新（耐心暂停减少）
     if (this.patiencePaused) {
@@ -514,14 +528,61 @@ export default class Patient {
   isPatiencePaused() {
     return this.patiencePaused
   }
+  
+  // 【新增】触发设备错误动画（设备不匹配时调用）
+  triggerMachineError() {
+    this.showMachineError = true
+    this.machineErrorStartTime = Date.now()
+  }
+  
+  // 【新增】更新设备错误动画状态
+  updateMachineErrorAnimation() {
+    if (this.showMachineError) {
+      const elapsed = Date.now() - this.machineErrorStartTime
+      if (elapsed >= this.machineErrorDuration) {
+        this.showMachineError = false
+      }
+    }
+  }
+  
+  // 【新增】触发点击跳动动画
+  triggerShake() {
+    this.isShaking = true
+    this.shakeStartTime = Date.now()
+  }
+  
+  // 【新增】获取跳动偏移量
+  getShakeOffset() {
+    if (!this.isShaking) return { x: 0, y: 0 }
+    
+    const elapsed = Date.now() - this.shakeStartTime
+    if (elapsed >= this.shakeDuration) {
+      this.isShaking = false
+      return { x: 0, y: 0 }
+    }
+    
+    // 上下跳动效果：1次完整上下跳动
+    const progress = elapsed / this.shakeDuration
+    const frequency = 1
+    const dampening = 1 - progress * 0.3
+    
+    const offsetX = 0
+    const offsetY = -Math.abs(Math.sin(progress * Math.PI * frequency)) * this.shakeIntensity * 2.5 * dampening
+    
+    return { x: offsetX, y: offsetY }
+  }
 
   render(ctx, isDragging = false, curedImage = null) {
     ctx.save()
     
+    // 【新增】获取跳动偏移量
+    const shakeOffset = this.getShakeOffset()
+    
     const centerX = this.x + this.width / 2
     const centerY = this.y + this.height / 2
     
-    ctx.translate(centerX, centerY + this.bounceOffset)
+    // 应用跳动偏移量
+    ctx.translate(centerX + shakeOffset.x, centerY + this.bounceOffset + shakeOffset.y)
     
     if (isDragging) {
       ctx.scale(1.1, 1.1)
@@ -789,7 +850,7 @@ export default class Patient {
     
     // 【新增】设备就绪（有绿色勾号）或检查完成：气泡背景变绿色（透明度0.8）
     if (this.machineReady || this.machineCheckComplete) {
-      ctx.fillStyle = 'rgba(134, 239, 172, 0.6)'  // 绿色背景，透明度0.8
+      ctx.fillStyle = 'rgba(134, 239, 172, 0.8)'  // 绿色背景，透明度0.8
     } else {
       ctx.fillStyle = '#FFF'  // 默认白色背景
     }
@@ -852,6 +913,32 @@ export default class Patient {
     ctx.moveTo(centerX - 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
     ctx.lineTo(centerX + 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
     ctx.stroke()
+    
+    // 【新增】错误红闪效果（设备不匹配时）
+    if (this.showMachineError) {
+      const elapsed = Date.now() - this.machineErrorStartTime
+      const flashCount = 3
+      const flashDuration = this.machineErrorDuration / flashCount
+      const flashProgress = (elapsed % flashDuration) / flashDuration
+      const alpha = Math.sin(flashProgress * Math.PI) * 0.8 + 0.2
+      
+      // 绘制红色圆形边框（覆盖整个气泡）
+      ctx.strokeStyle = `rgba(231, 76, 60, ${alpha})`
+      ctx.lineWidth = 4 * scale
+      
+      // 圆形边框
+      ctx.beginPath()
+      ctx.arc(centerX, bubbleY, bubbleSize / 2 + 2 * scale, 0, Math.PI * 2)
+      ctx.stroke()
+      
+      // 三角形边框
+      ctx.beginPath()
+      ctx.moveTo(centerX - 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+      ctx.lineTo(centerX + 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+      ctx.lineTo(centerX, bubbleY + bubbleSize / 2 + 5 * scale)
+      ctx.closePath()
+      ctx.stroke()
+    }
     
     ctx.restore()
   }
