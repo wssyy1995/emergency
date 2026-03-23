@@ -768,13 +768,21 @@ export default class Patient {
     const machine = machines.find(m => m.id === this.requiredMachineId)
     if (!machine) return
     
-    // 计算呼吸效果（如果设备正在启动中）
+    // 计算呼吸效果（只有启动中有呼吸）
     let borderAlpha = 1
     let borderWidth = 2
-    if (this.boundMachineId) {
-      // 设备启动中，绿色呼吸边框
+    let borderColor = '#E5E7EB'  // 默认灰色
+    // 注意：就绪状态优先判断，因为就绪时boundMachineId可能仍然存在
+    if (this.machineReady || this.machineCheckComplete) {
+      // 设备就绪，绿色固定边框（无呼吸）
+      borderAlpha = 1
+      borderWidth = 3
+      borderColor = '34, 197, 94'  // 绿色 RGB
+    } else if (this.boundMachineId) {
+      // 设备启动中，黄色呼吸边框
       borderAlpha = 0.5 + 0.5 * Math.sin(now / 200)
       borderWidth = 3
+      borderColor = '245, 158, 11'  // 黄色 RGB
     }
     
     ctx.save()
@@ -793,9 +801,9 @@ export default class Patient {
     ctx.shadowColor = 'transparent'
     
     // 气泡边框
-    if (this.boundMachineId) {
-      // 设备启动中：绿色呼吸边框
-      ctx.strokeStyle = `rgba(34, 197, 94, ${borderAlpha})`
+    if (this.boundMachineId || this.machineReady || this.machineCheckComplete) {
+      // 设备启动中：黄色呼吸边框；就绪：绿色固定边框
+      ctx.strokeStyle = `rgba(${borderColor}, ${borderAlpha})`
       ctx.lineWidth = borderWidth * scale
     } else {
       // 等待中：灰色边框
@@ -833,12 +841,13 @@ export default class Patient {
     ctx.fill()
     
     // 三角边框
-    if (this.boundMachineId) {
-      ctx.strokeStyle = `rgba(34, 197, 94, ${borderAlpha})`
+    if (this.boundMachineId || this.machineReady || this.machineCheckComplete) {
+      // 设备启动中：黄色呼吸边框；就绪：绿色固定边框
+      ctx.strokeStyle = `rgba(${borderColor}, ${borderAlpha})`
     } else {
       ctx.strokeStyle = '#E5E7EB'
     }
-    ctx.lineWidth = (this.boundMachineId ? borderWidth : 2) * scale
+    ctx.lineWidth = (this.boundMachineId || this.machineReady || this.machineCheckComplete ? borderWidth : 2) * scale
     ctx.beginPath()
     ctx.moveTo(centerX - 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
     ctx.lineTo(centerX + 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)

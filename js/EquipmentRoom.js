@@ -495,7 +495,7 @@ export default class EquipmentRoom {
     // 卡片背景
     if (isSelected) {
       // 选中状态：蓝色背景
-      ctx.fillStyle = '#DBEAFE'
+      ctx.fillStyle = '#ebf3ff'
     } else {
       // 默认状态：白色背景
       ctx.fillStyle = '#FFFFFF'
@@ -542,16 +542,19 @@ export default class EquipmentRoom {
     const cornerRadius = 5 * localScale
     const now = Date.now()
     
-    // 计算呼吸效果透明度（用于starting和ready状态）
+    // 计算呼吸效果透明度（只用于starting状态）
     let breatheAlpha = 1
-    if (state.state === 'starting' || state.state === 'ready') {
+    if (state.state === 'starting') {
       breatheAlpha = 0.5 + 0.5 * Math.sin(now / 200)  // 呼吸动画
     }
     
     // 卡片背景
-    if (state.state === 'starting' || state.state === 'ready') {
-      // 启动中或就绪：淡绿色背景
-      ctx.fillStyle = `rgba(220, 252, 231, ${0.3 + 0.2 * breatheAlpha})`
+    if (state.state === 'starting') {
+      // 启动中：淡灰色背景
+      ctx.fillStyle = '#F3F4F6'
+    } else if (state.state === 'ready') {
+      // 就绪：淡绿色背景（固定透明度，无呼吸）
+      ctx.fillStyle = 'rgba(220, 252, 231, 0.5)'
     } else if (isSelected) {
       // 选中状态：蓝色背景
       ctx.fillStyle = '#DBEAFE'
@@ -562,10 +565,14 @@ export default class EquipmentRoom {
     fillRoundRect(ctx, x, y, width, height, cornerRadius)
     
     // 卡片边框
-    if (state.state === 'starting' || state.state === 'ready') {
-      // 绿色呼吸边框
-      ctx.strokeStyle = `rgba(34, 197, 94, ${breatheAlpha})`
-      ctx.lineWidth = 2 * localScale
+    if (state.state === 'starting') {
+      // 启动中：黄色呼吸边框
+      ctx.strokeStyle = `rgba(245, 158, 11, ${breatheAlpha})`
+      ctx.lineWidth = 2.5 * localScale
+    } else if (state.state === 'ready') {
+      // 就绪：绿色固定边框（无呼吸）
+      ctx.strokeStyle = '#22C55E'
+      ctx.lineWidth = 2.5 * localScale
     } else if (isSelected) {
       ctx.strokeStyle = '#3B82F6'
       ctx.lineWidth = 1.5 * localScale
@@ -599,7 +606,7 @@ export default class EquipmentRoom {
     ctx.textBaseline = 'top'
     ctx.fillText(machine.name, x + width / 2, y + 25 * localScale)
     
-    // 启动中：显示绿色进度条
+    // 启动中：显示黄色进度条和灰色遮罩
     if (state.state === 'starting') {
       const barHeight = 3 * localScale
       const barY = y + height - barHeight - 2 * localScale
@@ -609,10 +616,14 @@ export default class EquipmentRoom {
       ctx.fillStyle = '#E5E7EB'
       fillRoundRect(ctx, x + 3 * localScale, barY, barWidth, barHeight, barHeight / 2)
       
-      // 进度条
+      // 进度条（黄色）
       const progressWidth = barWidth * state.progress
-      ctx.fillStyle = '#22C55E'
+      ctx.fillStyle = '#F59E0B'
       fillRoundRect(ctx, x + 3 * localScale, barY, progressWidth, barHeight, barHeight / 2)
+      
+      // 添加灰色遮罩
+      ctx.fillStyle = 'rgba(128, 128, 128, 0.25)'
+      fillRoundRect(ctx, x, y, width, height, cornerRadius)
     }
     
     // 就绪状态：显示绿色勾号
