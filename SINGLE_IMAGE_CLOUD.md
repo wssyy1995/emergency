@@ -74,7 +74,7 @@ onSomeButtonClick() {
 const cloudImages = {
   'honor.png': 'cloud://cloudbase-6gxf6ir4ef928555.xxx/images/honor.png',
   'cured.png': 'cloud://cloudbase-6gxf6ir4ef928555.xxx/images/cured.png',
-  'boom.png': 'cloud://cloudbase-6gxf6ir4ef928555.xxx/images/boom.png'
+  'boom.png': 'cloud://cloudbase-6gxf6ir4ef928555.xxx/images/global_icon/boom.png'
 }
 
 cloudImageManager.updateImageMap(cloudImages)

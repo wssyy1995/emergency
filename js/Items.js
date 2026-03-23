@@ -70,50 +70,6 @@ export const TOOLS = [
   }
 ]
 
-// 检验设备定义
-export const EXAM_DEVICES = [
-  {
-    id: 'xray',
-    name: 'X光机',
-    icon: '☢️',
-    imagePath: 'images/xray.png',
-    imageName: 'xray.png',
-    color: '#4A90E2'
-  },
-  {
-    id: 'ct',
-    name: 'CT',
-    icon: '🏥',
-    imagePath: 'images/ct.png',
-    imageName: 'ct.png',
-    color: '#7B68EE'
-  },
-  {
-    id: 'blood_test',
-    name: '血常规',
-    icon: '🩸',
-    imagePath: 'images/blood_test.png',
-    imageName: 'blood_test.png',
-    color: '#E74C3C'
-  },
-  {
-    id: 'ecg',
-    name: '心电图',
-    icon: '💓',
-    imagePath: 'images/ecg.png',
-    imageName: 'ecg.png',
-    color: '#2ECC71'
-  },
-  {
-    id: 'eeg',
-    name: '脑电图',
-    icon: '🧠',
-    imagePath: 'images/eeg.png',
-    imageName: 'eeg.png',
-    color: '#9B59B6'
-  }
-]
-
 // 图片缓存
 const imageCache = {}
 
@@ -152,7 +108,7 @@ function getImagePath(imageName) {
 
 // 预加载所有物品图片
 export async function preloadItemImages(callback) {
-  const allItems = [...MEDICINES, ...TOOLS, ...EXAM_DEVICES, ...extraMachines]
+  const allItems = [...MEDICINES, ...TOOLS, ...extraMachines]
   let loadedCount = 0
   const totalCount = allItems.length
 
@@ -271,11 +227,11 @@ export function getRandomItem() {
 
 // 根据ID获取物品
 export function getItemById(id) {
-  const allItems = [...MEDICINES, ...TOOLS, ...EXAM_DEVICES]
+  const allItems = [...MEDICINES, ...TOOLS]
   const item = allItems.find(item => item.id === id)
   if (item) return item
   
-  // 也搜索 GameConfig.machine 中的设备
+  // 搜索 GameConfig.machine 中的设备（检验设备）
   // 使用动态导入避免循环依赖
   try {
     const GameConfig = require('./GameConfig.js').GameConfig
@@ -300,5 +256,14 @@ export function isTool(id) {
 
 // 判断是否是检验设备
 export function isExamDevice(id) {
-  return EXAM_DEVICES.some(d => d.id === id)
+  // 检验设备定义在 GameConfig.machine 中
+  try {
+    const GameConfig = require('./GameConfig.js').GameConfig
+    if (GameConfig && GameConfig.machine) {
+      return GameConfig.machine.some(m => m.id === id)
+    }
+  } catch (e) {
+    return false
+  }
+  return false
 }

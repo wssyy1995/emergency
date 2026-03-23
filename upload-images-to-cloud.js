@@ -34,7 +34,6 @@ const IMAGE_FILES = [
   'honor.png',
   'timer.png',
   'patient_icon.png',
-  'start_level.png',
   'deliver.png',
   'start_machine.png',
   'machine_report.png',

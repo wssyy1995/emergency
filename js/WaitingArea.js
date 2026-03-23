@@ -44,7 +44,7 @@ export default class WaitingArea {
   }
 
   loadImages() {
-    this.nurseDeskImage = WaitingAreaImageCache.getImage('nurseDesk', 'images/nurse_desk.png')
+    this.nurseDeskImage = WaitingAreaImageCache.getImage('nurseDesk', 'images/nurse/nurse_desk.png')
     this.plantImage = WaitingAreaImageCache.getImage('plant', 'images/plant.png')
     this.bookshelfImage = WaitingAreaImageCache.getImage('bookshelf', 'images/bookshelf.png')
     this.guideImage = WaitingAreaImageCache.getImage('guide', 'images/guide.png')

@@ -66,13 +66,15 @@ export default class EquipmentRoom {
     
     // 加载按钮图片
     this.deliveryBtnImage = null
+    this.deliveryBtnDisabledImage = null
     this.startMachineBtnImage = null
+    this.startMachineBtnDisabledImage = null
     this.loadButtonImages()
   }
   
   // 加载按钮图片
   loadButtonImages() {
-    // 配送按钮
+    // 配送按钮（激活状态）
     const deliveryImg = wx.createImage()
     deliveryImg.onload = () => {
       this.deliveryBtnImage = deliveryImg
@@ -82,7 +84,17 @@ export default class EquipmentRoom {
     }
     deliveryImg.src = 'images/deliver.png'
     
-    // 启动按钮
+    // 配送按钮（禁用状态）
+    const deliveryDisabledImg = wx.createImage()
+    deliveryDisabledImg.onload = () => {
+      this.deliveryBtnDisabledImage = deliveryDisabledImg
+    }
+    deliveryDisabledImg.onerror = () => {
+      console.warn('Failed to load deliver_disable.png')
+    }
+    deliveryDisabledImg.src = 'images/deliver_disable.png'
+    
+    // 启动按钮（激活状态）
     const startImg = wx.createImage()
     startImg.onload = () => {
       this.startMachineBtnImage = startImg
@@ -91,6 +103,16 @@ export default class EquipmentRoom {
       console.warn('Failed to load start_machine.png')
     }
     startImg.src = 'images/start_machine.png'
+    
+    // 启动按钮（禁用状态）
+    const startDisabledImg = wx.createImage()
+    startDisabledImg.onload = () => {
+      this.startMachineBtnDisabledImage = startDisabledImg
+    }
+    startDisabledImg.onerror = () => {
+      console.warn('Failed to load start_machine_disable.png')
+    }
+    startDisabledImg.src = 'images/start_machine_disable.png'
   }
   
   // 加载检查报告图片
@@ -102,7 +124,7 @@ export default class EquipmentRoom {
     img.onerror = () => {
       console.warn('Failed to load machine_report.png')
     }
-    img.src = 'images/machine_report.png'
+    img.src = 'images/tool_machine/machine_report.png'
   }
   
   // 触发震动（仅在真机上生效，开发者工具中不震动）
@@ -293,10 +315,10 @@ export default class EquipmentRoom {
     const cols = 4
     const padding = 8 * localScale
     const gap = 6 * localScale
-    const cardW = 37 * localScale
-    const cardH = 36 * localScale
+    const cardW = 39 * localScale
+    const cardH = 38 * localScale
     const startX = sectionX + padding
-    const startY = sectionY + 30 * localScale
+    const startY = sectionY + 28 * localScale
     
     for (let i = 0; i < allMedicineTools.length; i++) {
       const item = allMedicineTools[i]
@@ -346,7 +368,7 @@ export default class EquipmentRoom {
     
     // 网格布局：2行，第一行4个，第二行1个居左，卡片尺寸根据区域高度自适应
     const padding = 8 * localScale
-    const gap = 5 * localScale
+    const gap = 6 * localScale
     const cardW = 37 * localScale
     const cardH = 36 * localScale
     const startX = sectionX + padding
@@ -433,15 +455,32 @@ export default class EquipmentRoom {
     // 按下后的偏移量
     const pressOffset = (isPressed && hasSelected) ? 2 * localScale : 0
     
-    // 获取对应按钮图片
-    const btnImage = btnType === 'delivery' ? this.deliveryBtnImage : this.startMachineBtnImage
+    // 获取对应按钮图片（根据是否选中选择不同图片）
+    let btnImage
+    let useDisabledImage = false
+    if (btnType === 'delivery') {
+      btnImage = hasSelected ? this.deliveryBtnImage : this.deliveryBtnDisabledImage
+      useDisabledImage = !hasSelected && this.deliveryBtnDisabledImage
+    } else {
+      btnImage = hasSelected ? this.startMachineBtnImage : this.startMachineBtnDisabledImage
+      useDisabledImage = !hasSelected && this.startMachineBtnDisabledImage
+    }
+    
+    // 如果禁用图片不存在，回退到激活图片并降低透明度
+    if (!btnImage || !btnImage.width) {
+      if (btnType === 'delivery') {
+        btnImage = this.deliveryBtnImage
+      } else {
+        btnImage = this.startMachineBtnImage
+      }
+    }
     
     // 绘制按钮图片（如果有）
     if (btnImage && btnImage.width > 0) {
-      // 未选中时降低透明度（颜色更深）
       ctx.save()
-      if (!hasSelected) {
-        ctx.globalAlpha = 0.95
+      // 如果使用激活图片作为禁用状态，降低透明度
+      if (!hasSelected && !useDisabledImage) {
+        ctx.globalAlpha = 0.5
       }
       
       // 【修复】保持图片比例，不压扁，并放大1.2倍
@@ -466,8 +505,9 @@ export default class EquipmentRoom {
       ctx.restore()
     } else {
       // 备用：绘制简单按钮
-      const btnColor = btnType === 'delivery' ? '#F97316' : '#22C55E'
-      const btnDisabledColor = btnType === 'delivery' ? 'rgba(249, 115, 22, 0.5)' : 'rgba(34, 197, 94, 0.5)'
+      // 有选中时：配送橙色、启动绿色；未选中时：灰色
+      const btnColor = btnType === 'delivery' ? '#F97316' : '#22C55E'  // 有选中
+      const btnDisabledColor = '#9CA3AF'  // 灰色（未选中）
       ctx.fillStyle = hasSelected ? btnColor : btnDisabledColor
       fillRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 10 * localScale)
       
@@ -494,8 +534,8 @@ export default class EquipmentRoom {
     
     // 卡片背景
     if (isSelected) {
-      // 选中状态：蓝色背景
-      ctx.fillStyle = '#ebf3ff'
+      // 选中状态：蓝色背景（60%透明度）
+      ctx.fillStyle = 'rgba(235, 243, 255, 0.6)'
     } else {
       // 默认状态：白色背景
       ctx.fillStyle = '#FFFFFF'
@@ -512,7 +552,7 @@ export default class EquipmentRoom {
     }
     strokeRoundRect(ctx, x, y, width, height, cornerRadius)
     
-    // 图标区域（上方）- 顶部padding加大
+    // 药品工具图标区域（上方）- 顶部padding加大
     const iconSize = 22 * localScale
     const iconX = x + width / 2
     const iconY = y + 13 * localScale
@@ -556,8 +596,8 @@ export default class EquipmentRoom {
       // 就绪：淡绿色背景（固定透明度，无呼吸）
       ctx.fillStyle = 'rgba(220, 252, 231, 0.5)'
     } else if (isSelected) {
-      // 选中状态：蓝色背景
-      ctx.fillStyle = '#DBEAFE'
+      // 选中状态：蓝色背景（60%透明度）
+      ctx.fillStyle = 'rgba(219, 234, 254, 0.6)'
     } else {
       // 默认状态：白色背景
       ctx.fillStyle = '#FFFFFF'
@@ -582,8 +622,8 @@ export default class EquipmentRoom {
     }
     strokeRoundRect(ctx, x, y, width, height, cornerRadius)
     
-    // 图标区域（上方）
-    const iconSize = 20 * localScale
+    // 检验设备图标区域（上方）
+    const iconSize = 22 * localScale
     const iconX = x + width / 2
     const iconY = y + 13 * localScale
     

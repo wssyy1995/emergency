@@ -2,7 +2,6 @@
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import { getRandomItem, getItemById, getItemImage, isMedicine } from './Items.js'
 import { getDoctorItemCount, getTreatTimeByDisease } from './GameConfig.js'
-import cloudImageManager from './CloudImageManager.js'
 
 // ==================== 全局医生图片缓存 ====================
 const DoctorImageCache = {
@@ -12,26 +11,10 @@ const DoctorImageCache = {
   treatImages: {},
   // 治疗中图标缓存
   curingImage: null,
-  // 是否使用云存储
-  useCloud: false,
-  
-  // 设置云存储模式
-  setUseCloud(enabled) {
-    this.useCloud = enabled
-  },
   
   // 获取治疗中图标
-  async getCuringImage() {
+  getCuringImage() {
     if (!this.curingImage) {
-      if (this.useCloud) {
-        try {
-          this.curingImage = await cloudImageManager.loadImage('curing.png')
-          return this.curingImage
-        } catch (e) {
-          console.warn('[DoctorImageCache] 云存储加载失败，回退到本地')
-        }
-      }
-      // 本地加载
       const img = wx.createImage()
       img.onload = () => {
         this.curingImage = img
@@ -46,54 +29,32 @@ const DoctorImageCache = {
   },
   
   // 获取空闲状态图片
-  async getIdleImage(doctorId) {
+  getIdleImage(doctorId) {
     if (!this.idleImages[doctorId]) {
-      const imageName = `doctor_${doctorId}_idle.png`
-      if (this.useCloud) {
-        try {
-          const img = await cloudImageManager.loadImage(imageName)
-          this.idleImages[doctorId] = img
-          return img
-        } catch (e) {
-          console.warn(`[DoctorImageCache] 云存储加载失败: ${imageName}`)
-        }
-      }
-      // 本地加载
       const img = wx.createImage()
       img.onload = () => {
         this.idleImages[doctorId] = img
       }
       img.onerror = () => {
-        console.warn(`Failed to load doctor idle image: images/${imageName}`)
+        console.warn(`Failed to load doctor idle image: images/doctor/doctor_${doctorId}_idle.png`)
       }
-      img.src = `images/${imageName}`
+      img.src = `images/doctor/doctor_${doctorId}_idle.png`
       this.idleImages[doctorId] = img
     }
     return this.idleImages[doctorId]
   },
   
   // 获取治疗状态图片
-  async getTreatImage(doctorId) {
+  getTreatImage(doctorId) {
     if (!this.treatImages[doctorId]) {
-      const imageName = `doctor_${doctorId}_treat.png`
-      if (this.useCloud) {
-        try {
-          const img = await cloudImageManager.loadImage(imageName)
-          this.treatImages[doctorId] = img
-          return img
-        } catch (e) {
-          console.warn(`[DoctorImageCache] 云存储加载失败: ${imageName}`)
-        }
-      }
-      // 本地加载
       const img = wx.createImage()
       img.onload = () => {
         this.treatImages[doctorId] = img
       }
       img.onerror = () => {
-        console.warn(`Failed to load doctor treat image: images/${imageName}`)
+        console.warn(`Failed to load doctor treat image: images/doctor/doctor_${doctorId}_treat.png`)
       }
-      img.src = `images/${imageName}`
+      img.src = `images/doctor/doctor_${doctorId}_treat.png`
       this.treatImages[doctorId] = img
     }
     return this.treatImages[doctorId]
@@ -573,14 +534,14 @@ export default class Doctor {
         this.upgradedIdleImage = null
       }
       // 所有医生使用相同的升级图片（简化处理）
-      idleImg.src = `images/doctor_pro_${upgradeId}.png`
+      idleImg.src = `images/doctor/doctor_pro_${upgradeId}.png`
       
       // 加载治疗图片（使用相同图片）
       const treatImg = wx.createImage()
       treatImg.onload = () => {
         this.upgradedTreatImage = treatImg
       }
-      treatImg.src = `images/doctor_pro_${upgradeId}.png`
+      treatImg.src = `images/doctor/doctor_pro_${upgradeId}.png`
     } else {
       // 未升级状态，使用默认图片
       this.upgradedIdleImage = null

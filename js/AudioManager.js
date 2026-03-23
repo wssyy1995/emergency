@@ -10,10 +10,37 @@ export default class AudioManager {
     
     // 是否静音
     this.isMuted = false
+    
+    // 背景音乐开关（默认关闭）
+    this.bgmEnabled = false
+  }
+  
+  // 设置背景音乐开关
+  setBGMEnabled(enabled) {
+    this.bgmEnabled = enabled
+    if (enabled) {
+      // 开启时播放背景音乐
+      this.playBGM()
+    } else {
+      // 关闭时停止背景音乐
+      this.stopBGM()
+    }
+    return this.bgmEnabled
+  }
+  
+  // 切换背景音乐开关
+  toggleBGM() {
+    return this.setBGMEnabled(!this.bgmEnabled)
   }
 
   // 加载并播放背景音乐
   playBGM(src = 'audio/bgm.mp3') {
+    // 如果背景音乐开关未开启，不播放
+    if (!this.bgmEnabled) {
+      console.log('背景音乐开关未开启，跳过播放')
+      return
+    }
+    
     // 如果已有背景音乐在播放，先停止
     this.stopBGM()
     

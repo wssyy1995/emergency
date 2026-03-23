@@ -3,6 +3,10 @@
   "packOptions": {
     "ignore": [
       {
+        "value": ".md",
+        "type": "file"
+      },
+      {
         "value": ".venv",
         "type": "folder"
       },{

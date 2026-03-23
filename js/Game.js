@@ -155,7 +155,6 @@ export default class Game {
     this.honorImage = null
     this.curedImage = null
     this.patientIconImage = null
-    this.startButtonImage = null  // 开始接诊按钮图标
     this.loadIcons()
     
     // 浮动文字动画
@@ -197,6 +196,10 @@ export default class Game {
     // 音量按钮状态
     this.isMuted = false
     this.volumeBtnBounds = null
+    
+    // 背景音乐开关（默认关闭）
+    this.bgmEnabled = false
+    this.bgmBtnBounds = null
     
     // 调试按钮状态（点击荣誉点+100）
     this.debugHonorBtnBounds = null
@@ -242,11 +245,11 @@ export default class Game {
 
   // 初始化云存储
   initCloudStorage() {
-    // 云存储配置
-    this.useCloudStorage = true  // 开启云存储功能
-    this.cloudEnvId = 'cloudbase-6gxf6ir4ef928555'  // 云环境ID
+    // 云存储配置 - 默认关闭，使用本地图片
+    this.useCloudStorage = false
+    this.cloudEnvId = 'cloudbase-6gxf6ir4ef928555'
     
-    if (wx.cloud) {
+    if (this.useCloudStorage && wx.cloud) {
       // 初始化云开发
       cloudImageManager.initCloud(this.cloudEnvId)
       
@@ -254,14 +257,12 @@ export default class Game {
       setCloudImageManager(cloudImageManager)
       setUseCloudStorage(true)
       
-      console.log('[Game] 云存傢已初始化（混合模式：只有配置的图片才使用云存储）')
+      console.log('[Game] 云存储已开启（混合模式）')
     } else {
+      // 关闭云存储，使用本地图片
+      setUseCloudStorage(false)
       console.log('[Game] 使用本地图片模式')
     }
-    
-    // 示例：配置单张图片使用云存储
-    // 取消下面的注释来测试单张图片云存储
-    // this.configCloudImage('honor.png', 'cloud://cloudbase-6gxf6ir4ef928555.xxx/images/honor.png')
   }
   
   // 配置单张图片使用云存储
@@ -302,7 +303,6 @@ export default class Game {
       'cured.png',
       'timer.png',
       'patient_icon.png',
-      'start_level.png',
       'bed_area_bg.png'
     ]
     
@@ -315,7 +315,6 @@ export default class Game {
           case 'cured.png': this.curedImage = img; break
           case 'timer.png': this.timerImage = img; break
           case 'patient_icon.png': this.patientIconImage = img; break
-          case 'start_level.png': this.startButtonImage = img; break
           case 'bed_area_bg.png': this.bedAreaBgImage = img; break
         }
       }
@@ -369,14 +368,7 @@ export default class Game {
     patientIconImg.onload = () => {
       this.patientIconImage = patientIconImg
     }
-    patientIconImg.src = 'images/patient_icon.png'
-    
-    // 加载开始接诊按钮图标
-    const startBtnImg = wx.createImage()
-    startBtnImg.onload = () => {
-      this.startButtonImage = startBtnImg
-    }
-    startBtnImg.src = 'images/start_level.png'
+    patientIconImg.src = 'images/patient/patient_icon.png'
     
     // 加载疾病图标缓存
     this.diseaseImages = {}
@@ -385,7 +377,7 @@ export default class Game {
       diseaseImg.onload = ((id, img) => {
         this.diseaseImages[id] = img
       })(i, diseaseImg)
-      diseaseImg.src = `images/disease_${i}.png`
+      diseaseImg.src = `images/disease/disease_${i}.png`
     }
     
     // 加载治疗区托盘背景图
@@ -402,9 +394,9 @@ export default class Game {
     // 加载升级图片缓存
     this.upgradeImages = {}
     const upgradeImagePaths = [
-      'images/nurse_pro_1.png',
-      'images/nurse_pro_2.png',
-      'images/nurse_pro_3.png'
+      'images/nurse/nurse_pro_1.png',
+      'images/nurse/nurse_pro_2.png',
+      'images/nurse/nurse_pro_3.png'
     ]
     upgradeImagePaths.forEach(path => {
       const img = wx.createImage()
@@ -1948,15 +1940,18 @@ export default class Game {
   }
 
   initTouch() {
-    // 首次点击时播放背景音乐（微信要求用户交互后才能播放音频）
-    let bgmStarted = false
+    // 首次点击时初始化音频（微信要求用户交互后才能播放音频）
+    let audioInitialized = false
     
     wx.onTouchStart((e) => {
       console.log('[触摸事件] TouchStart 触发')
-      // 第一次点击触发背景音乐
-      if (!bgmStarted) {
-        bgmStarted = true
-        audioManager.playBGM('audio/bgm.mp3')
+      // 第一次点击初始化音频（但不自动播放，等待用户开启开关）
+      if (!audioInitialized) {
+        audioInitialized = true
+        // 如果背景音乐开关已开启，则播放
+        if (this.bgmEnabled) {
+          audioManager.playBGM('audio/bgm.mp3')
+        }
       }
       
       const touch = e.touches[0]
@@ -2110,15 +2105,15 @@ export default class Game {
       }
       */
       
-      // 检查是否点击音量开关按钮
-      if (this.volumeBtnBounds &&
-          x >= this.volumeBtnBounds.x && x <= this.volumeBtnBounds.x + this.volumeBtnBounds.width &&
-          y >= this.volumeBtnBounds.y && y <= this.volumeBtnBounds.y + this.volumeBtnBounds.height) {
-        this.isMuted = !this.isMuted
-        audioManager.toggleMute()
-        console.log(this.isMuted ? '已静音' : '已取消静音')
-        return
-      }
+      // 音量按钮点击已禁用（BGM控制已移到调试面板）
+      // if (this.volumeBtnBounds &&
+      //     x >= this.volumeBtnBounds.x && x <= this.volumeBtnBounds.x + this.volumeBtnBounds.width &&
+      //     y >= this.volumeBtnBounds.y && y <= this.volumeBtnBounds.y + this.volumeBtnBounds.height) {
+      //   this.isMuted = !this.isMuted
+      //   audioManager.toggleMute()
+      //   console.log(this.isMuted ? '已静音' : '已取消静音')
+      //   return
+      // }
       
       // 处理调试弹窗点击
       if (this.debugModal && this.debugModal.visible) {
@@ -4670,6 +4665,17 @@ export default class Game {
     const buttons = [
       { id: 'addTime', text: '+30秒', color: '#3498DB', action: () => { this.timeRemaining += 30 } },
       { id: 'addCure', text: '+1治愈', color: '#27AE60', action: () => { this.curedCount++ } },
+      { id: 'toggleBGM', text: this.bgmEnabled ? 'BGM:开' : 'BGM:关', color: this.bgmEnabled ? '#27AE60' : '#7F8C8D', action: () => { 
+        // 切换BGM状态
+        this.bgmEnabled = !this.bgmEnabled
+        audioManager.setBGMEnabled(this.bgmEnabled)
+        // 重新渲染调试面板以更新按钮文字和颜色
+        this.debugModal.needsRedraw = true
+        wx.showToast({
+          title: this.bgmEnabled ? 'BGM已开启' : 'BGM已关闭',
+          icon: 'none'
+        })
+      } },
       { id: 'clearLevel', text: '直接通关', color: '#E74C3C', action: () => { 
         // 关闭调试面板
         this.debugModal.visible = false

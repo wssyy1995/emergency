@@ -350,7 +350,7 @@ export const GameConfig = {
         id: 'ct',
         name: 'CT',
         icon: '⭐️',
-        imagePath: 'images/machine_ct.png',
+        imagePath: 'images/tool_machine/machine_ct.png',
         unlockLevel: 2,
         durability: 10
       },
@@ -358,7 +358,7 @@ export const GameConfig = {
         id: 'super',
         name: '超声',
         icon: '🖨',
-        imagePath: 'images/machine_super.png',
+        imagePath: 'images/tool_machine/machine_super.png',
         price: 15,
         unlockLevel: 1,
         durability: 20
@@ -367,7 +367,7 @@ export const GameConfig = {
         id: 'blood',
         name: '血常规',
         icon: '🩸',
-        imagePath: 'images/machine_blood.png',
+        imagePath: 'images/tool_machine/machine_blood.png',
         unlockLevel: 2,
         durability: 50
       },
@@ -375,14 +375,14 @@ export const GameConfig = {
         id: 'heart',
         name: '心电图',
         icon: '🫀',
-        imagePath: 'images/machine_heart.png',
+        imagePath: 'images/tool_machine/machine_heart.png',
         unlockLevel: 1,
         durability: 100
       },  {
         id: 'brain',
         name: '脑电图',
         icon: '😁',
-        imagePath: 'images/machine_brain.png',
+        imagePath: 'images/tool_machine/machine_brain.png',
         unlockLevel: 1,
         durability: 100
       }
@@ -525,21 +525,21 @@ export const UpgradeConfig = {
     {
       id: 1,
       name: '实习护士',
-      imagePath: 'images/nurse_pro_1.png',
+      imagePath: 'images/nurse/nurse_pro_1.png',
       skill: '基础安抚，暂停耐心减少5秒',
       cost: 50
     },
     {
       id: 2,
       name: '专业护士',
-      imagePath: 'images/nurse_pro_2.png',
+      imagePath: 'images/nurse/nurse_pro_2.png',
       skill: '安抚效果+50%，暂停耐心减少7.5秒',
       cost: 100
     },
     {
       id: 3,
       name: '专家护士',
-      imagePath: 'images/nurse_pro_3.png',
+      imagePath: 'images/nurse/nurse_pro_3.png',
       skill: '安抚效果+100%，暂停耐心减少10秒',
       cost: 250
     }
@@ -550,21 +550,21 @@ export const UpgradeConfig = {
     {
       id: 1,
       name: '实习医生',
-      imagePath: 'images/doctor_1_idle.png',
+      imagePath: 'images/doctor/doctor_1_idle.png',
       skill: '基础治疗速度',
       cost: 80
     },
     {
       id: 2,
       name: '主治医生',
-      imagePath: 'images/nurse_pro.png', // 暂时使用护士图片
+      imagePath: 'images/nurse/nurse_pro.png', // 暂时使用护士图片
       skill: '治疗速度+20%，更快治愈病人',
       cost: 150
     },
     {
       id: 3,
       name: '主任医师',
-      imagePath: 'images/nurse_pro.png', // 暂时使用护士图片
+      imagePath: 'images/nurse/nurse_pro.png', // 暂时使用护士图片
       skill: '治疗速度+40%，物品需求减少1个',
       cost: 300
     }

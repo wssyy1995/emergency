@@ -35,7 +35,7 @@ const PatientImageCache = {
     img.onerror = () => {
       console.warn('Failed to load boom image')
     }
-    img.src = 'images/boom.png'
+    img.src = 'images/global_icon/boom.png'
     return img
   },
   
@@ -47,9 +47,9 @@ const PatientImageCache = {
         this.normalImages[patientType] = img
       }
       img.onerror = () => {
-        console.warn(`Failed to load patient normal image: images/patient_${patientType}_normal.png`)
+        console.warn(`Failed to load patient normal image: images/patient/patient_${patientType}_normal.png`)
       }
-      img.src = `images/patient_${patientType}_normal.png`
+      img.src = `images/patient/patient_${patientType}_normal.png`
       this.normalImages[patientType] = img
     }
     return this.normalImages[patientType]
@@ -63,9 +63,9 @@ const PatientImageCache = {
         this.sickImages[patientType] = img
       }
       img.onerror = () => {
-        console.warn(`Failed to load patient sick image: images/patient_${patientType}_sick.png`)
+        console.warn(`Failed to load patient sick image: images/patient/patient_${patientType}_sick.png`)
       }
-      img.src = `images/patient_${patientType}_sick.png`
+      img.src = `images/patient/patient_${patientType}_sick.png`
       this.sickImages[patientType] = img
     }
     return this.sickImages[patientType]
@@ -79,9 +79,9 @@ const PatientImageCache = {
         this.angryImages[patientType] = img
       }
       img.onerror = () => {
-        console.warn(`Failed to load patient angry image: images/patient_${patientType}_angry.png`)
+        console.warn(`Failed to load patient angry image: images/patient/patient_${patientType}_angry.png`)
       }
-      img.src = `images/patient_${patientType}_angry.png`
+      img.src = `images/patient/patient_${patientType}_angry.png`
       this.angryImages[patientType] = img
     }
     return this.angryImages[patientType]
@@ -789,7 +789,7 @@ export default class Patient {
     
     // 【新增】设备就绪（有绿色勾号）或检查完成：气泡背景变绿色（透明度0.8）
     if (this.machineReady || this.machineCheckComplete) {
-      ctx.fillStyle = 'rgba(134, 239, 172, 0.8)'  // 绿色背景，透明度0.8
+      ctx.fillStyle = 'rgba(134, 239, 172, 0.6)'  // 绿色背景，透明度0.8
     } else {
       ctx.fillStyle = '#FFF'  // 默认白色背景
     }

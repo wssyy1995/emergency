@@ -58,9 +58,9 @@ export default class Nurse {
       this.nurseImage = img
     }
     img.onerror = () => {
-      console.warn('Failed to load nurse image: images/nurse.png')
+      console.warn('Failed to load nurse image: images/nurse/nurse.png')
     }
-    img.src = 'images/nurse.png'
+    img.src = 'images/nurse/nurse.png'
     
     // 加载新玩家欢迎图片
     const helloImg = wx.createImage()
@@ -68,9 +68,9 @@ export default class Nurse {
       this.nurseHelloImage = helloImg
     }
     helloImg.onerror = () => {
-      console.warn('Failed to load nurse hello image: images/nurse_hello.png')
+      console.warn('Failed to load nurse hello image: images/nurse/nurse_hello.png')
     }
-    helloImg.src = 'images/nurse_hello.png'
+    helloImg.src = 'images/nurse/nurse_hello.png'
     
   }
   
@@ -409,7 +409,7 @@ export default class Nurse {
         this.upgradedImage = null
       }
       // 根据升级ID确定图片路径
-      img.src = `images/nurse_pro_${upgradeId}.png`
+      img.src = `images/nurse/nurse_pro_${upgradeId}.png`
     } else {
       // 未升级状态，使用默认图片
       this.upgradedImage = null
