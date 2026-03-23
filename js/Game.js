@@ -534,9 +534,9 @@ export default class Game {
     const availableWidth = this.mapWidth - totalGap
     
     // 调整比例：等候区 35% | 治疗区 35% | 器材室 30%
-    const waitingWidth = availableWidth * 0.34
-    const bedWidth = availableWidth * 0.36
-    const equipmentWidth = availableWidth * 0.30
+    const waitingWidth = availableWidth * 0.33
+    const bedWidth = availableWidth * 0.34
+    const equipmentWidth = availableWidth * 0.33
     
     // 等候区（左侧）- 传入内层舞台坐标（加上 trayPadding）
     const waitingX = this.mapX + gap + trayPadding
@@ -1054,6 +1054,122 @@ export default class Game {
       }
     }
     return null
+  }
+  
+  // 【新增】查找点击位置是否在医生上
+  findDoctorAt(x, y) {
+    for (const doctor of this.doctors) {
+      // 扩大点击范围，便于点击
+      const padding = 15
+      if (x >= doctor.x - doctor.width/2 - padding && 
+          x <= doctor.x + doctor.width/2 + padding &&
+          y >= doctor.y - doctor.height/2 - padding && 
+          y <= doctor.y + doctor.height/2 + padding) {
+        return doctor
+      }
+    }
+    return null
+  }
+  
+  // 【新增】尝试将选中的物品配送给医生（全匹配机制）
+  tryDeliverItemsToDoctor(doctor) {
+    // 获取选中的药品工具（只获取ID列表）
+    const selectedItems = Array.from(this.equipmentRoom.selectedMedicineTools)
+    
+    // 如果没有选中物品，不做任何操作（返回false表示未处理）
+    if (selectedItems.length === 0) {
+      return false
+    }
+    
+    // 【优化1】点击震动反馈（真机震动 + 医生震动动画）
+    this.vibrate()  // 真机震动
+    doctor.triggerShake()  // 医生震动动画
+    
+    // 医生必须处于治疗状态且需要物品
+    if (doctor.state !== 'treating') {
+      this.showToast('该医生当前不需要物品')
+      this.equipmentRoom.clearMedicineToolSelection()
+      return true
+    }
+    
+    // 获取医生还需要的物品ID列表（未收到的）
+    const requiredIds = doctor.requiredItems
+      .filter(item => !doctor.receivedItems.includes(item.id))
+      .map(item => item.id)
+      .sort()
+    
+    // 获取选中的物品ID列表并排序
+    const selectedIds = [...selectedItems].sort()
+    
+    // 【全匹配检查】数量必须相同，且每个选中的物品都必须是医生需要的
+    const isMatch = selectedIds.length === requiredIds.length && 
+                    selectedIds.every(id => requiredIds.includes(id))
+    
+    if (!isMatch) {
+      // ❌ 匹配失败：清空选中 + 医生气泡红闪 + 提示
+      this.equipmentRoom.clearMedicineToolSelection()
+      doctor.triggerErrorAnimation()
+      
+      // 显示需要的物品提示
+      const needNames = doctor.requiredItems
+        .filter(item => !doctor.receivedItems.includes(item.id))
+        .map(item => item.name)
+        .join('、')
+      this.showToast(`需要：${needNames}`)
+      return true
+    }
+    
+    // ✅ 匹配成功：配送所有物品（带飞行动画）
+    let deliveredCount = 0
+    const deliveredItemIds = []  // 记录成功配送的物品ID
+    
+    selectedIds.forEach(itemId => {
+      if (doctor.receiveItem(itemId)) {
+        deliveredCount++
+        deliveredItemIds.push(itemId)
+      }
+    })
+    
+    // 【优化2】添加物品飞行动画（从器材室飞向医生）
+    // 【修改】多个物品时只飞行最后一个物品
+    if (deliveredItemIds.length > 0) {
+      // 只取最后一个物品进行飞行动画
+      const lastItemId = deliveredItemIds[deliveredItemIds.length - 1]
+      
+      // 获取物品卡片的中心位置（起始位置）
+      const cardCenter = this.equipmentRoom.getCardCenter(lastItemId)
+      if (cardCenter) {
+        // 目标位置：医生头顶
+        const endX = doctor.x
+        const endY = doctor.y - 40
+        
+        this.equipmentRoom.addFlyingItem(
+          lastItemId,
+          cardCenter.x, cardCenter.y,  // 起始：卡片中心
+          endX, endY,                  // 目标：医生头顶
+          () => {
+            // 动画完成回调
+            if (doctor.hasReceivedAllItems()) {
+              this.showToast('物品齐全，开始治疗')
+            }
+          }
+        )
+      }
+    }
+    
+    // 清空选中
+    this.equipmentRoom.clearMedicineToolSelection()
+    
+    return true
+  }
+  
+  // 【新增】显示轻量级Toast提示
+  showToast(message) {
+    wx.showToast({
+      title: message,
+      icon: 'none',
+      duration: 1500
+    })
   }
   
   // 显示暴走提示（只显示一次）
@@ -2157,27 +2273,8 @@ export default class Game {
         return
       }
       
-      // 检查是否点击药品工具区的配送按钮
-      if (this.equipmentRoom.isClickOnDeliveryButton(x, y)) {
-        this.equipmentRoom.setDeliveryBtnPressed(true)
-        setTimeout(() => {
-          this.equipmentRoom.setDeliveryBtnPressed(false)
-        }, 150)
-        // 使用原来的发送逻辑配送药品工具
-        this.handleSendButtonClick()
-        return
-      }
-      
-      // 检查是否点击检验设备区的启动按钮
-      if (this.equipmentRoom.isClickOnStartButton(x, y)) {
-        this.equipmentRoom.setStartBtnPressed(true)
-        setTimeout(() => {
-          this.equipmentRoom.setStartBtnPressed(false)
-        }, 150)
-        // 处理启动检验设备
-        this.handleStartExamDevice()
-        return
-      }
+      // 【已移除】配送按钮和启动按钮检测，改为直接点击医生/病人
+      // 医生点击检测在下方处理
       
       // 检查是否点击器材室的物品
       const clickResult = this.equipmentRoom.getItemAt(x, y)
@@ -2246,6 +2343,20 @@ export default class Game {
         return
       }
       
+      // 【新增】检查是否点击医生（进行物品配送）
+      const clickedDoctor = this.findDoctorAt(x, y)
+      if (clickedDoctor) {
+        console.log('[点击检测] 点击医生:', clickedDoctor.name)
+        this.vibrate()
+        
+        // 尝试配送选中的物品给医生
+        const handled = this.tryDeliverItemsToDoctor(clickedDoctor)
+        if (handled) {
+          return  // 如果处理了配送，结束点击流程
+        }
+        // 如果没有选中物品，继续后续逻辑（如显示医生状态等）
+      }
+      
       // 检查是否点击前台排队的病人（显示椅子选择弹窗）
       console.log('[点击检测] 点击坐标:', x, y)
       const patient = this.waitingArea.getPatientAt(x, y)
@@ -2297,10 +2408,8 @@ export default class Game {
         // 如果治疗已完成，点击触发治愈
         if (ivSeatPatient.ivTreatmentComplete) {
           this.completeIVTreatment(ivSeatPatient)
-        } else {
-          // 治疗未完成，显示急救弹窗
-          this.showIVPatientSelectionModal(ivSeatPatient)
         }
+        // 治疗未完成时，不再显示急救弹窗
         return
       }
     })

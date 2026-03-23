@@ -26,13 +26,8 @@ export default class EquipmentRoom {
     this.selectedMedicineTools = new Set() // 药品工具多选
     this.selectedExamDevice = null // 检验设备单选
     
-    // 配送按钮（药品工具区）
-    this.deliveryBtnBounds = null
-    this.deliveryBtnPressed = false
-    
-    // 启动按钮（检验设备区）
-    this.startBtnBounds = null
-    this.startBtnPressed = false
+    // 【已移除】配送按钮和启动按钮，改为直接点击医生/病人进行配送/绑定
+    // 保留选中状态逻辑，移除按钮交互
     
     // 底部发送/清空按钮区域（暂时隐藏）
     this.showBottomButtons = false
@@ -59,6 +54,9 @@ export default class EquipmentRoom {
     
     // ==================== 报告飞行动画 ====================
     this.flyingReports = [] // 正在飞行的报告图标数组
+    
+    // 【新增】物品配送飞行动画（从器材室飞向医生）
+    this.flyingItems = [] // 正在飞行的物品数组
     
     // 加载检查报告图片
     this.machineReportImage = null
@@ -156,6 +154,9 @@ export default class EquipmentRoom {
     
     // 更新报告飞行动画
     this.updateFlyingReports(deltaTime)
+    
+    // 【新增】更新物品配送飞行动画
+    this.updateFlyingItems(deltaTime)
   }
   
   // 更新报告飞行动画
@@ -203,6 +204,50 @@ export default class EquipmentRoom {
       onArrive
     })
   }
+  
+  // 【新增】添加物品配送飞行动画（从器材室飞向医生）
+  addFlyingItem(itemId, startX, startY, endX, endY, onArrive) {
+    const item = getItemById(itemId)
+    if (!item) return
+    
+    // 计算弧形路径的控制点（形成向上的抛物线）
+    const midX = (startX + endX) / 2
+    const midY = (startY + endY) / 2
+    // 控制点向上偏移，形成弧形
+    const controlY = Math.min(startY, endY) - 60
+    
+    this.flyingItems.push({
+      itemId,
+      item,
+      x: startX,
+      y: startY,
+      startX,
+      startY,
+      endX,
+      endY,
+      controlX: midX,
+      controlY: controlY,
+      progress: 0,
+      duration: 600, // 飞行时间600ms（比报告快一点）
+      onArrive
+    })
+  }
+  
+  // 【新增】更新物品配送飞行动画
+  updateFlyingItems(deltaTime) {
+    for (let i = this.flyingItems.length - 1; i >= 0; i--) {
+      const flyingItem = this.flyingItems[i]
+      flyingItem.progress += deltaTime / flyingItem.duration
+      
+      if (flyingItem.progress >= 1) {
+        // 飞行完成
+        if (flyingItem.onArrive) {
+          flyingItem.onArrive()
+        }
+        this.flyingItems.splice(i, 1)
+      }
+    }
+  }
 
   // 检测点击位置是哪个物品
   getItemAt(x, y) {
@@ -240,6 +285,9 @@ export default class EquipmentRoom {
     
     // 绘制报告飞行动画（在最上层）
     this.renderFlyingReports(ctx)
+    
+    // 【新增】绘制物品配送飞行动画
+    this.renderFlyingItems(ctx)
   }
   
   // 绘制报告飞行动画
@@ -273,6 +321,48 @@ export default class EquipmentRoom {
     }
   }
   
+  // 【新增】绘制物品配送飞行动画
+  renderFlyingItems(ctx) {
+    for (const flyingItem of this.flyingItems) {
+      // 计算当前位置（二次贝塞尔曲线 - 弧形路径）
+      const t = flyingItem.progress
+      const easeT = 1 - Math.pow(1 - t, 3) // easeOutCubic
+      
+      // 二次贝塞尔曲线公式
+      const oneMinusT = 1 - easeT
+      const currentX = oneMinusT * oneMinusT * flyingItem.startX + 
+                       2 * oneMinusT * easeT * flyingItem.controlX + 
+                       easeT * easeT * flyingItem.endX
+      const currentY = oneMinusT * oneMinusT * flyingItem.startY + 
+                       2 * oneMinusT * easeT * flyingItem.controlY + 
+                       easeT * easeT * flyingItem.endY
+      
+      // 图标大小（飞行过程中稍微放大）
+      const iconSize = 22 * (1 + t * 0.15) // 从22px逐渐放大到25px（更小更精致）
+      
+      // 获取物品图片
+      const itemImage = getItemImage(flyingItem.itemId)
+      
+      // 绘制物品图标（带阴影）
+      ctx.save()
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.2)'
+      ctx.shadowBlur = 6
+      ctx.shadowOffsetY = 3
+      
+      if (itemImage && itemImage.width > 0) {
+        ctx.drawImage(itemImage, currentX - iconSize / 2, currentY - iconSize / 2, iconSize, iconSize)
+      } else {
+        // 备用：使用emoji
+        ctx.font = `${iconSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(flyingItem.item.icon, currentX, currentY)
+      }
+      
+      ctx.restore()
+    }
+  }
+  
   // 绘制标题
   renderTitle(ctx) {
     ctx.fillStyle = '#374151'
@@ -280,6 +370,11 @@ export default class EquipmentRoom {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
     ctx.fillText('器材室', this.x + this.width / 2, this.y + 8)
+    
+    // 【提示文字】点击物品后，再点击医生/病人进行配送/绑定
+    ctx.fillStyle = '#9CA3AF'
+    ctx.font = `${Math.max(10, this.width * 0.028)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.fillText('选中物品后点击医生/病人', this.x + this.width / 2, this.y + 28)
   }
   
   // 绘制药品工具区域
@@ -302,8 +397,8 @@ export default class EquipmentRoom {
     ctx.lineWidth = 1.5 * localScale
     strokeRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
-    // 标题和配送按钮行
-    this.renderSectionHeader(ctx, sectionX, sectionY, sectionW, '药品工具', '#C2410C', 'delivery', localScale)
+    // 标题（仅标题，按钮已移除）
+    this.renderSectionTitle(ctx, sectionX, sectionY, sectionW, '药品工具', '#C2410C', localScale)
     
     // 清空卡片数组
     this.medicineToolCards = []
@@ -360,8 +455,8 @@ export default class EquipmentRoom {
     ctx.lineWidth = 1.5 * localScale
     strokeRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
-    // 标题和启动按钮行
-    this.renderSectionHeader(ctx, sectionX, sectionY, sectionW, '检验设备', '#15803D', 'start', localScale)
+    // 标题（仅标题，按钮已移除）
+    this.renderSectionTitle(ctx, sectionX, sectionY, sectionW, '检验设备', '#15803D', localScale)
     
     // 清空卡片数组
     this.examDeviceCards = []
@@ -416,117 +511,19 @@ export default class EquipmentRoom {
     }
   }
   
-  // 绘制区域标题和操作按钮
-  renderSectionHeader(ctx, sectionX, sectionY, sectionW, title, titleColor, btnType, localScale = this.scale) {
-    const headerY = sectionY + 6 * localScale
-    // 【调整】按钮尺寸变大
-    const btnWidth = 135 * localScale
-    const btnHeight = 50 * localScale
+  // 绘制区域标题（仅标题，按钮已移除）
+  renderSectionTitle(ctx, sectionX, sectionY, sectionW, title, titleColor, localScale = this.scale) {
+    const headerY = sectionY + 10 * localScale
     
-    // 标题（左侧）- 字体稍小，位置上移5px
+    // 标题居中
     ctx.fillStyle = titleColor
-    ctx.font = `bold ${Math.max(9, 11 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-    ctx.textAlign = 'left'
+    ctx.font = `bold ${Math.max(11, 13 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    // 【调整】标题往上
-    ctx.fillText(title, sectionX + 10 * localScale, headerY + btnHeight / 2 - 15 * localScale )
-    
-    // 按钮（右侧）
-    // 【调整】按钮往右移动 
-    const btnX = sectionX + sectionW - btnWidth + 55 * localScale
-    // 【调整】按钮往上移动 3px
-    const btnY = headerY -23 * localScale
-    
-    // 判断按钮状态
-    let hasSelected = false
-    let btnText = ''
-    let isPressed = false
-    
-    if (btnType === 'delivery') {
-      hasSelected = this.selectedMedicineTools.size > 0
-      btnText = hasSelected ? `配送(${this.selectedMedicineTools.size})` : '配送'
-      isPressed = this.deliveryBtnPressed
-    } else {
-      hasSelected = this.selectedExamDevice !== null
-      btnText = '启动'
-      isPressed = this.startBtnPressed
-    }
-    
-    // 按下后的偏移量
-    const pressOffset = (isPressed && hasSelected) ? 2 * localScale : 0
-    
-    // 获取对应按钮图片（根据是否选中选择不同图片）
-    let btnImage
-    let useDisabledImage = false
-    if (btnType === 'delivery') {
-      btnImage = hasSelected ? this.deliveryBtnImage : this.deliveryBtnDisabledImage
-      useDisabledImage = !hasSelected && this.deliveryBtnDisabledImage
-    } else {
-      btnImage = hasSelected ? this.startMachineBtnImage : this.startMachineBtnDisabledImage
-      useDisabledImage = !hasSelected && this.startMachineBtnDisabledImage
-    }
-    
-    // 如果禁用图片不存在，回退到激活图片并降低透明度
-    if (!btnImage || !btnImage.width) {
-      if (btnType === 'delivery') {
-        btnImage = this.deliveryBtnImage
-      } else {
-        btnImage = this.startMachineBtnImage
-      }
-    }
-    
-    // 绘制按钮图片（如果有）
-    if (btnImage && btnImage.width > 0) {
-      ctx.save()
-      // 如果使用激活图片作为禁用状态，降低透明度
-      if (!hasSelected && !useDisabledImage) {
-        ctx.globalAlpha = 0.5
-      }
-      
-      // 【修复】保持图片比例，不压扁，并放大1.2倍
-      const imgRatio = btnImage.width / btnImage.height
-      const btnRatio = btnWidth / btnHeight
-      const scaleFactor = 1.2  // 图片放大系数
-      let drawWidth, drawHeight
-      if (imgRatio > btnRatio) {
-        // 图片更宽，以按钮宽度为基准
-        drawWidth = btnWidth * scaleFactor
-        drawHeight = (btnWidth / imgRatio) * scaleFactor
-      } else {
-        // 图片更高，以按钮高度为基准
-        drawHeight = btnHeight * scaleFactor
-        drawWidth = (btnHeight * imgRatio) * scaleFactor
-      }
-      // 居中绘制
-      const drawX = btnX + (btnWidth - drawWidth) / 2
-      const drawY = btnY + pressOffset + (btnHeight - drawHeight) / 2
-      ctx.drawImage(btnImage, drawX, drawY, drawWidth, drawHeight)
-      
-      ctx.restore()
-    } else {
-      // 备用：绘制简单按钮
-      // 有选中时：配送橙色、启动绿色；未选中时：灰色
-      const btnColor = btnType === 'delivery' ? '#F97316' : '#22C55E'  // 有选中
-      const btnDisabledColor = '#9CA3AF'  // 灰色（未选中）
-      ctx.fillStyle = hasSelected ? btnColor : btnDisabledColor
-      fillRoundRect(ctx, btnX, btnY + pressOffset, btnWidth, btnHeight, 10 * localScale)
-      
-      // 按钮文字
-      ctx.fillStyle = '#FFFFFF'
-      ctx.font = `bold ${Math.max(9, 10 * localScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2 + pressOffset)
-    }
-    
-    // 记录按钮区域
-    const bounds = { x: btnX, y: btnY, width: btnWidth, height: btnHeight }
-    if (btnType === 'delivery') {
-      this.deliveryBtnBounds = bounds
-    } else {
-      this.startBtnBounds = bounds
-    }
+    ctx.fillText(title, sectionX + sectionW / 2, headerY)
   }
+  
+  // 【已移除】renderSectionHeader 方法，按钮功能改为直接点击医生/病人
   
   // 绘制单个物品卡片（药品工具用）
   renderItemCard(ctx, x, y, width, height, item, isSelected, localScale = this.scale) {
@@ -692,59 +689,18 @@ export default class EquipmentRoom {
   }
 
   // ==================== 点击检测 ====================
+  
+  // 【已移除】配送按钮和启动按钮检测，改为直接点击医生/病人进行配送/绑定
+  // 保留物品/设备卡片的点击检测（在 Game.js 中处理）
 
-  // 检查点击是否在配送按钮上
-  isClickOnDeliveryButton(x, y) {
-    if (!this.deliveryBtnBounds) return false
-    const isHit = x >= this.deliveryBtnBounds.x && 
-                  x <= this.deliveryBtnBounds.x + this.deliveryBtnBounds.width &&
-                  y >= this.deliveryBtnBounds.y && 
-                  y <= this.deliveryBtnBounds.y + this.deliveryBtnBounds.height
-    if (isHit) {
-      this.vibrate()
-    }
-    return isHit
-  }
-
-  // 检查点击是否在启动按钮上
-  isClickOnStartButton(x, y) {
-    if (!this.startBtnBounds) return false
-    const isHit = x >= this.startBtnBounds.x && 
-                  x <= this.startBtnBounds.x + this.startBtnBounds.width &&
-                  y >= this.startBtnBounds.y && 
-                  y <= this.startBtnBounds.y + this.startBtnBounds.height
-    if (isHit) {
-      this.vibrate()
-    }
-    return isHit
-  }
-
-  // 检查点击是否在器材区发送按钮上（兼容旧接口）
+  // 检查点击是否在器材区发送按钮上（已废弃，返回false）
   isClickOnEquipmentSendButton(x, y) {
-    if (!this.showBottomButtons) return false
-    if (!this.equipmentSendBtnBounds) return false
-    const isHit = x >= this.equipmentSendBtnBounds.x && 
-                  x <= this.equipmentSendBtnBounds.x + this.equipmentSendBtnBounds.width &&
-                  y >= this.equipmentSendBtnBounds.y && 
-                  y <= this.equipmentSendBtnBounds.y + this.equipmentSendBtnBounds.height
-    if (isHit) {
-      this.vibrate()
-    }
-    return isHit
+    return false
   }
   
-  // 检查点击是否在器材区清空按钮上（兼容旧接口）
+  // 检查点击是否在器材区清空按钮上（已废弃，返回false）
   isClickOnEquipmentClearButton(x, y) {
-    if (!this.showBottomButtons) return false
-    if (!this.equipmentClearBtnBounds) return false
-    const isHit = x >= this.equipmentClearBtnBounds.x && 
-                  x <= this.equipmentClearBtnBounds.x + this.equipmentClearBtnBounds.width &&
-                  y >= this.equipmentClearBtnBounds.y && 
-                  y <= this.equipmentClearBtnBounds.y + this.equipmentClearBtnBounds.height
-    if (isHit) {
-      this.vibrate()
-    }
-    return isHit
+    return false
   }
 
   // ==================== 选择操作 ====================

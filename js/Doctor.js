@@ -100,6 +100,17 @@ export default class Doctor {
     this.blinkTimer = 0
     this.isBlinking = false
     
+    // 【新增】错误提示动画（物品不匹配时红闪）
+    this.showError = false
+    this.errorStartTime = 0
+    this.errorDuration = 600  // 红闪持续600ms
+    
+    // 【新增】点击震动动画（被点击时轻微跳动）
+    this.isShaking = false
+    this.shakeStartTime = 0
+    this.shakeDuration = 600  // 【减慢】跳动持续600ms
+    this.shakeIntensity = 3   // 跳动幅度（像素）
+    
     this.requiredItems = []
     this.receivedItems = []
     this.currentLevel = 0
@@ -152,6 +163,11 @@ export default class Doctor {
   
   update(deltaTime, bedArea) {
     this.animationTime += deltaTime
+    
+    // 更新错误动画
+    this.updateErrorAnimation()
+    
+    // 【新增】震动动画状态在 getShakeOffset 中更新
     
     // 只有启用动画时才计算跳动效果
     if (!this.animationEnabled) {
@@ -352,11 +368,60 @@ export default class Doctor {
     return []
   }
   
+  // 【新增】触发错误动画（物品不匹配时调用）
+  triggerErrorAnimation() {
+    this.showError = true
+    this.errorStartTime = Date.now()
+  }
+  
+  // 【新增】更新错误动画状态
+  updateErrorAnimation() {
+    if (this.showError) {
+      const elapsed = Date.now() - this.errorStartTime
+      if (elapsed >= this.errorDuration) {
+        this.showError = false
+      }
+    }
+  }
+  
+  // 【新增】触发点击跳动动画（上下跳动）
+  triggerShake() {
+    this.isShaking = true
+    this.shakeStartTime = Date.now()
+  }
+  
+  // 【新增】更新跳动动画状态，返回当前偏移量（改为上下跳动）
+  getShakeOffset() {
+    if (!this.isShaking) return { x: 0, y: 0 }
+    
+    const elapsed = Date.now() - this.shakeStartTime
+    if (elapsed >= this.shakeDuration) {
+      this.isShaking = false
+      return { x: 0, y: 0 }
+    }
+    
+    // 【改为上下跳动效果：2次跳动，慢一点】
+    const progress = elapsed / this.shakeDuration
+    const frequency = 2  // 跳动频率（2次上下跳动）
+    const dampening = 1 - progress * 0.3  // 轻微阻尼
+    
+    // 主要上下跳动，左右不动
+    const offsetX = 0
+    // 正弦波控制上下跳动（负值表示向上）
+    const offsetY = -Math.abs(Math.sin(progress * Math.PI * frequency)) * this.shakeIntensity * 2.5 * dampening
+    
+    return { x: offsetX, y: offsetY }
+  }
+  
   render(ctx) {
     const scale = this.width / this.baseWidth
     
+    // 【新增】获取震动偏移量
+    const shakeOffset = this.getShakeOffset()
+    
     ctx.save()
-    ctx.translate(this.x, this.y + this.bounceOffset)
+    // 应用震动偏移量
+    ctx.translate(this.x + shakeOffset.x, this.y + this.bounceOffset + shakeOffset.y)
     ctx.scale(this.facing, 1)
     
     // 阴影
@@ -482,6 +547,52 @@ export default class Doctor {
           ctx.fillText(item.icon, iconX, 0)
         }
       })
+      
+      // 【新增】错误红闪效果（物品不匹配时）
+      if (this.showError) {
+        const elapsed = Date.now() - this.errorStartTime
+        const flashCount = 3  // 闪烁3次
+        const flashDuration = this.errorDuration / flashCount
+        // 计算当前闪烁的透明度（0-1之间正弦波动）
+        const flashProgress = (elapsed % flashDuration) / flashDuration
+        const alpha = Math.sin(flashProgress * Math.PI) * 0.8 + 0.2
+        
+        // 【修复】重新绘制完整的气泡路径（圆角矩形+三角形尾巴），然后描红边
+        ctx.strokeStyle = `rgba(231, 76, 60, ${alpha})`  // 红色
+        ctx.lineWidth = 4 * scale
+        ctx.lineJoin = 'round'  // 圆角连接
+        
+        // 绘制圆角矩形边框
+        ctx.beginPath()
+        const r = 16 * scale  // 圆角半径
+        const bw = bubbleWidth
+        const bh = bubbleHeight
+        const bx = -bw / 2
+        const by = -bh / 2
+        
+        // 手动绘制圆角矩形路径
+        ctx.moveTo(bx + r, by)
+        ctx.lineTo(bx + bw - r, by)
+        ctx.arc(bx + bw - r, by + r, r, -Math.PI / 2, 0)
+        ctx.lineTo(bx + bw, by + bh - r)
+        ctx.arc(bx + bw - r, by + bh - r, r, 0, Math.PI / 2)
+        ctx.lineTo(bx + r, by + bh)
+        ctx.arc(bx + r, by + bh - r, r, Math.PI / 2, Math.PI)
+        ctx.lineTo(bx, by + r)
+        ctx.arc(bx + r, by + r, r, Math.PI, -Math.PI / 2)
+        ctx.closePath()
+        
+        // 绘制三角形尾巴路径
+        const tailWidth = 14 * scale
+        const tailHeight = 10 * scale
+        ctx.moveTo(-tailWidth / 2, bh / 2 - 1)
+        ctx.lineTo(tailWidth / 2, bh / 2 - 1)
+        ctx.lineTo(0, bh / 2 + tailHeight)
+        ctx.closePath()
+        
+        // 描边（同时描圆角矩形和三角形）
+        ctx.stroke()
+      }
       
       ctx.restore()
     }
