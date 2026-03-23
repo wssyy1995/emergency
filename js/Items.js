@@ -5,6 +5,7 @@ export const MEDICINES = [
     name: '抗生素',
     icon: '💊',
     imagePath: 'images/antibiotic.png',
+    imageName: 'antibiotic.png',
     color: '#FF6B6B'
   },
   {
@@ -12,6 +13,7 @@ export const MEDICINES = [
     name: '止痛药',
     icon: '💉',
     imagePath: 'images/painkiller.png',
+    imageName: 'painkiller.png',
     color: '#4ECDC4'
   },
   {
@@ -19,6 +21,7 @@ export const MEDICINES = [
     name: '肾上腺素',
     icon: '💓',
     imagePath: 'images/adrenaline.png',
+    imageName: 'adrenaline.png',
     color: '#FFE66D'
   },
   {
@@ -26,6 +29,7 @@ export const MEDICINES = [
     name: '注射液',
     icon: '🧪',
     imagePath: 'images/injection.png',
+    imageName: 'injection.png',
     color: '#95E1D3'
   }
 ]
@@ -37,6 +41,7 @@ export const TOOLS = [
     name: 'AED',
     icon: '⚡',
     imagePath: 'images/aed.png',
+    imageName: 'aed.png',
     color: '#F38181'
   },
   {
@@ -44,6 +49,7 @@ export const TOOLS = [
     name: '医用绷带',
     icon: '🩹',
     imagePath: 'images/tape.png',
+    imageName: 'tape.png',
     color: '#AA96DA'
   },
   {
@@ -51,6 +57,7 @@ export const TOOLS = [
     name: '手术剪',
     icon: '✂️',
     imagePath: 'images/scissors.png',
+    imageName: 'scissors.png',
     color: '#FCBAD3'
   },
   {
@@ -58,6 +65,7 @@ export const TOOLS = [
     name: '体温计',
     icon: '🌡️',
     imagePath: 'images/thermometer.png',
+    imageName: 'thermometer.png',
     color: '#FFFFD2'
   }
 ]
@@ -69,6 +77,7 @@ export const EXAM_DEVICES = [
     name: 'X光机',
     icon: '☢️',
     imagePath: 'images/xray.png',
+    imageName: 'xray.png',
     color: '#4A90E2'
   },
   {
@@ -76,6 +85,7 @@ export const EXAM_DEVICES = [
     name: 'CT',
     icon: '🏥',
     imagePath: 'images/ct.png',
+    imageName: 'ct.png',
     color: '#7B68EE'
   },
   {
@@ -83,6 +93,7 @@ export const EXAM_DEVICES = [
     name: '血常规',
     icon: '🩸',
     imagePath: 'images/blood_test.png',
+    imageName: 'blood_test.png',
     color: '#E74C3C'
   },
   {
@@ -90,6 +101,7 @@ export const EXAM_DEVICES = [
     name: '心电图',
     icon: '💓',
     imagePath: 'images/ecg.png',
+    imageName: 'ecg.png',
     color: '#2ECC71'
   },
   {
@@ -97,6 +109,7 @@ export const EXAM_DEVICES = [
     name: '脑电图',
     icon: '🧠',
     imagePath: 'images/eeg.png',
+    imageName: 'eeg.png',
     color: '#9B59B6'
   }
 ]
@@ -107,17 +120,76 @@ const imageCache = {}
 // 额外的机器设备图片（由 Game.js 在初始化时设置）
 let extraMachines = []
 
+// 云存储图片管理器（动态导入）
+let cloudImageManager = null
+
+// 是否使用云存储
+let useCloudStorage = false
+
+// 设置是否使用云存储
+export function setUseCloudStorage(enabled) {
+  useCloudStorage = enabled
+  console.log('[Items] 云存储模式:', enabled ? '开启' : '关闭')
+}
+
+// 设置云存储管理器
+export function setCloudImageManager(manager) {
+  cloudImageManager = manager
+}
+
 // 设置额外的机器设备（用于预加载）
 export function setExtraMachines(machines) {
   extraMachines = machines || []
 }
 
+// 获取图片路径（支持本地和云存储）
+function getImagePath(imageName) {
+  if (useCloudStorage && cloudImageManager) {
+    return cloudImageManager.getImagePath(imageName)
+  }
+  return 'images/' + imageName
+}
+
 // 预加载所有物品图片
-export function preloadItemImages(callback) {
+export async function preloadItemImages(callback) {
   const allItems = [...MEDICINES, ...TOOLS, ...EXAM_DEVICES, ...extraMachines]
   let loadedCount = 0
   const totalCount = allItems.length
 
+  // 如果使用云存储，使用 CloudImageManager 加载
+  if (useCloudStorage && cloudImageManager) {
+    const imageNames = allItems
+      .filter(item => item.imageName)
+      .map(item => item.imageName)
+    
+    try {
+      await cloudImageManager.preloadImages(imageNames, (loaded, total) => {
+        console.log(`[Items] 预加载进度: ${loaded}/${total}`)
+      })
+      
+      // 将加载的图片放入缓存
+      for (const item of allItems) {
+        if (item.imageName) {
+          try {
+            const img = await cloudImageManager.loadImage(item.imageName)
+            imageCache[item.id] = img
+          } catch (e) {
+            console.warn('[Items] 加载失败:', item.imageName)
+          }
+        }
+      }
+      
+      if (callback) callback()
+    } catch (err) {
+      console.error('[Items] 云存储预加载失败:', err)
+      // 回退到本地加载
+      useCloudStorage = false
+      preloadItemImages(callback)
+    }
+    return
+  }
+
+  // 本地加载方式
   allItems.forEach(item => {
     const img = wx.createImage()
     img.onload = () => {
@@ -147,6 +219,39 @@ export function getItemImage(itemId) {
 // 检查图片是否已加载
 export function isImageLoaded(itemId) {
   return !!imageCache[itemId]
+}
+
+// 异步加载单个物品图片（支持云存储）
+export async function loadItemImageAsync(itemId) {
+  // 检查缓存
+  if (imageCache[itemId]) {
+    return imageCache[itemId]
+  }
+  
+  const item = getItemById(itemId)
+  if (!item) return null
+  
+  // 使用云存储加载
+  if (useCloudStorage && cloudImageManager && item.imageName) {
+    try {
+      const img = await cloudImageManager.loadImage(item.imageName)
+      imageCache[itemId] = img
+      return img
+    } catch (e) {
+      console.warn('[Items] 云存储加载失败，回退到本地:', itemId)
+    }
+  }
+  
+  // 本地加载
+  return new Promise((resolve, reject) => {
+    const img = wx.createImage()
+    img.onload = () => {
+      imageCache[itemId] = img
+      resolve(img)
+    }
+    img.onerror = reject
+    img.src = item.imagePath
+  })
 }
 
 // 获取随机药品
@@ -197,4 +302,3 @@ export function isTool(id) {
 export function isExamDevice(id) {
   return EXAM_DEVICES.some(d => d.id === id)
 }
-

@@ -4,9 +4,10 @@ import EquipmentRoom from './EquipmentRoom.js'
 import Patient from './Patient.js'
 import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
-import { getItemById, getItemImage, preloadItemImages, setExtraMachines } from './Items.js'
+import { getItemById, getItemImage, preloadItemImages, setExtraMachines, setCloudImageManager, setUseCloudStorage } from './Items.js'
 import { audioManager } from './AudioManager.js'
 import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus, getLevelHintStatus, saveLevelHintStatus, getSelectedUpgrades, saveSelectedUpgrade, getUpgradesByType, getCurrentUpgrade, getInstanceUpgrade, saveInstanceUpgrade, getPurchasedUpgrades, isUpgradePurchased } from './GameConfig.js'
+import cloudImageManager from './CloudImageManager.js'
 
 // ==================== 马卡龙 UI 颜色配置（可自行调整）====================
 const UI_COLORS = {
@@ -116,6 +117,9 @@ export default class Game {
     const sysInfo = wx.getSystemInfoSync()
     this.platform = sysInfo.platform // 'ios', 'android', 'devtools', 'windows', 'mac'
     console.log('当前平台:', this.platform)
+    
+    // 初始化云存储
+    this.initCloudStorage()
     
     // 游戏状态
     this.score = 0
@@ -236,7 +240,109 @@ export default class Game {
     }
   }
 
+  // 初始化云存储
+  initCloudStorage() {
+    // 云存储配置
+    this.useCloudStorage = true  // 开启云存储功能
+    this.cloudEnvId = 'cloudbase-6gxf6ir4ef928555'  // 云环境ID
+    
+    if (wx.cloud) {
+      // 初始化云开发
+      cloudImageManager.initCloud(this.cloudEnvId)
+      
+      // 设置到 Items.js
+      setCloudImageManager(cloudImageManager)
+      setUseCloudStorage(true)
+      
+      console.log('[Game] 云存傢已初始化（混合模式：只有配置的图片才使用云存储）')
+    } else {
+      console.log('[Game] 使用本地图片模式')
+    }
+    
+    // 示例：配置单张图片使用云存储
+    // 取消下面的注释来测试单张图片云存储
+    // this.configCloudImage('honor.png', 'cloud://cloudbase-6gxf6ir4ef928555.xxx/images/honor.png')
+  }
+  
+  // 配置单张图片使用云存储
+  // 用法：在上传图片到云存储后，调用此方法配置
+  configCloudImage(imageName, cloudPath) {
+    cloudImageManager.useCloudImage(imageName, cloudPath)
+    console.log('[Game] 已配置云存储图片:', imageName)
+  }
+
+  // 使用云存储加载图片
+  async loadImageFromCloud(imageName) {
+    if (!this.useCloudStorage || !cloudImageManager) {
+      return null
+    }
+    try {
+      return await cloudImageManager.loadImage(imageName)
+    } catch (e) {
+      console.warn('[Game] 云存储加载失败:', imageName)
+      return null
+    }
+  }
+
   loadIcons() {
+    // 如果使用云存储，使用异步加载
+    if (this.useCloudStorage) {
+      this.loadIconsFromCloud()
+      return
+    }
+    
+    // 本地加载方式
+    this.loadIconsLocal()
+  }
+  
+  // 从云存储加载图标
+  async loadIconsFromCloud() {
+    const imageNames = [
+      'honor.png',
+      'cured.png',
+      'timer.png',
+      'patient_icon.png',
+      'start_level.png',
+      'bed_area_bg.png'
+    ]
+    
+    // 加载基础图标
+    for (const name of imageNames) {
+      const img = await this.loadImageFromCloud(name)
+      if (img) {
+        switch (name) {
+          case 'honor.png': this.honorImage = img; break
+          case 'cured.png': this.curedImage = img; break
+          case 'timer.png': this.timerImage = img; break
+          case 'patient_icon.png': this.patientIconImage = img; break
+          case 'start_level.png': this.startButtonImage = img; break
+          case 'bed_area_bg.png': this.bedAreaBgImage = img; break
+        }
+      }
+    }
+    
+    // 加载疾病图标
+    this.diseaseImages = {}
+    for (let i = 1; i <= 13; i++) {
+      const img = await this.loadImageFromCloud(`disease_${i}.png`)
+      if (img) {
+        this.diseaseImages[i] = img
+      }
+    }
+    
+    // 加载升级图片
+    this.upgradeImages = {}
+    const upgradeNames = ['nurse_pro_1.png', 'nurse_pro_2.png', 'nurse_pro_3.png']
+    for (const name of upgradeNames) {
+      const img = await this.loadImageFromCloud(name)
+      if (img) {
+        this.upgradeImages[name] = img
+      }
+    }
+  }
+  
+  // 本地加载图标
+  loadIconsLocal() {
     // 加载荣誉点图标
     const honorImg = wx.createImage()
     honorImg.onload = () => {
@@ -279,7 +385,6 @@ export default class Game {
       diseaseImg.onload = ((id, img) => {
         this.diseaseImages[id] = img
       })(i, diseaseImg)
-      // 尝试小写 png 和大写 PNG
       diseaseImg.src = `images/disease_${i}.png`
     }
     
