@@ -604,6 +604,35 @@ export default class Patient {
       const drawHeight = targetHeight
       
       ctx.drawImage(currentImage, -drawWidth / 2, -drawHeight / 2 - 26, drawWidth, drawHeight)
+    } else {
+      // 【修复】图片未加载完成时，显示备用图形（彩色圆角方块）
+      const placeholderSize = 60
+      const placeholderColor = this.isAngry ? '#E74C3C' : '#3498DB'
+      
+      // 绘制圆角方块作为占位
+      ctx.fillStyle = placeholderColor
+      fillRoundRect(ctx, -placeholderSize / 2, -placeholderSize / 2 - 20, placeholderSize, placeholderSize, 12)
+      
+      // 绘制简单的脸部特征
+      ctx.fillStyle = '#FFFFFF'
+      // 眼睛
+      ctx.beginPath()
+      ctx.arc(-12, -35, 4, 0, Math.PI * 2)
+      ctx.arc(12, -35, 4, 0, Math.PI * 2)
+      ctx.fill()
+      // 嘴巴（根据状态显示不同表情）
+      ctx.strokeStyle = '#FFFFFF'
+      ctx.lineWidth = 2
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      if (this.isAngry) {
+        // 生气：倒弧线
+        ctx.arc(0, -25, 8, Math.PI, 0)
+      } else {
+        // 正常：正弧线
+        ctx.arc(0, -25, 8, 0, Math.PI)
+      }
+      ctx.stroke()
     }
     
     ctx.restore()

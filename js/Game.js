@@ -12,10 +12,10 @@ import cloudImageManager from './CloudImageManager.js'
 // ==================== 马卡龙 UI 颜色配置（可自行调整）====================
 const UI_COLORS = {
   // 全局背景
-  background: '#E6E6FA',      // 浅薰衣草紫
+  background: '#e1e3ed',    
   
   // 顶部状态栏
-  header: '#B394BF',          // 香芋紫色背景
+  header: '#74c3e8',          // 顶部header颜色
   headerBorder: '#f1e3f0',    // 顶部状态栏边框色（稍深）
   
   // 等候区托盘
@@ -405,6 +405,32 @@ export default class Game {
       }
       img.src = path
     })
+    
+    // 【新增】预加载病人图片，避免第一关病人显示不出来
+    this.preloadPatientImages()
+  }
+  
+  // 【新增】预加载病人图片
+  preloadPatientImages() {
+    // 预加载第1-3关会用到的病人类型（根据 GameConfig.patientDetails 中的配置）
+    // 第1关病人ID: 1,2,3,14,15,16
+    // 第2关病人ID: 4,16,15,17,18,2,1,5
+    // 第3关病人ID: 6,18,17,16,15,5,4,3,2,19
+    const patientTypesToPreload = [1, 2, 3, 4, 5, 6, 14, 15, 16, 17, 18, 19]
+    
+    patientTypesToPreload.forEach(type => {
+      // 只预加载 sick 图片（normal 和 angry 都使用 sick 图片）
+      const sickImg = wx.createImage()
+      sickImg.onload = () => {
+        console.log(`[预加载] 病人图片加载成功: patient_${type}_sick.png`)
+      }
+      sickImg.onerror = () => {
+        console.warn(`[预加载] 病人图片加载失败: patient_${type}_sick.png`)
+      }
+      sickImg.src = `images/patient/patient_${type}_sick.png`
+    })
+    
+    console.log('[预加载] 开始预加载病人图片，数量:', patientTypesToPreload.length)
   }
 
   // 添加浮动文字
@@ -1705,8 +1731,8 @@ export default class Game {
     fillRoundRect(ctx, this.mapX, this.mapY, this.mapWidth, headerHeight, headerRadius)
     
     // 顶部状态栏边框（圆角）
-    ctx.strokeStyle = UI_COLORS.headerBorder
-    ctx.lineWidth = 2
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'
+    ctx.lineWidth = 3
     strokeRoundRect(ctx, this.mapX, this.mapY, this.mapWidth, headerHeight, headerRadius)
     
     // 顶部状态栏底部阴影
@@ -1871,7 +1897,7 @@ export default class Game {
     ctx.font = `${Math.max(16, this.screenWidth * 0.025)}px cursive, sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    const titleText = '🏥 急诊室模拟器'
+    const titleText = '🏥 抢救大作战'
     const titleX = this.mapX + 15
     ctx.fillText(titleText, titleX, titleY)
     
@@ -6123,9 +6149,9 @@ export default class Game {
 
   // 【开始接诊按钮】渲染在header位置（直接绘制，不依赖图片）
   renderStartButtonInHeader(ctx, titleY) {
-    // 按钮尺寸
-    const btnWidth = 140
-    const btnHeight = 44
+    // 按钮尺寸（变小）
+    const btnWidth = 110
+    const btnHeight = 36
     const btnX = (this.screenWidth - btnWidth) / 2
     const btnY = titleY - btnHeight / 2
     
@@ -6148,7 +6174,7 @@ export default class Game {
     ctx.translate(-(btnX + btnWidth / 2), -(btnY + btnHeight / 2))
     
     // 【绘制按钮主体】参考【本关目标】弹窗的【开始】按钮样式：蓝色渐变+白色边框
-    const cornerRadius = 16
+    const cornerRadius = 22
     
     // 按钮按下状态偏移
     const pressOffset = this.startButtonPressed ? 2 : 0
