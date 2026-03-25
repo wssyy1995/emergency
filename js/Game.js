@@ -1,7 +1,7 @@
 import WaitingArea from './WaitingArea.js'
 import BedArea from './BedArea.js'
 import EquipmentRoom from './EquipmentRoom.js'
-import Patient from './Patient.js'
+import Patient, { PatientImageCache } from './Patient.js'
 import Doctor from './Doctor.js'
 import { fillRoundRect, strokeRoundRect, roundRect } from './utils.js'
 import { getItemById, getItemImage, preloadItemImages, setExtraMachines, setCloudImageManager, setUseCloudStorage } from './Items.js'
@@ -410,59 +410,47 @@ export default class Game {
     })
     
     // 【新增】预加载病人图片，避免第一关病人显示不出来
-    this.preloadPatientImages()
+    // 保存预加载Promise，供后续等待
+    this.patientImagesPreloadPromise = this.preloadPatientImages()
   }
   
-  // 【新增】预加载病人图片
-  preloadPatientImages() {
-    // 预加载第1-3关会用到的病人类型（根据 GameConfig.patientDetails 中的配置）
+  // 【新增】预加载病人图片 - 游戏初始化时加载1-3关所有病人图片
+  async preloadPatientImages() {
+    // 第1-3关会用到的病人类型（根据 GameConfig.levels 中的配置）
     // 第1关病人ID: 1,2,3,14,15,16
     // 第2关病人ID: 4,16,15,17,18,2,1,5
     // 第3关病人ID: 6,18,17,16,15,5,4,3,2,19
-    const patientTypesToPreload = [1, 2, 3, 4, 5, 6, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+    const level1Ids = [1, 2, 3, 14, 15, 16]
+    const level2Ids = [4, 16, 15, 17, 18, 2, 1, 5]
+    const level3Ids = [6, 18, 17, 16, 15, 5, 4, 3, 2, 19]
     
-    // 同时预加载所有病人图片
-    let loadedCount = 0
-    const totalCount = patientTypesToPreload.length
+    // 合并去重
+    const allTypes = [...new Set([...level1Ids, ...level2Ids, ...level3Ids])]
     
-    patientTypesToPreload.forEach(type => {
-      // 只预加载 sick 图片（normal 和 angry 都使用 sick 图片）
-      const sickImg = wx.createImage()
-      sickImg.onload = () => {
-        loadedCount++
-        console.log(`[预加载] 病人图片加载成功: patient_${type}_sick.png (${loadedCount}/${totalCount})`)
-      }
-      sickImg.onerror = () => {
-        loadedCount++
-        console.warn(`[预加载] 病人图片加载失败: patient_${type}_sick.png (${loadedCount}/${totalCount})`)
-      }
-      sickImg.src = `images/patient/patient_${type}_sick.png`
-    })
+    console.log('[预加载] 开始预加载1-3关病人图片，数量:', allTypes.length)
     
-    console.log('[预加载] 开始预加载病人图片，数量:', patientTypesToPreload.length)
+    // 使用 PatientImageCache 预加载所有图片（normal、sick、angry）
+    await PatientImageCache.preloadPatientImages(allTypes)
+    
+    console.log('[预加载] 1-3关病人图片预加载完成')
   }
   
-  // 【新增】预加载第一关特定病人的图片（确保第一关开始前加载完成）
-  preloadLevel1Patients() {
-    // 第1关病人ID: 1,2,3,14,15,16
-    const level1PatientIds = [1, 2, 3, 14, 15, 16]
+  // 【新增】预加载指定关卡的病人图片
+  async preloadLevelPatients(levelIndex) {
+    const levelConfig = getLevelConfig(levelIndex)
+    if (!levelConfig || !levelConfig.patients) {
+      console.warn(`[预加载] 关卡${levelIndex + 1}配置不存在`)
+      return
+    }
     
-    return Promise.all(level1PatientIds.map(type => {
-      return new Promise((resolve) => {
-        const img = wx.createImage()
-        img.onload = () => {
-          console.log(`[第一关预加载] 病人图片加载成功: patient_${type}_sick.png`)
-          resolve(true)
-        }
-        img.onerror = () => {
-          console.warn(`[第一关预加载] 病人图片加载失败: patient_${type}_sick.png`)
-          resolve(false) // 即使失败也继续
-        }
-        img.src = `images/patient/patient_${type}_sick.png`
-      })
-    }))
+    const patientIds = levelConfig.patients
+    console.log(`[预加载] 开始预加载关卡${levelIndex + 1}病人图片:`, patientIds)
+    
+    await PatientImageCache.preloadPatientImages(patientIds)
+    
+    console.log(`[预加载] 关卡${levelIndex + 1}病人图片预加载完成`)
   }
-
+  
   // 添加浮动文字
   addFloatingText(text, x, y, color) {
     this.floatingTexts.push({
@@ -519,72 +507,70 @@ export default class Game {
     })
   }
   
-  // 【新增】添加治愈图标飞行动画（从病人位置飞到header治愈胶囊）
+  // 【新增】添加治愈成功动画（参考ui.txt：缩放+光晕+粒子效果）
   addCuredFlyAnimation(startX, startY) {
-    // 计算目标位置（header中的治愈胶囊位置）
-    const headerHeight = 45
-    const titleY = this.mapY + headerHeight / 2
-    
-    // 获取治愈胶囊的位置（参考renderUI中的计算）
+    // 创建治愈成功动画
+    this.curedFlyAnimations.push({
+      x: startX,
+      y: startY,
+      // 动画阶段：'appear'(出现缩放+粒子飘散) -> 'fly'(飞向header) -> 'done'(完成)
+      state: 'appear',
+      stateTime: 0,
+      
+      // 出现阶段 (0.8s)，包含图标弹性缩放+金色粒子飘散
+      appearDuration: 800,
+      appearScale: 0,  // 从0开始缩放
+      particles: [
+        { x: -20, y: -15, size: 6, delay: 0.1, speedY: 0.08, speedX: 0.02 },
+        { x: 22, y: -8, size: 5, delay: 0.3, speedY: 0.1, speedX: -0.015 },
+        { x: -10, y: 20, size: 7, delay: 0.2, speedY: 0.06, speedX: 0.025 },
+        { x: 16, y: 16, size: 5, delay: 0.4, speedY: 0.09, speedX: -0.02 },
+        { x: 0, y: -25, size: 8, delay: 0.15, speedY: 0.12, speedX: 0 },
+        { x: -25, y: 5, size: 4, delay: 0.25, speedY: 0.07, speedX: 0.03 },
+        { x: 25, y: 10, size: 5, delay: 0.35, speedY: 0.08, speedX: -0.025 }
+      ],
+      
+      // 飞行阶段
+      flyDuration: 600,
+      flyProgress: 0,
+      // 计算目标位置（header治愈胶囊）
+      endX: this.getCureCapsuleX(),
+      endY: this.mapY + 22,
+      
+      iconSize: 32
+    })
+  }
+  
+  // 【新增】获取治愈胶囊的X坐标
+  getCureCapsuleX() {
     const levelConfig = getLevelConfig(this.currentLevel)
     const capsuleSpacing = 12
     const hasCountdown = this.hasCountdown || false
     
-    // 使用临时canvas context测量文字宽度
     const tempCtx = this.ctx
     tempCtx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
     
-    // 计算胶囊宽度（与renderUI一致）
     const levelText = `第${this.currentLevel + 1}关`
     const levelWidth = tempCtx.measureText(levelText).width + 16
     const patientText = `${this.spawnedPatientsCount}/${levelConfig.patients.length}`
     const patientIconSize = 22
     const patientWidth = tempCtx.measureText(patientText).width + patientIconSize + 20
-    const cureText = `${this.curedCount}/${levelConfig.cureTarget}`
-    const cureIconSize = 28
-    const cureWidth = tempCtx.measureText(cureText).width + cureIconSize + 20
+    const cureWidth = tempCtx.measureText(`${this.curedCount}/${levelConfig.cureTarget}`).width + 28 + 20
     
-    let totalWidth, countdownWidth = 0
+    let countdownWidth = 0
     if (hasCountdown) {
-      const countdownText = `${this.timeRemaining}s`
       tempCtx.font = `bold ${Math.max(13, this.screenWidth * 0.019)}px cursive, sans-serif`
-      const countdownIconSize = 20
-      countdownWidth = tempCtx.measureText(countdownText).width + countdownIconSize + 20
-      totalWidth = levelWidth + countdownWidth + patientWidth + cureWidth + capsuleSpacing * 3
-    } else {
-      totalWidth = levelWidth + patientWidth + cureWidth + capsuleSpacing * 2
+      countdownWidth = tempCtx.measureText(`${this.timeRemaining}s`).width + 20 + 20
     }
     
-    const centerX = this.mapX + this.mapWidth / 2
-    const startX_header = centerX - totalWidth / 2
-    const cureX = startX_header + levelWidth + (hasCountdown ? capsuleSpacing + countdownWidth : 0) + capsuleSpacing + patientWidth + capsuleSpacing
-    const cureY = titleY
+    const totalWidth = hasCountdown 
+      ? levelWidth + countdownWidth + patientWidth + cureWidth + capsuleSpacing * 3
+      : levelWidth + patientWidth + cureWidth + capsuleSpacing * 2
     
-    // 创建飞行动画
-    this.curedFlyAnimations.push({
-      startX,
-      startY,
-      endX: cureX + 20,  // 飞到治愈图标中心
-      endY: cureY,
-      currentX: startX,
-      currentY: startY,
-      state: 'pause',     // 'pause': 停顿中, 'flying': 飞行中, 'done': 完成
-      pauseTime: 800,     // 停顿500ms
-      pauseElapsed: 0,
-      flyProgress: 0,
-      flyDuration: 800,   // 飞行800ms
-      iconSize: 28,
-      // 【新增】亮晶晶的小星星（更大、更多、会旋转）
-      sparkles: [
-        { offsetX: -20, offsetY: -15, size: 5, phase: 0, speed: 0.01, rotation: 0, rotationSpeed: 0.02 },
-        { offsetX: 22, offsetY: -8, size: 4, phase: 1.5, speed: 0.015, rotation: 0.5, rotationSpeed: 0.025 },
-        { offsetX: -10, offsetY: 20, size: 4.5, phase: 3, speed: 0.012, rotation: 1, rotationSpeed: -0.02 },
-        { offsetX: 16, offsetY: 16, size: 3.5, phase: 4.5, speed: 0.014, rotation: 1.5, rotationSpeed: 0.03 },
-        { offsetX: 0, offsetY: -25, size: 6, phase: 2, speed: 0.011, rotation: 2, rotationSpeed: -0.025 },
-        { offsetX: -25, offsetY: 5, size: 3, phase: 5, speed: 0.013, rotation: 2.5, rotationSpeed: 0.02 },
-        { offsetX: 25, offsetY: 10, size: 3.5, phase: 0.5, speed: 0.016, rotation: 3, rotationSpeed: -0.03 }
-      ]
-    })
+    const centerX = this.mapX + this.mapWidth / 2
+    const startX = centerX - totalWidth / 2
+    
+    return startX + levelWidth + (hasCountdown ? capsuleSpacing + countdownWidth : 0) + capsuleSpacing + patientWidth + capsuleSpacing + 14
   }
   
   // 添加浮动物品图片
@@ -635,45 +621,57 @@ export default class Game {
     }
   }
   
-  // 【新增】更新治愈图标飞行动画
+  // 【新增】更新治愈成功动画（参考ui.txt：缩放+光晕+粒子+飞行）
   updateCuredFlyAnimations(deltaTime) {
     for (let i = this.curedFlyAnimations.length - 1; i >= 0; i--) {
       const anim = this.curedFlyAnimations[i]
+      anim.stateTime += deltaTime
       
-      // 【新增】更新亮晶晶小星星的闪烁相位和旋转角度
-      if (anim.sparkles) {
-        anim.sparkles.forEach(sparkle => {
-          sparkle.phase += deltaTime * sparkle.speed
-          sparkle.rotation += deltaTime * sparkle.rotationSpeed
-        })
-      }
-      
-      if (anim.state === 'pause') {
-        // 停顿阶段
-        anim.pauseElapsed += deltaTime
-        if (anim.pauseElapsed >= anim.pauseTime) {
-          anim.state = 'flying'
-        }
-      } else if (anim.state === 'flying') {
-        // 飞行阶段
-        anim.flyProgress += deltaTime / anim.flyDuration
-        
-        if (anim.flyProgress >= 1) {
-          // 飞行完成
-          anim.flyProgress = 1
-          anim.state = 'done'
+      switch (anim.state) {
+        case 'appear':
+          // 出现阶段 - 弹性缩放 (0.5s)
+          const appearProgress = Math.min(anim.stateTime / anim.appearDuration, 1)
+          // 弹性效果：先超过1再回弹
+          const t = appearProgress
+          anim.appearScale = t === 0 ? 0 : t === 1 ? 1 : 
+            Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI) / 3) + 1
           
-          // 治愈数值+1（滚动效果）
-          this.curedCount++
-        }
-        
-        // 计算当前位置（使用缓动函数）
-        const easeProgress = 1 - Math.pow(1 - anim.flyProgress, 3) // easeOutCubic
-        anim.currentX = anim.startX + (anim.endX - anim.startX) * easeProgress
-        anim.currentY = anim.startY + (anim.endY - anim.startY) * easeProgress
-      } else if (anim.state === 'done') {
-        // 完成，移除动画
-        this.curedFlyAnimations.splice(i, 1)
+          if (appearProgress >= 1) {
+            anim.state = 'fly'  // 【修改】appear完成后直接进入 fly
+            anim.stateTime = 0
+          }
+          break
+          
+        case 'glow':
+          // 光晕阶段 - 金色光晕扩散 (1.5s)
+          anim.glowProgress = Math.min(anim.stateTime / anim.glowDuration, 1)
+          
+          if (anim.glowProgress >= 1) {
+            anim.state = 'particles'
+            anim.stateTime = 0
+          }
+          break
+          
+        case 'fly':
+          // 飞向header阶段 (0.6s)
+          anim.flyProgress += deltaTime / anim.flyDuration
+          
+          if (anim.flyProgress >= 1) {
+            anim.flyProgress = 1
+            anim.state = 'done'
+            this.curedCount++
+          }
+          
+          // 计算当前位置（使用缓动函数）
+          const easeProgress = 1 - Math.pow(1 - anim.flyProgress, 3) // easeOutCubic
+          anim.currentX = anim.x + (anim.endX - anim.x) * easeProgress
+          anim.currentY = anim.y + (anim.endY - anim.y) * easeProgress
+          break
+          
+        case 'done':
+          // 完成，移除动画
+          this.curedFlyAnimations.splice(i, 1)
+          break
       }
     }
   }
@@ -820,19 +818,24 @@ export default class Game {
     // 初始化病人池
     this.initCurrentLevelPatientPool()
     
-    // 【新增】预加载第一关病人图片，确保生成时图片已加载
-    if (this.currentLevel === 0) {
-      this.preloadLevel1Patients().then(() => {
-        console.log('[第一关] 病人图片预加载完成')
-      })
-    }
-    
     // 清除之前的定时器
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
     if (this.spawnTimer) clearTimeout(this.spawnTimer)
     
-    // 统一显示【开始接诊】按钮（点击后再显示【本关目标】弹窗）
-    this.showStartButton = true
+    // 【修改】第一关等待图片预加载完成后再显示【开始接诊】按钮
+    if (this.currentLevel === 0 && this.patientImagesPreloadPromise) {
+      this.patientImagesPreloadPromise.then(() => {
+        console.log('[第一关] 1-3关病人图片预加载完成，显示开始按钮')
+        this.showStartButton = true
+      }).catch(err => {
+        console.warn('[第一关] 图片预加载失败:', err)
+        // 即使失败也显示按钮，使用备用图形
+        this.showStartButton = true
+      })
+    } else {
+      // 非第一关直接显示按钮
+      this.showStartButton = true
+    }
   }
   
   // 开始生成病人（提取为独立方法）
@@ -1986,96 +1989,100 @@ export default class Game {
   }
   
   // 【新增】渲染治愈图标飞行动画
+  // 【新增】渲染治愈成功动画（参考ui.txt：缩放+光晕+粒子+飞行）
   renderCuredFlyAnimations() {
     const ctx = this.ctx
     ctx.save()
     
     this.curedFlyAnimations.forEach(anim => {
-      // 【修改】只在停顿阶段绘制亮晶晶的小星星，飞行阶段不绘制
-      if (anim.sparkles && anim.state === 'pause') {
-        anim.sparkles.forEach(sparkle => {
-          // 计算闪烁透明度（0.3 ~ 1.0 之间波动）
-          const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(sparkle.phase))
-          const scale = anim.iconSize / 28  // 根据图标大小调整星星大小
-          
-          const sparkleX = anim.currentX + sparkle.offsetX * scale
-          const sparkleY = anim.currentY + sparkle.offsetY * scale
-          const sparkleSize = sparkle.size * scale
-          
-          // 绘制四角星形状
-          ctx.fillStyle = `rgba(255, 255, 200, ${alpha})`  // 淡黄色
-          ctx.shadowColor = `rgba(255, 255, 150, ${alpha * 0.8})`
-          ctx.shadowBlur = sparkleSize * 2
-          
-          // 【修改】绘制旋转的星星（菱形）
-          ctx.save()
-          ctx.translate(sparkleX, sparkleY)
-          ctx.rotate(sparkle.rotation)
-          
-          // 绘制十字星形状（更有光泽感）
-          ctx.beginPath()
-          // 上半部分
-          ctx.moveTo(0, -sparkleSize)
-          ctx.lineTo(sparkleSize * 0.35, -sparkleSize * 0.35)
-          ctx.lineTo(sparkleSize, 0)
-          ctx.lineTo(sparkleSize * 0.35, sparkleSize * 0.35)
-          ctx.lineTo(0, sparkleSize)
-          ctx.lineTo(-sparkleSize * 0.35, sparkleSize * 0.35)
-          ctx.lineTo(-sparkleSize, 0)
-          ctx.lineTo(-sparkleSize * 0.35, -sparkleSize * 0.35)
-          ctx.closePath()
-          ctx.fill()
-          
-          // 添加十字光芒效果
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.8})`
-          ctx.beginPath()
-          // 垂直光芒
-          ctx.moveTo(0, -sparkleSize * 1.2)
-          ctx.lineTo(sparkleSize * 0.15, 0)
-          ctx.lineTo(0, sparkleSize * 1.2)
-          ctx.lineTo(-sparkleSize * 0.15, 0)
-          ctx.closePath()
-          ctx.fill()
-          
-          ctx.beginPath()
-          // 水平光芒
-          ctx.moveTo(-sparkleSize * 1.2, 0)
-          ctx.lineTo(0, sparkleSize * 0.15)
-          ctx.lineTo(sparkleSize * 1.2, 0)
-          ctx.lineTo(0, -sparkleSize * 0.15)
-          ctx.closePath()
-          ctx.fill()
-          
-          ctx.restore()
-        })
-        
-        // 重置阴影
-        ctx.shadowColor = 'transparent'
-        ctx.shadowBlur = 0
-      }
+      const drawX = anim.state === 'fly' ? anim.currentX : anim.x
+      const drawY = anim.state === 'fly' ? anim.currentY : anim.y
       
-      // 绘制 cured.png 图标
-      if (this.curedImage && this.curedImage.width > 0) {
-        // 计算图标大小（飞行过程中稍微缩小）
-        const iconSize = anim.iconSize * (1 - anim.flyProgress * 0.2)
-        
-        // 添加发光效果
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.8)'
-        ctx.shadowBlur = 10
-        ctx.shadowOffsetX = 0
-        ctx.shadowOffsetY = 0
-        
-        ctx.drawImage(
-          this.curedImage, 
-          anim.currentX - iconSize / 2, 
-          anim.currentY - iconSize / 2, 
-          iconSize, 
-          iconSize
-        )
-        
-        // 重置阴影
-        ctx.shadowColor = 'transparent'
-        ctx.shadowBlur = 0
+      switch (anim.state) {
+        case 'appear':
+          // 阶段1：弹性缩放出现 + 金色粒子同时显示
+          const appearProgress = anim.stateTime / anim.appearDuration
+          
+          // 绘制图标
+          if (this.curedImage && this.curedImage.width > 0) {
+            const scale = anim.appearScale
+            const iconSize = anim.iconSize * scale
+            
+            // 发光效果
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.6)'
+            ctx.shadowBlur = 15 * scale
+            
+            ctx.drawImage(
+              this.curedImage,
+              drawX - iconSize / 2,
+              drawY - iconSize / 2,
+              iconSize,
+              iconSize
+            )
+            ctx.shadowBlur = 0
+          }
+          
+          // 【新增】同时绘制金色粒子（从0开始飘散）
+          anim.particles.forEach(p => {
+            // 粒子延迟启动，但整体在appear阶段就显示
+            const pDelay = p.delay * 0.5  // 缩短延迟，让粒子更早出现
+            const pProgress = Math.max(0, Math.min(1, (appearProgress - pDelay) / (1 - pDelay)))
+            if (pProgress <= 0) return
+            
+            const pX = drawX + p.x + p.x * pProgress * 0.3
+            const pY = drawY + p.y - p.y * pProgress * 1.5 - appearProgress * 15  // 向上飘散
+            const pSize = p.size * (1 - pProgress * 0.3)
+            const pAlpha = (1 - pProgress) * (1 - appearProgress * 0.5)  // 随时间淡出
+            
+            // 金色粒子
+            ctx.fillStyle = `rgba(255, 215, 0, ${pAlpha})`
+            ctx.beginPath()
+            ctx.arc(pX, pY, pSize / 2, 0, Math.PI * 2)
+            ctx.fill()
+            
+            // 粒子光晕
+            ctx.fillStyle = `rgba(255, 235, 100, ${pAlpha * 0.5})`
+            ctx.beginPath()
+            ctx.arc(pX, pY, pSize, 0, Math.PI * 2)
+            ctx.fill()
+          })
+          break
+          
+        case 'fly':
+          // 阶段4：飞向header
+          if (this.curedImage && this.curedImage.width > 0) {
+            // 飞行中稍微缩小
+            const flyScale = 1 - anim.flyProgress * 0.3
+            const iconSize = anim.iconSize * flyScale
+            
+            // 拖尾效果
+            const trailAlpha = (1 - anim.flyProgress) * 0.3
+            for (let i = 1; i <= 3; i++) {
+              const trailProgress = Math.max(0, anim.flyProgress - i * 0.05)
+              if (trailProgress <= 0) continue
+              const easeTrail = 1 - Math.pow(1 - trailProgress, 3)
+              const trailX = anim.x + (anim.endX - anim.x) * easeTrail
+              const trailY = anim.y + (anim.endY - anim.y) * easeTrail
+              
+              ctx.fillStyle = `rgba(34, 197, 94, ${trailAlpha / i})`
+              ctx.beginPath()
+              ctx.arc(trailX, trailY, iconSize * 0.3 / i, 0, Math.PI * 2)
+              ctx.fill()
+            }
+            
+            // 绘制图标
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.6)'
+            ctx.shadowBlur = 10
+            ctx.drawImage(
+              this.curedImage,
+              drawX - iconSize / 2,
+              drawY - iconSize / 2,
+              iconSize,
+              iconSize
+            )
+            ctx.shadowBlur = 0
+          }
+          break
       }
     })
     
@@ -3791,7 +3798,7 @@ export default class Game {
   }
   
   // 显示关卡完成提示（自定义确认弹窗）
-  showLevelCompleteModal() {
+  async showLevelCompleteModal() {
     // 【升级模式】不显示关卡完成弹窗
     if (this.upgradeMode) {
       console.log('[升级模式] 跳过显示关卡完成弹窗')
@@ -3805,6 +3812,14 @@ export default class Game {
     }
     
     console.log('显示关卡完成弹窗，当前关卡:', this.currentLevel)
+    
+    // 【新增】预加载下一关的病人图片
+    const nextLevel = this.currentLevel + 1
+    const totalLevels = GameConfig.levels ? GameConfig.levels.length : 10
+    if (nextLevel < totalLevels) {
+      console.log(`[关卡完成] 预加载下一关(关卡${nextLevel + 1})病人图片`)
+      this.preloadLevelPatients(nextLevel)
+    }
     
     // 停止游戏运行（等待用户点击继续）
     this.isRunning = false

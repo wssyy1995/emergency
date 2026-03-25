@@ -95,6 +95,51 @@ const PatientImageCache = {
     return this.boomImage
   },
   
+  // 【新增】预加载指定病人类型的图片（normal、sick）
+  preloadPatientImages(patientTypes) {
+    const promises = []
+    
+    patientTypes.forEach(type => {
+      // 预加载 normal 图片
+      if (!this.normalImages[type]) {
+        promises.push(new Promise((resolve) => {
+          const img = wx.createImage()
+          img.onload = () => {
+            this.normalImages[type] = img
+            console.log(`[PatientImageCache] normal图片预加载成功: patient_${type}_normal.png`)
+            resolve(true)
+          }
+          img.onerror = () => {
+            console.warn(`[PatientImageCache] normal图片预加载失败: patient_${type}_normal.png`)
+            resolve(false)
+          }
+          img.src = `images/patient/patient_${type}_normal.png`
+        }))
+      }
+      
+      // 预加载 sick 图片
+      if (!this.sickImages[type]) {
+        promises.push(new Promise((resolve) => {
+          const img = wx.createImage()
+          img.onload = () => {
+            this.sickImages[type] = img
+            console.log(`[PatientImageCache] sick图片预加载成功: patient_${type}_sick.png`)
+            resolve(true)
+          }
+          img.onerror = () => {
+            console.warn(`[PatientImageCache] sick图片预加载失败: patient_${type}_sick.png`)
+            resolve(false)
+          }
+          img.src = `images/patient/patient_${type}_sick.png`
+        }))
+      }
+      
+      // 【注意】angry图片不再预加载，因为文件不存在，使用时会回退到 sick 图片
+    })
+    
+    return Promise.all(promises)
+  },
+  
   // 安抚图标
   comfortImage: null,
   
@@ -151,6 +196,9 @@ const PatientImageCache = {
 
 // 立即初始化缓存
 PatientImageCache.init()
+
+// 导出缓存对象供外部预加载使用
+export { PatientImageCache }
 
 export default class Patient {
   constructor(id, patientDetail = null, disease = null) {
