@@ -108,8 +108,16 @@ export default class Doctor {
     // 【新增】点击震动动画（被点击时轻微跳动）
     this.isShaking = false
     this.shakeStartTime = 0
-    this.shakeDuration = 600  // 【减慢】跳动持续600ms
-    this.shakeIntensity = 3   // 跳动幅度（像素）
+    this.shakeDuration = 1000  // 【减慢】跳动持续800ms
+    this.shakeIntensity = 1.5   // 跳动幅度（像素）
+    
+    // 【新增】持续跳动状态（匹配时持续跳动）
+    this.isContinuousShaking = false  // 是否处于持续跳动状态
+    
+    // 【新增】匹配成功时的黄色光芒效果
+    this.showMatchGlow = false
+    this.matchGlowStartTime = 0
+    this.matchGlowDuration = 800  // 黄闪持续800ms
     
     this.requiredItems = []
     this.receivedItems = []
@@ -166,6 +174,15 @@ export default class Doctor {
     
     // 更新错误动画
     this.updateErrorAnimation()
+    
+    // 更新匹配光芒动画
+    this.updateMatchGlow()
+    
+    // 【新增】如果不在治疗状态，停止持续跳动（治疗完成时自动停止）
+    if (this.state !== 'treating' && this.isContinuousShaking) {
+      this.stopContinuousShake()
+      this.showMatchGlow = false
+    }
     
     // 【新增】震动动画状态在 getShakeOffset 中更新
     
@@ -374,6 +391,19 @@ export default class Doctor {
     this.errorStartTime = Date.now()
   }
   
+  // 【新增】触发匹配成功时的黄色光芒
+  triggerMatchGlow() {
+    this.showMatchGlow = true
+    this.matchGlowStartTime = Date.now()
+  }
+  
+  // 【新增】更新匹配光芒动画状态
+  updateMatchGlow() {
+    // 如果处于持续跳动状态，保持光芒开启（在渲染中使用呼吸效果）
+    // 如果停止持续跳动，updateDoctorContinuousShake 会设置 showMatchGlow = false
+    // 这里不需要自动关闭，由外部逻辑控制
+  }
+  
   // 【新增】更新错误动画状态
   updateErrorAnimation() {
     if (this.showError) {
@@ -390,8 +420,33 @@ export default class Doctor {
     this.shakeStartTime = Date.now()
   }
   
+  // 【新增】开始持续跳动（匹配时）
+  startContinuousShake() {
+    if (!this.isContinuousShaking) {
+      this.isContinuousShaking = true
+      console.log(`[持续跳动] 医生${this.name}开始持续跳动`)
+    }
+  }
+  
+  // 【新增】停止持续跳动
+  stopContinuousShake() {
+    if (this.isContinuousShaking) {
+      this.isContinuousShaking = false
+      console.log(`[持续跳动] 医生${this.name}停止持续跳动`)
+    }
+  }
+  
   // 【新增】更新跳动动画状态，返回当前偏移量（改为上下跳动）
   getShakeOffset() {
+    // 优先检查持续跳动状态
+    if (this.isContinuousShaking) {
+      // 持续跳动：使用正弦波，无限循环
+      const frequency = 0.0015  // 跳动频率（更慢，约3秒一个周期）
+      const offsetY = -Math.abs(Math.sin(this.animationTime * frequency * Math.PI * 2)) * this.shakeIntensity * 1.5
+      return { x: 0, y: offsetY }
+    }
+    
+    // 一次性点击跳动
     if (!this.isShaking) return { x: 0, y: 0 }
     
     const elapsed = Date.now() - this.shakeStartTime
@@ -408,7 +463,7 @@ export default class Doctor {
     // 主要上下跳动，左右不动
     const offsetX = 0
     // 正弦波控制上下跳动（负值表示向上）
-    const offsetY = -Math.abs(Math.sin(progress * Math.PI * frequency)) * this.shakeIntensity * 2.5 * dampening
+    const offsetY = -Math.abs(Math.sin(progress * Math.PI * frequency)) * this.shakeIntensity * 2 * dampening
     
     return { x: offsetX, y: offsetY }
   }
@@ -502,8 +557,8 @@ export default class Doctor {
       
       ctx.save()
       
-      // 呼吸动效：1.5秒周期，缩放 0.92 ~ 1.08（更明显）
-      const breathScale = 1 + Math.sin(this.animationTime / 250) * 0.08
+      // 呼吸动效：1.8秒周期，缩放 0.98 ~ 1.02（更柔和）
+      const breathScale = 1 + Math.sin(this.animationTime / 300) * 0.02
       ctx.translate(this.x, this.y - 75 * scale)
       ctx.scale(breathScale, breathScale)
       
@@ -592,6 +647,54 @@ export default class Doctor {
         
         // 描边（同时描圆角矩形和三角形）
         ctx.stroke()
+      }
+      
+      // 【新增】匹配成功时的枣红色光芒效果
+      if (this.showMatchGlow) {
+        // 使用呼吸效果，持续显示
+        const breatheAlpha = 0.2 + 0.2 * Math.sin(this.animationTime / 300)  // 更淡的透明度 0.2~0.4
+        
+        // 绘制鲜艳红色的发光边框，阴影范围更大
+        ctx.shadowColor = 'rgba(255, 0, 0, 0.25)'  // 鲜红色阴影
+        ctx.shadowBlur = 20 * scale  // 更大的模糊半径
+        ctx.shadowOffsetY = 0
+        
+        ctx.strokeStyle = `rgba(255, 50, 50, ${breatheAlpha})`  // 鲜红色 #FF3232，呼吸效果
+        ctx.lineWidth = 3 * scale  // 线宽
+        ctx.lineJoin = 'round'
+        
+        // 绘制圆角矩形路径
+        ctx.beginPath()
+        const r = 16 * scale
+        const bw = bubbleWidth
+        const bh = bubbleHeight
+        const bx = -bw / 2
+        const by = -bh / 2
+        
+        ctx.moveTo(bx + r, by)
+        ctx.lineTo(bx + bw - r, by)
+        ctx.arc(bx + bw - r, by + r, r, -Math.PI / 2, 0)
+        ctx.lineTo(bx + bw, by + bh - r)
+        ctx.arc(bx + bw - r, by + bh - r, r, 0, Math.PI / 2)
+        ctx.lineTo(bx + r, by + bh)
+        ctx.arc(bx + r, by + bh - r, r, Math.PI / 2, Math.PI)
+        ctx.lineTo(bx, by + r)
+        ctx.arc(bx + r, by + r, r, Math.PI, -Math.PI / 2)
+        ctx.closePath()
+        
+        // 绘制三角形尾巴
+        const tailWidth = 14 * scale
+        const tailHeight = 10 * scale
+        ctx.moveTo(-tailWidth / 2, bh / 2 - 1)
+        ctx.lineTo(tailWidth / 2, bh / 2 - 1)
+        ctx.lineTo(0, bh / 2 + tailHeight)
+        ctx.closePath()
+        
+        ctx.stroke()
+        
+        // 重置阴影
+        ctx.shadowColor = 'transparent'
+        ctx.shadowBlur = 0
       }
       
       ctx.restore()

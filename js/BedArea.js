@@ -244,7 +244,13 @@ class IVSeat {
   }
 
   render(ctx, curedImage = null) {
-    const currentImage = this.patient ? this.getCurrentOccupiedImage() : this.getCurrentFreeImage()
+    // 【修改】只有当病人开始治疗时才显示占用图片
+    // 开始治疗条件：不需要设备检查 或 设备检查已完成
+    const isTreatmentStarted = this.patient && (
+      !this.patient.requiredMachineId || 
+      this.patient.machineCheckComplete
+    )
+    const currentImage = isTreatmentStarted ? this.getCurrentOccupiedImage() : this.getCurrentFreeImage()
     
     if (currentImage && currentImage.width > 0) {
       // 使用椅子定义的宽高，保持图片比例

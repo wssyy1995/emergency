@@ -345,6 +345,7 @@ export const GameConfig = {
     }
   ],
     // ==================== 检验设备清单 ====================
+    // running_time: 设备启动时间（毫秒），默认4000ms
     machine: [
       {
         id: 'ct',
@@ -352,7 +353,8 @@ export const GameConfig = {
         icon: '⭐️',
         imagePath: 'images/tool_machine/machine_ct.png',
         unlockLevel: 2,
-        durability: 10
+        durability: 10,
+        running_time: 5000
       },
       {
         id: 'super',
@@ -361,7 +363,8 @@ export const GameConfig = {
         imagePath: 'images/tool_machine/machine_super.png',
         price: 15,
         unlockLevel: 1,
-        durability: 20
+        durability: 20,
+        running_time: 5000
       },
       {
         id: 'blood',
@@ -369,7 +372,8 @@ export const GameConfig = {
         icon: '🩸',
         imagePath: 'images/tool_machine/machine_blood.png',
         unlockLevel: 2,
-        durability: 50
+        durability: 50,
+        running_time: 5000
       },
       {
         id: 'heart',
@@ -377,14 +381,17 @@ export const GameConfig = {
         icon: '🫀',
         imagePath: 'images/tool_machine/machine_heart.png',
         unlockLevel: 1,
-        durability: 100
-      },  {
+        durability: 100,
+        running_time: 5000
+      },
+      {
         id: 'brain',
         name: '脑电图',
         icon: '😁',
         imagePath: 'images/tool_machine/machine_brain.png',
         unlockLevel: 1,
-        durability: 100
+        durability: 100,
+        running_time: 5000
       }
     ]
 }

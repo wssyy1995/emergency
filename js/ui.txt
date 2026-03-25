@@ -1,338 +1,140 @@
-<!doctype html>
+
 <html lang="zh">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Canvas凸起按钮</title>
-  <style>
-    :root { color-scheme: light; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: #f5f7fb;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-    }
-    .wrap {
-      width: min(980px, 94vw);
-      display: grid;
-      gap: 18px;
-      justify-items: center;
-    }
-    .row {
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    canvas {
-      width: 820px;
-      max-width: 94vw;
-      height: 220px;
-      border-radius: 16px;
-      background: transparent;
-    }
-    .hint {
-      font-size: 14px;
-      color: #667085;
-    }
-    .pill {
-      display: inline-flex;
-      gap: 10px;
-      align-items: center;
-      padding: 8px 12px;
-      background: rgba(255,255,255,0.7);
-      border: 1px solid rgba(16,24,40,0.08);
-      border-radius: 999px;
-      box-shadow: 0 6px 20px rgba(16,24,40,0.05);
-      user-select: none;
-    }
-    .pill input {
-      width: 180px;
-      border: none;
-      outline: none;
-      background: transparent;
-      font-size: 14px;
-      color: #344054;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>治疗成功动画</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeInScale {
+            0% { opacity: 0; transform: scale(0.5); }
+            50% { opacity: 1; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes glowPulse {
+            0% { box-shadow: 0 0 0px 0px rgba(255, 215, 0, 0.7); opacity: 1; }
+            100% { box-shadow: 0 0 40px 20px rgba(255, 215, 0, 0); opacity: 0; }
+        }
+
+        @keyframes particleFadeOut {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-20px) scale(0.5); }
+        }
+
+        .success-checkmark {
+            animation: fadeInScale 0.5s ease-out forwards;
+        }
+
+        .success-glow {
+            animation: glowPulse 1.5s ease-out forwards;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            margin: auto;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            background-color: gold;
+            border-radius: 50%;
+            opacity: 0;
+            animation: particleFadeOut 1.5s ease-out forwards;
+            pointer-events: none;
+        }
+        .particle-1 {
+            width: 8px; height: 8px;
+            top: 20%; left: 10%;
+            animation-delay: 0.1s;
+        }
+        .particle-2 {
+            width: 6px; height: 6px;
+            top: 15%; right: 5%;
+            animation-delay: 0.3s;
+        }
+        .particle-3 {
+            width: 10px; height: 10px;
+            bottom: 10%; left: 20%;
+            animation-delay: 0.2s;
+        }
+         .particle-4 {
+            width: 7px; height: 7px;
+            bottom: 25%; right: 15%;
+            animation-delay: 0.4s;
+        }
+
+    </style>
 </head>
-<body>
-  <div class="wrap">
-    <div class="row">
-      <div class="pill">
-        <span style="color:#344054;font-weight:700;">按钮文案</span>
-        <input id="label" value="开始接诊" />
-      </div>
-      <div class="pill">
-        <span style="color:#344054;font-weight:700;">颜色风格</span>
-        <select id="theme" style="border:none;outline:none;background:transparent;font-size:14px;color:#344054;">
-          <option value="blue" selected>蓝色</option>
-          <option value="teal">青色</option>
-          <option value="purple">紫色</option>
-        </select>
-      </div>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div id="animationContainer" class="relative w-40 h-40 flex items-center justify-center">
+        <!-- Success Checkmark -->
+        <svg id="checkmark" class="absolute w-full h-full text-green-500 success-checkmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: scale(0); opacity: 0;">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+
+        <!-- Glow Effect -->
+        <div id="glow" class="success-glow"></div>
+
+        <!-- Particles -->
+        <div id="particle1" class="particle particle-1"></div>
+        <div id="particle2" class="particle particle-2"></div>
+        <div id="particle3" class="particle particle-3"></div>
+        <div id="particle4" class="particle particle-4"></div>
     </div>
 
-    <canvas id="c" width="820" height="220"></canvas>
-    <div class="hint">点击按钮：高光与阴影会反转，产生“按下/弹起”的凹凸反馈。</div>
-  </div>
+    <script>
+        // Function to trigger the animation
+        function triggerAnimation() {
+            const container = document.getElementById('animationContainer');
+            const checkmark = document.getElementById('checkmark');
+            const glow = document.getElementById('glow');
+            const particles = [
+                document.getElementById('particle1'),
+                document.getElementById('particle2'),
+                document.getElementById('particle3'),
+                document.getElementById('particle4')
+            ];
 
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
+            // Reset animation states (if triggered multiple times)
+            checkmark.style.animation = 'none';
+            glow.style.animation = 'none';
+            particles.forEach(p => p.style.animation = 'none');
+            void checkmark.offsetWidth; // Trigger reflow to restart animation
+            void glow.offsetWidth;
+            particles.forEach(p => void p.offsetWidth);
 
-  const labelEl = document.getElementById('label');
-  const themeEl = document.getElementById('theme');
+            // Apply animations
+            checkmark.style.animation = 'fadeInScale 0.5s ease-out forwards';
+            glow.style.animation = 'glowPulse 1.5s ease-out forwards';
+            particles.forEach((p, index) => {
+                p.style.animation = `particleFadeOut 1.5s ease-out forwards ${index * 0.1}s`;
+            });
 
-  // HiDPI适配
-  function resizeCanvasToDisplaySize() {
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.round(rect.width * dpr));
-    const h = Math.max(1, Math.round(rect.height * dpr));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
+             // Optional: Hide elements after animation completes to clean up
+            setTimeout(() => {
+                checkmark.style.opacity = '0';
+                checkmark.style.transform = 'scale(0.5)'; // Reset for next trigger
+                glow.style.opacity = '0';
+                glow.style.boxShadow = 'none';
+                particles.forEach(p => {
+                    p.style.opacity = '0';
+                    p.style.transform = 'translateY(0) scale(1)'; // Reset for next trigger
+                });
+            }, 1500);
+        }
 
-  function roundRectPath(x, y, w, h, r) {
-    r = Math.min(r, w/2, h/2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-
-  const state = {
-    pressed: false,
-    hover: false,
-    hit: { x: 0, y: 0, w: 0, h: 0, r: 22 }
-  };
-
-  function getTheme() {
-    const t = themeEl.value;
-    if (t === 'teal') {
-      return { top: '#66E0FF', bottom: '#1494C7', edge: 'rgba(8,64,110,0.35)' };
-    }
-    if (t === 'purple') {
-      return { top: '#9B8CFF', bottom: '#5B45D6', edge: 'rgba(46,18,120,0.30)' };
-    }
-    return { top: '#6FD6FF', bottom: '#1F8FD1', edge: 'rgba(8,64,110,0.35)' };
-  }
-
-  function draw() {
-    resizeCanvasToDisplaySize();
-    const cssW = canvas.getBoundingClientRect().width;
-    const cssH = canvas.getBoundingClientRect().height;
-
-    ctx.clearRect(0, 0, cssW, cssH);
-
-    // 画布居中按钮
-    const w = Math.min(780, cssW - 26);
-    const h = Math.min(170, cssH - 24);
-    const x = (cssW - w) / 2;
-    const y = (cssH - h) / 2 + 6;
-    const r = Math.min(32, h * 0.22);
-
-    state.hit = { x, y, w, h, r };
-
-    const { top, bottom, edge } = getTheme();
-
-    // 外部底座/投影（按下时更“凹”）
-    const shadowY = state.pressed ? 2 : 10;
-    const shadowBlur = state.pressed ? 10 : 18;
-    const shadowAlpha = state.pressed ? 0.16 : 0.22;
-
-    ctx.save();
-    ctx.shadowColor = `rgba(0,0,0,${shadowAlpha})`;
-    ctx.shadowBlur = shadowBlur;
-    ctx.shadowOffsetY = shadowY;
-
-    // 外白描边底座
-    roundRectPath(x, y, w, h, r);
-    ctx.fillStyle = '#F7FBFF';
-    ctx.fill();
-    ctx.restore();
-
-    // 内部主体
-    const pad = 9;
-    const bx = x + pad;
-    const by = y + pad;
-    const bw = w - pad*2;
-    const bh = h - pad*2;
-    const br = Math.max(10, r - pad);
-
-    // 天蓝色底色：不使用渐变（保持纯色，同时通过高光/阴影做立体感）
-    roundRectPath(bx, by, bw, bh, br);
-    ctx.fillStyle = top; // top 作为天蓝色
-    ctx.fill();
-
-    // 内部高光（按下时移动反向）
-    ctx.save();
-    roundRectPath(bx, by, bw, bh, br);
-    ctx.clip();
-
-    const gloss = ctx.createLinearGradient(0, by, 0, by + bh);
-    if (!state.pressed) {
-      gloss.addColorStop(0, 'rgba(255,255,255,0.55)');
-      gloss.addColorStop(0.25, 'rgba(255,255,255,0.18)');
-      gloss.addColorStop(0.62, 'rgba(255,255,255,0.00)');
-    } else {
-      gloss.addColorStop(0, 'rgba(255,255,255,0.25)');
-      gloss.addColorStop(0.20, 'rgba(255,255,255,0.40)');
-      gloss.addColorStop(0.65, 'rgba(255,255,255,0.00)');
-    }
-    ctx.fillStyle = gloss;
-    ctx.fillRect(bx, by, bw, bh);
-    ctx.restore();
-
-    // 边缘描边
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = edge;
-    roundRectPath(bx, by, bw, bh, br);
-    ctx.stroke();
-
-    // 字体大小自适应（粗体描边）
-    const text = String(labelEl.value || '').trim();
-    const maxTextW = bw * 0.92;
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    let fontSize = Math.floor(bh * 0.46);
-    fontSize = Math.max(22, fontSize);
-
-    // 如果太长则递减
-    function measureSize(sz) {
-      ctx.font = `900 ${sz}px "PingFang SC","Microsoft YaHei",sans-serif`;
-      return ctx.measureText(text).width;
-    }
-
-    while (measureSize(fontSize) > maxTextW && fontSize > 18) fontSize -= 2;
-
-    // 文本描边深色 + 白色填充 + 轻微白描边
-    const tx = bx + bw/2;
-    const ty = by + bh/2 + (state.pressed ? 1 : 0);
-
-    ctx.save();
-    // 深色描边
-    ctx.lineWidth = Math.max(6, fontSize * 0.10);
-    ctx.strokeStyle = 'rgba(12,70,120,0.55)';
-    ctx.font = `900 ${fontSize}px "PingFang SC","Microsoft YaHei",sans-serif`;
-    ctx.strokeText(text, tx, ty);
-
-    // 白色填充
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(text, tx, ty);
-
-    // 细白描边（增强跳出）
-    ctx.lineWidth = Math.max(2, fontSize * 0.035);
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    ctx.strokeText(text, tx, ty);
-    ctx.restore();
-
-    // 外圈薄白描边（更像参考图）
-    ctx.save();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    roundRectPath(x + 2, y + 2, w - 4, h - 4, r - 2);
-    ctx.stroke();
-    ctx.restore();
-
-    // Hover提示（仅轻微）
-    if (state.hover && !state.pressed) {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-      ctx.lineWidth = 3;
-      roundRectPath(bx, by, bw, bh, br);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  function pointInRoundedRect(px, py, rect) {
-    const { x, y, w, h, r } = rect;
-    if (px < x || px > x + w || py < y || py > y + h) return false;
-    // 粗略：使用圆角近似判定足够用于UI交互
-    // 通过检查四角圆形区域实现
-    const cx1 = x + r, cy1 = y + r;
-    const cx2 = x + w - r, cy1b = y + r;
-    const cx1b = x + r, cy2 = y + h - r;
-    const cx2b = x + w - r, cy2b = y + h - r;
-
-    const inLeftTop = (px - cx1)**2 + (py - cy1)**2 <= r**2;
-    const inRightTop = (px - cx2)**2 + (py - cy1b)**2 <= r**2;
-    const inLeftBottom = (px - cx1b)**2 + (py - cy2)**2 <= r**2;
-    const inRightBottom = (px - cx2b)**2 + (py - cy2b)**2 <= r**2;
-
-    const inMiddleX = px >= x + r && px <= x + w - r;
-    const inMiddleY = py >= y + r && py <= y + h - r;
-
-    // 如果在“主体中间矩形”，则一定在
-    if (inMiddleX && py >= y && py <= y + h) return true;
-    if (inMiddleY && px >= x && px <= x + w) return true;
-
-    // 否则只能落在四角圆内之一
-    return inLeftTop || inRightTop || inLeftBottom || inRightBottom;
-  }
-
-  function toCanvasCSSPoint(e) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
-  }
-
-  canvas.addEventListener('mousemove', (e) => {
-    const p = toCanvasCSSPoint(e);
-    state.hover = pointInRoundedRect(p.x, p.y, state.hit);
-    draw();
-  });
-
-  canvas.addEventListener('mouseleave', () => {
-    state.hover = false;
-    state.pressed = false;
-    draw();
-  });
-
-  canvas.addEventListener('mousedown', (e) => {
-    const p = toCanvasCSSPoint(e);
-    if (pointInRoundedRect(p.x, p.y, state.hit)) {
-      state.pressed = true;
-      draw();
-    }
-  });
-
-  window.addEventListener('mouseup', () => {
-    const wasPressed = state.pressed;
-    state.pressed = false;
-    draw();
-
-    // 触发点击
-    if (wasPressed && state.hover) {
-      const text = String(labelEl.value || '').trim();
-      // 这里仅做演示：你可把它替换成你按钮的业务回调
-      console.log('Canvas按钮点击：', text);
-      alert(`点击：${text}`);
-    }
-  });
-
-  // 文案/主题变更重绘
-  labelEl.addEventListener('input', () => draw());
-  themeEl.addEventListener('change', () => draw());
-
-  // 初次绘制
-  // 等一帧拿到正确尺寸
-  requestAnimationFrame(draw);
-  window.addEventListener('resize', () => requestAnimationFrame(draw));
-</script>
+        // Trigger animation when the page loads (for demonstration)
+        document.addEventListener('DOMContentLoaded', () => {
+            triggerAnimation();
+            // You might want to trigger it on a button click in your actual game
+            // For demo, re-trigger every 3 seconds
+            setInterval(triggerAnimation, 3000);
+        });
+    </script>
 </body>
 </html>

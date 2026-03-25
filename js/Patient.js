@@ -257,6 +257,14 @@ export default class Patient {
     this.shakeDuration = 600  // 跳动持续600ms
     this.shakeIntensity = 3   // 跳动幅度（像素）
     
+    // 【新增】持续跳动状态（匹配时持续跳动）
+    this.isContinuousShaking = false  // 是否处于持续跳动状态
+    
+    // 【新增】匹配成功时的黄色光芒效果
+    this.showMatchGlow = false
+    this.matchGlowStartTime = 0
+    this.matchGlowDuration = 800  // 黄闪持续800ms
+    
     // 病人图片编号（使用 patientDetail.id，直接对应图片编号 1-26）
     this.patientType = patientDetail ? patientDetail.id : id
     
@@ -306,6 +314,15 @@ export default class Patient {
     
     // 【新增】更新错误动画状态
     this.updateMachineErrorAnimation()
+    
+    // 更新匹配光芒动画状态
+    this.updateMatchGlow()
+    
+    // 【新增】如果设备已绑定或检查完成，停止持续跳动
+    if (this.isContinuousShaking && (this.boundMachineId || this.machineCheckComplete)) {
+      this.stopContinuousShake()
+      this.showMatchGlow = false
+    }
     
     // 安抚状态更新（耐心暂停减少）
     if (this.patiencePaused) {
@@ -545,14 +562,52 @@ export default class Patient {
     }
   }
   
+  // 【新增】触发匹配成功时的黄色光芒
+  triggerMatchGlow() {
+    this.showMatchGlow = true
+    this.matchGlowStartTime = Date.now()
+  }
+  
+  // 【新增】更新匹配光芒动画状态
+  updateMatchGlow() {
+    // 如果处于持续跳动状态，保持光芒开启（在渲染中使用呼吸效果）
+    // 如果停止持续跳动，updatePatientContinuousShake 会设置 showMatchGlow = false
+    // 这里不需要自动关闭，由外部逻辑控制
+  }
+  
   // 【新增】触发点击跳动动画
   triggerShake() {
     this.isShaking = true
     this.shakeStartTime = Date.now()
   }
   
+  // 【新增】开始持续跳动（匹配时）
+  startContinuousShake() {
+    if (!this.isContinuousShaking) {
+      this.isContinuousShaking = true
+      console.log(`[持续跳动] 病人${this.name}开始持续跳动`)
+    }
+  }
+  
+  // 【新增】停止持续跳动
+  stopContinuousShake() {
+    if (this.isContinuousShaking) {
+      this.isContinuousShaking = false
+      console.log(`[持续跳动] 病人${this.name}停止持续跳动`)
+    }
+  }
+  
   // 【新增】获取跳动偏移量
   getShakeOffset() {
+    // 优先检查持续跳动状态
+    if (this.isContinuousShaking) {
+      // 持续跳动：使用正弦波，无限循环
+      const frequency = 0.001  // 跳动频率（更慢，约3秒一个周期）
+      const offsetY = -Math.abs(Math.sin(this.animationTime * frequency * Math.PI * 2)) * this.shakeIntensity *1.5
+      return { x: 0, y: offsetY }
+    }
+    
+    // 一次性点击跳动
     if (!this.isShaking) return { x: 0, y: 0 }
     
     const elapsed = Date.now() - this.shakeStartTime
@@ -869,10 +924,10 @@ export default class Patient {
       borderWidth = 3
       borderColor = '34, 197, 94'  // 绿色 RGB
     } else if (this.boundMachineId) {
-      // 设备启动中，黄色呼吸边框
-      borderAlpha = 0.5 + 0.5 * Math.sin(now / 200)
+      // 设备启动中，明亮橙黄色呼吸边框
+      borderAlpha = 0.6 + 0.4 * Math.sin(now / 200)
       borderWidth = 3
-      borderColor = '245, 158, 11'  // 黄色 RGB
+      borderColor = '255, 165, 0'  // 橙黄色 RGB #FFA500
     }
     
     ctx.save()
@@ -880,6 +935,9 @@ export default class Patient {
     // 【新增】设备就绪（有绿色勾号）或检查完成：气泡背景变绿色（透明度0.8）
     if (this.machineReady || this.machineCheckComplete) {
       ctx.fillStyle = 'rgba(134, 239, 172, 0.8)'  // 绿色背景，透明度0.8
+    } else if (this.boundMachineId) {
+      // 【新增】设备启动中：气泡背景变明亮橙黄色（透明度0.5）
+      ctx.fillStyle = 'rgba(255, 200, 100, 0.5)'  // 明亮橙黄色背景，透明度0.5
     } else {
       ctx.fillStyle = '#FFF'  // 默认白色背景
     }
@@ -921,6 +979,9 @@ export default class Patient {
     // 【新增】设备就绪或检查完成：小三角背景也变绿色（透明度0.8）
     if (this.machineReady || this.machineCheckComplete) {
       ctx.fillStyle = 'rgba(134, 239, 172, 0.8)'
+    } else if (this.boundMachineId) {
+      // 【新增】设备启动中：小三角背景也变明亮橙黄色（透明度0.5）
+      ctx.fillStyle = 'rgba(255, 200, 100, 0.5)'
     } else {
       ctx.fillStyle = '#FFF'
     }
@@ -967,6 +1028,37 @@ export default class Patient {
       ctx.lineTo(centerX, bubbleY + bubbleSize / 2 + 5 * scale)
       ctx.closePath()
       ctx.stroke()
+    }
+    
+    // 【新增】匹配成功时的枣红色光芒效果
+    if (this.showMatchGlow) {
+      // 使用呼吸效果，持续显示
+      const breatheAlpha = 0.2 + 0.2 * Math.sin(this.animationTime / 300)  // 更淡的透明度 0.2~0.4
+      
+      // 绘制鲜艳红色的发光边框，阴影范围更大
+      ctx.shadowColor = 'rgba(255, 0, 0, 0.25)'  // 鲜红色阴影
+      ctx.shadowBlur = 20 * scale  // 更大的模糊半径
+      ctx.shadowOffsetY = 0
+      
+      ctx.strokeStyle = `rgba(255, 50, 50, ${breatheAlpha})`  // 鲜红色 #FF3232，呼吸效果
+      ctx.lineWidth = 3 * scale  // 线宽
+      
+      // 圆形边框
+      ctx.beginPath()
+      ctx.arc(centerX, bubbleY, bubbleSize / 2 + 2 * scale, 0, Math.PI * 2)
+      ctx.stroke()
+      
+      // 三角形边框
+      ctx.beginPath()
+      ctx.moveTo(centerX - 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+      ctx.lineTo(centerX + 5 * scale, bubbleY + bubbleSize / 2 - 2 * scale)
+      ctx.lineTo(centerX, bubbleY + bubbleSize / 2 + 5 * scale)
+      ctx.closePath()
+      ctx.stroke()
+      
+      // 重置阴影
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
     }
     
     ctx.restore()

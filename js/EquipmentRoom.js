@@ -139,7 +139,9 @@ export default class EquipmentRoom {
       const state = this.machineStates[machine.id]
       if (state.state === 'starting') {
         const elapsed = Date.now() - state.startTime
-        state.progress = Math.min(1, elapsed / this.machineStartDuration)
+        // 使用设备配置的 running_time，默认为4000ms
+        const runningTime = machine.running_time || 4000
+        state.progress = Math.min(1, elapsed / runningTime)
         if (state.progress >= 1) {
           // 启动完成
           state.state = 'ready'
@@ -166,14 +168,14 @@ export default class EquipmentRoom {
       report.progress += deltaTime / report.duration
       
       if (report.progress >= 1) {
-        // 飞行完成，延迟600ms后通知病人开始治疗
+        // 飞行完成，延迟300ms后通知病人开始治疗
         if (!report.notified) {
           report.notified = true
           setTimeout(() => {
             if (report.onArrive) {
               report.onArrive(report.patient)
             }
-          }, 600) // 延迟600ms
+          }, 300) // 延迟300ms
         }
         this.flyingReports.splice(i, 1)
       }
@@ -446,17 +448,17 @@ export default class EquipmentRoom {
     // 【修复】基于区域高度计算局部缩放因子，确保卡片随容器高度自适应
     const localScale = sectionH / 110  // 以设计高度110为基准
     
-    // 区域背景（绿色）
-    ctx.fillStyle = '#F0FDF4'
+    // 区域背景（琥珀色）
+    ctx.fillStyle = '#FFFBEB'
     fillRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
     // 区域边框
-    ctx.strokeStyle = '#BBF7D0'
+    ctx.strokeStyle = '#FCD34D'
     ctx.lineWidth = 1.5 * localScale
     strokeRoundRect(ctx, sectionX, sectionY, sectionW, sectionH, 10 * localScale)
     
     // 标题（仅标题，按钮已移除）
-    this.renderSectionTitle(ctx, sectionX, sectionY, sectionW, '检验设备', '#15803D', localScale)
+    this.renderSectionTitle(ctx, sectionX, sectionY, sectionW, '检验设备', '#B45309', localScale)
     
     // 清空卡片数组
     this.examDeviceCards = []
@@ -580,7 +582,7 @@ export default class EquipmentRoom {
     // 计算呼吸效果透明度（只用于starting状态）
     let breatheAlpha = 1
     if (state.state === 'starting') {
-      breatheAlpha = 0.5 + 0.5 * Math.sin(now / 200)  // 呼吸动画
+      breatheAlpha = 0.6 + 0.4 * Math.sin(now / 200)  // 呼吸动画，更明亮
     }
     
     // 卡片背景
@@ -601,9 +603,9 @@ export default class EquipmentRoom {
     
     // 卡片边框
     if (state.state === 'starting') {
-      // 启动中：黄色呼吸边框
-      ctx.strokeStyle = `rgba(245, 158, 11, ${breatheAlpha})`
-      ctx.lineWidth = 2.5 * localScale
+      // 启动中：明亮橙黄色呼吸边框
+      ctx.strokeStyle = `rgba(255, 165, 0, ${breatheAlpha})`  // 橙黄色 #FFA500
+      ctx.lineWidth = 3 * localScale
     } else if (state.state === 'ready') {
       // 就绪：绿色固定边框（无呼吸）
       ctx.strokeStyle = '#22C55E'
@@ -651,9 +653,9 @@ export default class EquipmentRoom {
       ctx.fillStyle = '#E5E7EB'
       fillRoundRect(ctx, x + 3 * localScale, barY, barWidth, barHeight, barHeight / 2)
       
-      // 进度条（黄色）
+      // 进度条（明亮橙黄色）
       const progressWidth = barWidth * state.progress
-      ctx.fillStyle = '#F59E0B'
+      ctx.fillStyle = '#FFA500'  // 橙黄色
       fillRoundRect(ctx, x + 3 * localScale, barY, progressWidth, barHeight, barHeight / 2)
       
       // 添加灰色遮罩

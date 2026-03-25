@@ -160,6 +160,9 @@ export default class Game {
     // 浮动文字动画
     this.floatingTexts = []
     
+    // 【新增】治愈图标飞行动画（从病人飞到header治愈胶囊）
+    this.curedFlyAnimations = []
+    
     // 拖动暴走病人状态
     this.draggingRagePatient = null
     this.dragStartX = 0
@@ -416,21 +419,48 @@ export default class Game {
     // 第1关病人ID: 1,2,3,14,15,16
     // 第2关病人ID: 4,16,15,17,18,2,1,5
     // 第3关病人ID: 6,18,17,16,15,5,4,3,2,19
-    const patientTypesToPreload = [1, 2, 3, 4, 5, 6, 14, 15, 16, 17, 18, 19]
+    const patientTypesToPreload = [1, 2, 3, 4, 5, 6, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+    
+    // 同时预加载所有病人图片
+    let loadedCount = 0
+    const totalCount = patientTypesToPreload.length
     
     patientTypesToPreload.forEach(type => {
       // 只预加载 sick 图片（normal 和 angry 都使用 sick 图片）
       const sickImg = wx.createImage()
       sickImg.onload = () => {
-        console.log(`[预加载] 病人图片加载成功: patient_${type}_sick.png`)
+        loadedCount++
+        console.log(`[预加载] 病人图片加载成功: patient_${type}_sick.png (${loadedCount}/${totalCount})`)
       }
       sickImg.onerror = () => {
-        console.warn(`[预加载] 病人图片加载失败: patient_${type}_sick.png`)
+        loadedCount++
+        console.warn(`[预加载] 病人图片加载失败: patient_${type}_sick.png (${loadedCount}/${totalCount})`)
       }
       sickImg.src = `images/patient/patient_${type}_sick.png`
     })
     
     console.log('[预加载] 开始预加载病人图片，数量:', patientTypesToPreload.length)
+  }
+  
+  // 【新增】预加载第一关特定病人的图片（确保第一关开始前加载完成）
+  preloadLevel1Patients() {
+    // 第1关病人ID: 1,2,3,14,15,16
+    const level1PatientIds = [1, 2, 3, 14, 15, 16]
+    
+    return Promise.all(level1PatientIds.map(type => {
+      return new Promise((resolve) => {
+        const img = wx.createImage()
+        img.onload = () => {
+          console.log(`[第一关预加载] 病人图片加载成功: patient_${type}_sick.png`)
+          resolve(true)
+        }
+        img.onerror = () => {
+          console.warn(`[第一关预加载] 病人图片加载失败: patient_${type}_sick.png`)
+          resolve(false) // 即使失败也继续
+        }
+        img.src = `images/patient/patient_${type}_sick.png`
+      })
+    }))
   }
 
   // 添加浮动文字
@@ -489,6 +519,74 @@ export default class Game {
     })
   }
   
+  // 【新增】添加治愈图标飞行动画（从病人位置飞到header治愈胶囊）
+  addCuredFlyAnimation(startX, startY) {
+    // 计算目标位置（header中的治愈胶囊位置）
+    const headerHeight = 45
+    const titleY = this.mapY + headerHeight / 2
+    
+    // 获取治愈胶囊的位置（参考renderUI中的计算）
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const capsuleSpacing = 12
+    const hasCountdown = this.hasCountdown || false
+    
+    // 使用临时canvas context测量文字宽度
+    const tempCtx = this.ctx
+    tempCtx.font = `bold ${Math.max(14, this.screenWidth * 0.02)}px cursive, sans-serif`
+    
+    // 计算胶囊宽度（与renderUI一致）
+    const levelText = `第${this.currentLevel + 1}关`
+    const levelWidth = tempCtx.measureText(levelText).width + 16
+    const patientText = `${this.spawnedPatientsCount}/${levelConfig.patients.length}`
+    const patientIconSize = 22
+    const patientWidth = tempCtx.measureText(patientText).width + patientIconSize + 20
+    const cureText = `${this.curedCount}/${levelConfig.cureTarget}`
+    const cureIconSize = 28
+    const cureWidth = tempCtx.measureText(cureText).width + cureIconSize + 20
+    
+    let totalWidth, countdownWidth = 0
+    if (hasCountdown) {
+      const countdownText = `${this.timeRemaining}s`
+      tempCtx.font = `bold ${Math.max(13, this.screenWidth * 0.019)}px cursive, sans-serif`
+      const countdownIconSize = 20
+      countdownWidth = tempCtx.measureText(countdownText).width + countdownIconSize + 20
+      totalWidth = levelWidth + countdownWidth + patientWidth + cureWidth + capsuleSpacing * 3
+    } else {
+      totalWidth = levelWidth + patientWidth + cureWidth + capsuleSpacing * 2
+    }
+    
+    const centerX = this.mapX + this.mapWidth / 2
+    const startX_header = centerX - totalWidth / 2
+    const cureX = startX_header + levelWidth + (hasCountdown ? capsuleSpacing + countdownWidth : 0) + capsuleSpacing + patientWidth + capsuleSpacing
+    const cureY = titleY
+    
+    // 创建飞行动画
+    this.curedFlyAnimations.push({
+      startX,
+      startY,
+      endX: cureX + 20,  // 飞到治愈图标中心
+      endY: cureY,
+      currentX: startX,
+      currentY: startY,
+      state: 'pause',     // 'pause': 停顿中, 'flying': 飞行中, 'done': 完成
+      pauseTime: 800,     // 停顿500ms
+      pauseElapsed: 0,
+      flyProgress: 0,
+      flyDuration: 800,   // 飞行800ms
+      iconSize: 28,
+      // 【新增】亮晶晶的小星星（更大、更多、会旋转）
+      sparkles: [
+        { offsetX: -20, offsetY: -15, size: 5, phase: 0, speed: 0.01, rotation: 0, rotationSpeed: 0.02 },
+        { offsetX: 22, offsetY: -8, size: 4, phase: 1.5, speed: 0.015, rotation: 0.5, rotationSpeed: 0.025 },
+        { offsetX: -10, offsetY: 20, size: 4.5, phase: 3, speed: 0.012, rotation: 1, rotationSpeed: -0.02 },
+        { offsetX: 16, offsetY: 16, size: 3.5, phase: 4.5, speed: 0.014, rotation: 1.5, rotationSpeed: 0.03 },
+        { offsetX: 0, offsetY: -25, size: 6, phase: 2, speed: 0.011, rotation: 2, rotationSpeed: -0.025 },
+        { offsetX: -25, offsetY: 5, size: 3, phase: 5, speed: 0.013, rotation: 2.5, rotationSpeed: 0.02 },
+        { offsetX: 25, offsetY: 10, size: 3.5, phase: 0.5, speed: 0.016, rotation: 3, rotationSpeed: -0.03 }
+      ]
+    })
+  }
+  
   // 添加浮动物品图片
   addFloatingItem(item, x, y) {
     this.floatingTexts.push({
@@ -533,6 +631,49 @@ export default class Game {
       
       if (ft.life <= 0) {
         this.floatingTexts.splice(i, 1)
+      }
+    }
+  }
+  
+  // 【新增】更新治愈图标飞行动画
+  updateCuredFlyAnimations(deltaTime) {
+    for (let i = this.curedFlyAnimations.length - 1; i >= 0; i--) {
+      const anim = this.curedFlyAnimations[i]
+      
+      // 【新增】更新亮晶晶小星星的闪烁相位和旋转角度
+      if (anim.sparkles) {
+        anim.sparkles.forEach(sparkle => {
+          sparkle.phase += deltaTime * sparkle.speed
+          sparkle.rotation += deltaTime * sparkle.rotationSpeed
+        })
+      }
+      
+      if (anim.state === 'pause') {
+        // 停顿阶段
+        anim.pauseElapsed += deltaTime
+        if (anim.pauseElapsed >= anim.pauseTime) {
+          anim.state = 'flying'
+        }
+      } else if (anim.state === 'flying') {
+        // 飞行阶段
+        anim.flyProgress += deltaTime / anim.flyDuration
+        
+        if (anim.flyProgress >= 1) {
+          // 飞行完成
+          anim.flyProgress = 1
+          anim.state = 'done'
+          
+          // 治愈数值+1（滚动效果）
+          this.curedCount++
+        }
+        
+        // 计算当前位置（使用缓动函数）
+        const easeProgress = 1 - Math.pow(1 - anim.flyProgress, 3) // easeOutCubic
+        anim.currentX = anim.startX + (anim.endX - anim.startX) * easeProgress
+        anim.currentY = anim.startY + (anim.endY - anim.startY) * easeProgress
+      } else if (anim.state === 'done') {
+        // 完成，移除动画
+        this.curedFlyAnimations.splice(i, 1)
       }
     }
   }
@@ -679,6 +820,13 @@ export default class Game {
     // 初始化病人池
     this.initCurrentLevelPatientPool()
     
+    // 【新增】预加载第一关病人图片，确保生成时图片已加载
+    if (this.currentLevel === 0) {
+      this.preloadLevel1Patients().then(() => {
+        console.log('[第一关] 病人图片预加载完成')
+      })
+    }
+    
     // 清除之前的定时器
     if (this.initialSpawnTimer) clearTimeout(this.initialSpawnTimer)
     if (this.spawnTimer) clearTimeout(this.spawnTimer)
@@ -720,8 +868,8 @@ export default class Game {
       }
     }
     
-    // 开始生成前N个病人
-    this.initialSpawnTimer = setTimeout(spawnFirstPatients, 1000)
+    // 开始生成前N个病人（延迟2秒，确保图片已加载）
+    this.initialSpawnTimer = setTimeout(spawnFirstPatients, 2000)
   }
   
   // 生成剩余的病人（随机间隔）
@@ -792,8 +940,6 @@ export default class Game {
     this.waitingArea.update(deltaTime)
     this.equipmentRoom.update(deltaTime)
     this.doctors.forEach(doctor => doctor.update(deltaTime, this.bedArea))
-    
-    // 更新【开始接诊】按钮消失动画
     if (this.startButtonAnimation.isPlaying) {
       this.startButtonAnimation.progress += deltaTime / this.startButtonAnimation.duration
       if (this.startButtonAnimation.progress >= 1) {
@@ -806,6 +952,9 @@ export default class Game {
     
     // 更新浮动文字
     this.updateFloatingTexts(deltaTime)
+    
+    // 【新增】更新治愈图标飞行动画
+    this.updateCuredFlyAnimations(deltaTime)
     
     // 更新等候区病人
     this.waitingArea.patients.forEach(patient => patient.update(deltaTime))
@@ -821,13 +970,13 @@ export default class Game {
             const addedScore = 10 + Math.floor(Math.random() * 20)
             // 不实时增加荣誉点，而是累加到本关荣誉点
             this.honorEarnedThisLevel += addedScore
-            this.curedCount++
+            // 【注意】curedCount 在飞行动画完成时自动+1
             bed.scoreAdded = true
             
-            // 添加浮动奖励动效（只显示治愈数，不显示荣誉点）
+            // 【新增】添加治愈图标飞行动画（从病人飞到header治愈胶囊）
             const centerX = bed.x + bed.width / 2
-            const centerY = bed.y
-            this.addFloatingCuredOnly(1, centerX, centerY)
+            const centerY = bed.y - 60  // 在病人头部上方
+            this.addCuredFlyAnimation(centerX, centerY)
             
             // 检查是否完成关卡目标
             this.checkLevelTarget()
@@ -1097,6 +1246,89 @@ export default class Game {
     return null
   }
   
+  // 【新增】检测医生匹配并触发/停止跳动（按需调用）
+  checkAndTriggerDoctorMatchGlow() {
+    const selectedItems = Array.from(this.equipmentRoom.selectedMedicineTools)
+    
+    for (const doctor of this.doctors) {
+      // 如果医生不在治疗状态或没有需要物品，停止跳动
+      if (doctor.state !== 'treating' || doctor.requiredItems.length === 0) {
+        if (doctor.isContinuousShaking) {
+          doctor.stopContinuousShake()
+          doctor.showMatchGlow = false
+        }
+        continue
+      }
+      
+      // 获取医生还需要的物品（未收到的）
+      const neededItems = doctor.requiredItems
+        .filter(item => !doctor.receivedItems.includes(item.id))
+        .map(item => item.id)
+        .sort()
+      
+      // 获取选中的物品并排序
+      const selectedSorted = [...selectedItems].sort()
+      
+      // 完全匹配检查：选中的物品必须恰好等于医生还需要的物品
+      const isFullMatch = selectedItems.length > 0 && 
+                          selectedSorted.length === neededItems.length &&
+                          selectedSorted.every((id, index) => id === neededItems[index])
+      
+      if (isFullMatch) {
+        // 开始持续跳动和光芒
+        doctor.startContinuousShake()
+        doctor.showMatchGlow = true
+      } else {
+        // 停止持续跳动和光芒
+        if (doctor.isContinuousShaking) {
+          doctor.stopContinuousShake()
+          doctor.showMatchGlow = false
+        }
+      }
+    }
+  }
+  
+  // 【新增】检测病人匹配并触发/停止跳动（按需调用）
+  checkAndTriggerPatientMatchGlow() {
+    const selectedDevice = this.equipmentRoom.selectedExamDevice
+    
+    // 遍历所有病人（床上和输液椅上）
+    const allPatients = []
+    
+    // 检查病床上的病人
+    for (const bed of this.bedArea.beds) {
+      if (bed.patient && bed.patient.requiredMachineId && !bed.patient.machineCheckComplete) {
+        allPatients.push(bed.patient)
+      }
+    }
+    
+    // 检查输液椅上的病人
+    for (const seat of this.bedArea.ivSeats) {
+      if (seat.patient && seat.patient.requiredMachineId && !seat.patient.machineCheckComplete) {
+        allPatients.push(seat.patient)
+      }
+    }
+    
+    for (const patient of allPatients) {
+      // 检查是否匹配当前选中的设备
+      const hasMatch = selectedDevice && 
+                       patient.requiredMachineId === selectedDevice && 
+                       !patient.boundMachineId
+      
+      if (hasMatch) {
+        // 开始持续跳动和光芒
+        patient.startContinuousShake()
+        patient.showMatchGlow = true
+      } else {
+        // 停止持续跳动和光芒
+        if (patient.isContinuousShaking) {
+          patient.stopContinuousShake()
+          patient.showMatchGlow = false
+        }
+      }
+    }
+  }
+  
   // 【新增】尝试将选中的物品配送给医生（全匹配机制）
   tryDeliverItemsToDoctor(doctor) {
     // 获取选中的药品工具（只获取ID列表）
@@ -1107,14 +1339,14 @@ export default class Game {
       return false
     }
     
-    // 【优化1】点击震动反馈（真机震动 + 医生震动动画）
-    this.vibrate()  // 真机震动
-    doctor.triggerShake()  // 医生震动动画
+    // 点击震动反馈（真机震动）
+    this.vibrate()
     
     // 医生必须处于治疗状态且需要物品
     if (doctor.state !== 'treating') {
       this.showToast('该医生当前不需要物品')
       this.equipmentRoom.clearMedicineToolSelection()
+      this.checkAndTriggerDoctorMatchGlow() // 停止所有医生跳动
       return true
     }
     
@@ -1134,6 +1366,7 @@ export default class Game {
     if (!isMatch) {
       // ❌ 匹配失败：清空选中 + 医生气泡红闪 + 提示
       this.equipmentRoom.clearMedicineToolSelection()
+      this.checkAndTriggerDoctorMatchGlow() // 停止所有医生跳动
       doctor.triggerErrorAnimation()
       
       // 显示需要的物品提示
@@ -1175,13 +1408,17 @@ export default class Game {
           endX, endY,                  // 目标：医生头顶
           () => {
             // 动画完成回调
-            if (doctor.hasReceivedAllItems()) {
-              this.showToast('物品齐全，开始治疗')
-            }
+            // if (doctor.hasReceivedAllItems()) {
+            //   this.showToast('物品齐全，开始治疗')
+            // }
           }
         )
       }
     }
+    
+    // 【新增】停止医生的持续跳动和光芒
+    doctor.stopContinuousShake()
+    doctor.showMatchGlow = false
     
     // 清空选中
     this.equipmentRoom.clearMedicineToolSelection()
@@ -1200,6 +1437,28 @@ export default class Game {
   
   // 【新增】尝试将选中的设备绑定给病人（全匹配机制）
   tryBindMachineToPatient(patient) {
+    // 【新增】如果设备已经就绪（有绿色勾号），点击病人直接触发报告发送
+    if (patient.machineReady && patient.boundMachineId) {
+      const machineState = this.equipmentRoom.machineStates[patient.boundMachineId]
+      if (machineState && machineState.state === 'ready' && machineState.hasCheckMark) {
+        // 找到设备卡片位置作为飞行动画起点
+        const card = this.equipmentRoom.examDeviceCards.find(c => c.itemId === patient.boundMachineId)
+        if (card) {
+          const result = this.equipmentRoom.useMachineForTreatment(patient.boundMachineId, card.x, card.y)
+          if (result) {
+            // 开始飞行动画
+            result.startFlying((p) => {
+              console.log('报告到达病人，开始正式治疗:', p.name)
+              // 延迟1秒后标记病人可以开始自动治疗
+              p.machineCheckComplete = true
+            })
+            this.showToast('发送检查报告')
+            return true
+          }
+        }
+      }
+    }
+    
     // 获取选中的设备
     const selectedMachine = this.equipmentRoom.selectedExamDevice
     
@@ -1208,14 +1467,14 @@ export default class Game {
       return false
     }
     
-    // 【优化1】点击震动反馈（真机震动 + 病人跳动动画）
+    // 点击震动反馈（真机震动）
     this.vibrate()
-    patient.triggerShake()
     
     // 急症病人不需要设备检查
     if (patient.disease?.diseases_priority === 1) {
       this.showToast('急症病人无需设备检查')
       this.equipmentRoom.clearExamDeviceSelection()
+      this.checkAndTriggerPatientMatchGlow() // 停止所有病人跳动
       return true
     }
     
@@ -1223,18 +1482,21 @@ export default class Game {
     if (!patient.requiredMachineId) {
       this.showToast('该病人无需设备检查')
       this.equipmentRoom.clearExamDeviceSelection()
+      this.checkAndTriggerPatientMatchGlow() // 停止所有病人跳动
       return true
     }
     
     if (patient.machineCheckComplete) {
       this.showToast('设备检查已完成')
       this.equipmentRoom.clearExamDeviceSelection()
+      this.checkAndTriggerPatientMatchGlow() // 停止所有病人跳动
       return true
     }
     
     if (patient.boundMachineId) {
       this.showToast('设备检查中，请稍候')
       this.equipmentRoom.clearExamDeviceSelection()
+      this.checkAndTriggerPatientMatchGlow() // 停止所有病人跳动
       return true
     }
     
@@ -1242,6 +1504,7 @@ export default class Game {
     if (selectedMachine !== patient.requiredMachineId) {
       // ❌ 匹配失败：清空选中 + 病人气泡红闪 + 提示
       this.equipmentRoom.clearExamDeviceSelection()
+      this.checkAndTriggerPatientMatchGlow() // 停止所有病人跳动
       patient.triggerMachineError()
       
       // 显示需要的设备提示
@@ -1262,8 +1525,10 @@ export default class Game {
       machineState.boundPatient = patient
       patient.boundMachineId = selectedMachine
       
-      this.showToast('开始设备检查')
-    }
+      // 【新增】停止病人的持续跳动和光芒（设备已启动）
+      patient.stopContinuousShake()
+      patient.showMatchGlow = false
+          }
     
     // 清空选中
     this.equipmentRoom.clearExamDeviceSelection()
@@ -1403,6 +1668,7 @@ export default class Game {
     
     this.renderUI()
     this.renderFloatingTexts()
+    this.renderCuredFlyAnimations()
     this.renderGameOverModal()
     this.renderLevelCompleteModal()
     this.renderLevelToast()
@@ -1713,6 +1979,103 @@ export default class Game {
         ctx.shadowBlur = 0
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 0
+      }
+    })
+    
+    ctx.restore()
+  }
+  
+  // 【新增】渲染治愈图标飞行动画
+  renderCuredFlyAnimations() {
+    const ctx = this.ctx
+    ctx.save()
+    
+    this.curedFlyAnimations.forEach(anim => {
+      // 【修改】只在停顿阶段绘制亮晶晶的小星星，飞行阶段不绘制
+      if (anim.sparkles && anim.state === 'pause') {
+        anim.sparkles.forEach(sparkle => {
+          // 计算闪烁透明度（0.3 ~ 1.0 之间波动）
+          const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(sparkle.phase))
+          const scale = anim.iconSize / 28  // 根据图标大小调整星星大小
+          
+          const sparkleX = anim.currentX + sparkle.offsetX * scale
+          const sparkleY = anim.currentY + sparkle.offsetY * scale
+          const sparkleSize = sparkle.size * scale
+          
+          // 绘制四角星形状
+          ctx.fillStyle = `rgba(255, 255, 200, ${alpha})`  // 淡黄色
+          ctx.shadowColor = `rgba(255, 255, 150, ${alpha * 0.8})`
+          ctx.shadowBlur = sparkleSize * 2
+          
+          // 【修改】绘制旋转的星星（菱形）
+          ctx.save()
+          ctx.translate(sparkleX, sparkleY)
+          ctx.rotate(sparkle.rotation)
+          
+          // 绘制十字星形状（更有光泽感）
+          ctx.beginPath()
+          // 上半部分
+          ctx.moveTo(0, -sparkleSize)
+          ctx.lineTo(sparkleSize * 0.35, -sparkleSize * 0.35)
+          ctx.lineTo(sparkleSize, 0)
+          ctx.lineTo(sparkleSize * 0.35, sparkleSize * 0.35)
+          ctx.lineTo(0, sparkleSize)
+          ctx.lineTo(-sparkleSize * 0.35, sparkleSize * 0.35)
+          ctx.lineTo(-sparkleSize, 0)
+          ctx.lineTo(-sparkleSize * 0.35, -sparkleSize * 0.35)
+          ctx.closePath()
+          ctx.fill()
+          
+          // 添加十字光芒效果
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.8})`
+          ctx.beginPath()
+          // 垂直光芒
+          ctx.moveTo(0, -sparkleSize * 1.2)
+          ctx.lineTo(sparkleSize * 0.15, 0)
+          ctx.lineTo(0, sparkleSize * 1.2)
+          ctx.lineTo(-sparkleSize * 0.15, 0)
+          ctx.closePath()
+          ctx.fill()
+          
+          ctx.beginPath()
+          // 水平光芒
+          ctx.moveTo(-sparkleSize * 1.2, 0)
+          ctx.lineTo(0, sparkleSize * 0.15)
+          ctx.lineTo(sparkleSize * 1.2, 0)
+          ctx.lineTo(0, -sparkleSize * 0.15)
+          ctx.closePath()
+          ctx.fill()
+          
+          ctx.restore()
+        })
+        
+        // 重置阴影
+        ctx.shadowColor = 'transparent'
+        ctx.shadowBlur = 0
+      }
+      
+      // 绘制 cured.png 图标
+      if (this.curedImage && this.curedImage.width > 0) {
+        // 计算图标大小（飞行过程中稍微缩小）
+        const iconSize = anim.iconSize * (1 - anim.flyProgress * 0.2)
+        
+        // 添加发光效果
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.8)'
+        ctx.shadowBlur = 10
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = 0
+        
+        ctx.drawImage(
+          this.curedImage, 
+          anim.currentX - iconSize / 2, 
+          anim.currentY - iconSize / 2, 
+          iconSize, 
+          iconSize
+        )
+        
+        // 重置阴影
+        ctx.shadowColor = 'transparent'
+        ctx.shadowBlur = 0
       }
     })
     
@@ -2390,6 +2753,8 @@ export default class Game {
             } else {
               console.log('取消选中药品工具:', item.name)
             }
+            // 【新增】检测医生匹配（选中或取消都检测）
+            this.checkAndTriggerDoctorMatchGlow()
           } else {
             // 检验设备：根据状态执行不同操作
             const machineState = this.equipmentRoom.getMachineState(clickResult.itemId)
@@ -2403,6 +2768,8 @@ export default class Game {
               } else {
                 console.log('取消选中检验设备:', item.name)
               }
+              // 【新增】检测病人匹配（选中或取消都检测）
+              this.checkAndTriggerPatientMatchGlow()
             } else if (machineState.state === 'ready') {
               // 就绪状态（有勾号）：触发飞行动画
               // 找到被点击的卡片位置
@@ -2415,11 +2782,7 @@ export default class Game {
                     console.log('报告到达病人，开始正式治疗:', patient.name)
                     // 延迟1秒后标记病人可以开始自动治疗
                     patient.machineCheckComplete = true
-                    wx.showToast({
-                      title: '检查完成，开始治疗',
-                      icon: 'none',
-                      duration: 1500
-                    })
+                 
                   })
                 }
               }
@@ -2898,10 +3261,10 @@ export default class Game {
     const addedScore = 10 + Math.floor(Math.random() * 20)
     // 不实时增加荣誉点，而是累加到本关荣誉点
     this.honorEarnedThisLevel += addedScore
-    this.curedCount++
+    // 【注意】curedCount 在飞行动画完成时自动+1
     
-    // 添加浮动奖励动效（只显示治愈数，不显示荣誉点）
-    this.addFloatingCuredOnly(1, patient.x, patient.y)
+    // 【新增】添加治愈图标飞行动画（从病人飞到header治愈胶囊）
+    this.addCuredFlyAnimation(patient.x, patient.y - 60)  // 在病人头部上方
     
     // 病人离开
     if (patient.seat) {
@@ -3724,6 +4087,7 @@ export default class Game {
     
     // 清空药品工具选中状态（发送后重置）
     this.equipmentRoom.clearMedicineToolSelection()
+    this.checkAndTriggerDoctorMatchGlow() // 停止所有医生跳动
     
     if (deliveredCount > 0) {
       const remainingRequired = targetDoctor.getRequiredItemIds()
@@ -3784,6 +4148,7 @@ export default class Game {
     
     // 清空选中状态
     this.equipmentRoom.clearExamDeviceSelection()
+    this.checkAndTriggerPatientMatchGlow() // 停止所有病人跳动
   }
   
   // 查找申请指定设备的病人（在床位或输液椅上，未绑定其他设备，按申请时间优先）
@@ -4466,7 +4831,7 @@ export default class Game {
     // 与数据行联动的时间线：
     // - 行1"完成"在400ms时结束落下（100ms延迟+300ms动画）
     // - 600ms（行1完成后200ms）：+0 -> +baseHonor
-    // - 行2"完成/未达成"在1900ms时结束落下（1600ms延迟+300ms动画）
+    // - 行2"完成/未达成"在1800ms时结束落下（1500ms延迟+300ms动画）
     // - 2100ms（行2完成后200ms）：+baseHonor -> +最终值（仅当有额外奖励时）
     let displayValue = 0
     let prevValue = 0
@@ -4491,26 +4856,26 @@ export default class Game {
         isTransitioning = true
         transitionProgress = (elapsed - 600) / 400
       }
-      // 阶段3：1000-2100ms，保持+baseHonor（等待行2落下并延迟200ms）
-      else if (elapsed < 2100) {
+      // 阶段3：1000-2000ms，保持+baseHonor（等待行2落下并延迟200ms）
+      else if (elapsed < 2000) {
         displayValue = baseHonor
         prevValue = baseHonor
       }
-      // 阶段4：2100-2500ms，+baseHonor -> +最终值（翻牌动画400ms，仅当有额外奖励时）
-      else if (elapsed < 2500) {
+      // 阶段4：2000-2400ms，+baseHonor -> +最终值（翻牌动画400ms，仅当有额外奖励时）
+      else if (elapsed < 2400) {
         if (hasExtraBonus) {
           // 有额外奖励，进行翻牌动画
           displayValue = baseHonor + extraBonus
           prevValue = baseHonor
           isTransitioning = true
-          transitionProgress = (elapsed - 2100) / 400
+          transitionProgress = (elapsed - 2000) / 400
         } else {
           // 无额外奖励，直接显示最终值（不翻牌）
           displayValue = baseHonor
           prevValue = baseHonor
         }
       }
-      // 阶段5：2500ms+，保持最终值
+      // 阶段5：2400ms+，保持最终值
       else {
         displayValue = hasExtraBonus ? (baseHonor + extraBonus) : baseHonor
         prevValue = displayValue
@@ -4635,8 +5000,8 @@ export default class Game {
     ctx.fillStyle = '#57748E'
     ctx.font = 'bold 13px "PingFang SC", sans-serif'
     ctx.fillText('完美治愈', targetAreaX + 36, row2Y + 16)
-    // 右侧状态 - 延迟1600ms落下出现
-    const row2Delay = 1600
+    // 右侧状态 - 延迟1500ms落下出现
+    const row2Delay = 1500
     const row2Duration = 300
     const isPerfectCure = this.curedCount >= totalPatients
     let row2TextY = row2Y + 16
