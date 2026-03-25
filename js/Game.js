@@ -990,6 +990,8 @@ export default class Game {
               bed.clear()
               bed.leaveTimer = null
               bed.scoreAdded = false
+              // 【新增】检查是否提前游戏失败（病人治愈离开病床时）
+              this.checkEarlyGameOver()
             }, 1000)
           }
         }
@@ -1019,6 +1021,8 @@ export default class Game {
         // 【修复】检查紧急病人是否已经离开屏幕，清理座位
         if (seat.patient.isLeaving && seat.patient.shouldRemove) {
           seat.clear()
+          // 【新增】检查是否提前游戏失败（输液病人暴怒离开时）
+          this.checkEarlyGameOver()
           return
         }
         
@@ -1106,12 +1110,15 @@ export default class Game {
         this.hasRagingPatient = false
       }
       this.waitingArea.removePatient(patient)
-      // 检查是否完成关卡（当所有病人都已生成且都被处理）
-      const levelConfig = getLevelConfig(this.currentLevel)
-      const totalPatients = levelConfig.patients.length
-      if (this.spawnedPatientsCount >= totalPatients) {
-        this.levelComplete = true
-        this.checkLevelComplete()
+      // 【新增】检查是否提前游戏失败（病人暴怒离开时）
+      if (!this.checkEarlyGameOver()) {
+        // 如果没有提前失败，再检查是否完成关卡
+        const levelConfig = getLevelConfig(this.currentLevel)
+        const totalPatients = levelConfig.patients.length
+        if (this.spawnedPatientsCount >= totalPatients) {
+          this.levelComplete = true
+          this.checkLevelComplete()
+        }
       }
     })
   }
@@ -1141,6 +1148,61 @@ export default class Game {
     // 【修复】无论是否达标，都检查关卡完成状态（处理所有病人已处理但未达标的情况）
     this.checkLevelComplete()
   }
+  
+  // 【新增】检查是否提前游戏失败
+  // 当病人全部生成完成，且即使页面上所有病人都治愈也无法达标时，提前结束
+  checkEarlyGameOver() {
+    const levelConfig = getLevelConfig(this.currentLevel)
+    const totalPatients = levelConfig.patients.length
+    const cureTarget = levelConfig.cureTarget
+    
+    // 病人还未全部生成，不检测
+    if (this.spawnedPatientsCount < totalPatients) {
+      return false
+    }
+    
+    // 已治愈人数
+    const cured = this.curedCount
+    
+    // 正在播放治愈动画的人数（飞行动画中，即将变成治愈）
+    const curing = this.curedFlyAnimations ? this.curedFlyAnimations.length : 0
+    
+    // 病床上正在治疗的病人数
+    const inBed = this.bedArea.getOccupiedBeds().filter(bed => 
+      bed.patient && !bed.patient.isCured
+    ).length
+    
+    // 输液椅上正在治疗的病人数
+    const inIV = this.bedArea.ivSeats.filter(seat => 
+      seat.patient && !seat.patient.isCured
+    ).length
+    
+    // 等候区的病人数
+    const waiting = this.waitingArea.patients.length
+    
+    // 当前页面上还能治愈的最大人数 = 已治愈 + 动画中 + 病床上 + 输液椅上 + 等候区
+    const maxPossibleCured = cured + curing + inBed + inIV + waiting
+    
+    console.log('[提前失败检测]', 
+      '已生成:', this.spawnedPatientsCount, '/', totalPatients,
+      '已治愈:', cured, 
+      '动画中:', curing,
+      '病床上:', inBed,
+      '输液椅:', inIV,
+      '等候区:', waiting,
+      '最大可能:', maxPossibleCured, '/', cureTarget
+    )
+    
+    // 即使全部治愈也无法达标
+    if (maxPossibleCured < cureTarget) {
+      console.log('[提前失败] 即使全部治愈也无法达标，提前结束游戏')
+      this.gameOverWithReason(`本关目标${cureTarget}人治愈，
+剩余病人不足`)
+      return true
+    }
+    
+    return false
+  }
 
   // 游戏结束（带原因）
   gameOverWithReason(reason) {
@@ -1163,6 +1225,45 @@ export default class Game {
     this.levelCompleteModal = null
     this.gameWinModal = null
     this.levelToast = null
+    
+    // 【新增】1. 取消器材室所有的物品选择状态
+    if (this.equipmentRoom) {
+      this.equipmentRoom.clearSelection()
+    }
+    
+    // 【新增】2. 取消设备和病人的绑定关系记录
+    // 清除所有病人的设备绑定状态
+    const allPatients = []
+    // 收集病床上的病人
+    this.bedArea.getOccupiedBeds().forEach(bed => {
+      if (bed.patient) allPatients.push(bed.patient)
+    })
+    // 收集输液椅上的病人
+    this.bedArea.ivSeats.forEach(seat => {
+      if (seat.patient) allPatients.push(seat.patient)
+    })
+    // 收集等候区的病人
+    this.waitingArea.patients.forEach(patient => {
+      allPatients.push(patient)
+    })
+    
+    // 清除每个病人的设备绑定状态
+    allPatients.forEach(patient => {
+      patient.boundMachineId = null
+      patient.requiredMachineId = null
+      patient.machineCheckComplete = false
+      patient.machineReady = false
+      patient.showMachineBubble = false
+    })
+    
+    // 清除设备状态中的病人绑定
+    if (this.equipmentRoom && this.equipmentRoom.machineStates) {
+      Object.values(this.equipmentRoom.machineStates).forEach(state => {
+        state.boundPatient = null
+        state.state = 'idle'
+        state.progress = 0
+      })
+    }
     
     // 设置游戏结束弹窗状态
     this.gameOverModal = {
@@ -3277,6 +3378,10 @@ export default class Game {
     if (patient.seat) {
       patient.seat.clear()
     }
+    
+    // 【新增】检查是否提前游戏失败（输液病人治愈离开时）
+    // 注意： curedCount 还没增加，但飞行动画已开始，checkEarlyGameOver 会计算动画中的病人
+    this.checkEarlyGameOver()
     
     // 检查是否完成关卡目标
     this.checkLevelTarget()
