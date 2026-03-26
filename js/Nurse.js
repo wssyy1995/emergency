@@ -177,17 +177,7 @@ export default class Nurse {
       ? this.nurseHelloImage 
       : this.getCurrentImage()
     
-    // 调试：每60帧输出一次（约1秒）
-    if (Math.random() < 0.02) {
-      console.log('[Nurse] render:', 
-        'isNewPlayer=', this.isNewPlayer,
-        'currentUpgradeId=', this.currentUpgradeId,
-        'upgradedImage=', !!this.upgradedImage,
-        'currentImage=', !!currentImage,
-        'currentImage.width=', currentImage?.width
-      )
-    }
-    
+
     if (currentImage && currentImage.width > 0) {
       // 使用图片绘制护士
       const targetHeight = 100

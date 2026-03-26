@@ -318,7 +318,7 @@ export default class Game {
     this.honorImage = await this.loadImageWithFallback('honor.png', 'images/honor.png')
     this.curedImage = await this.loadImageWithFallback('cured.png', 'images/cured.png')
     this.timerImage = await this.loadImageWithFallback('timer.png', 'images/timer.png')
-    this.patientIconImage = await this.loadImageWithFallback('patient_icon.png', 'images/patient_icon.png')
+    this.patientIconImage = await this.loadImageWithFallback('patient_icon.png', 'images/patient/patient_icon.png')
     this.bedAreaBgImage = await this.loadImageWithFallback('bed_area_bg.png', 'images/bed_area_bg.png')
     
     // 加载疾病图标
@@ -425,46 +425,23 @@ export default class Game {
       img.src = path
     })
     
-    // 【新增】预加载病人图片，避免第一关病人显示不出来
-    // 保存预加载Promise，供后续等待
-    this.patientImagesPreloadPromise = this.preloadPatientImages()
+    // 【注意】病人图片已在 Preloader 中预加载完成
+    // 不需要在这里重复预加载
+    this.patientImagesPreloadPromise = Promise.resolve()
   }
   
   // 【新增】预加载病人图片 - 游戏初始化时加载1-3关所有病人图片
+  // 【注意】现在图片已在 Preloader 中预加载，这里保留方法但不再重复加载
   async preloadPatientImages() {
-    // 第1-3关会用到的病人类型（根据 GameConfig.levels 中的配置）
-    // 第1关病人ID: 1,2,3,14,15,16
-    // 第2关病人ID: 4,16,15,17,18,2,1,5
-    // 第3关病人ID: 6,18,17,16,15,5,4,3,2,19
-    const level1Ids = [1, 2, 3, 14, 15, 16]
-    const level2Ids = [4, 16, 15, 17, 18, 2, 1, 5]
-    const level3Ids = [6, 18, 17, 16, 15, 5, 4, 3, 2, 19]
-    
-    // 合并去重
-    const allTypes = [...new Set([...level1Ids, ...level2Ids, ...level3Ids])]
-    
-    console.log('[预加载] 开始预加载1-3关病人图片，数量:', allTypes.length)
-    
-    // 使用 PatientImageCache 预加载所有图片（normal、sick、angry）
-    await PatientImageCache.preloadPatientImages(allTypes)
-    
-    console.log('[预加载] 1-3关病人图片预加载完成')
+    console.log('[预加载] 病人图片已在 Preloader 中预加载，跳过')
+    return Promise.resolve()
   }
   
   // 【新增】预加载指定关卡的病人图片
+  // 【注意】现在图片已在 Preloader 中预加载，这里保留方法但不再重复加载
   async preloadLevelPatients(levelIndex) {
-    const levelConfig = getLevelConfig(levelIndex)
-    if (!levelConfig || !levelConfig.patients) {
-      console.warn(`[预加载] 关卡${levelIndex + 1}配置不存在`)
-      return
-    }
-    
-    const patientIds = levelConfig.patients
-    console.log(`[预加载] 开始预加载关卡${levelIndex + 1}病人图片:`, patientIds)
-    
-    await PatientImageCache.preloadPatientImages(patientIds)
-    
-    console.log(`[预加载] 关卡${levelIndex + 1}病人图片预加载完成`)
+    console.log(`[预加载] 关卡${levelIndex + 1}病人图片已在 Preloader 中预加载，跳过`)
+    return Promise.resolve()
   }
   
   // 添加浮动文字
@@ -5354,7 +5331,7 @@ export default class Game {
     if (!this.debugModal || !this.debugModal.visible) return
     
     const modalWidth = 260
-    const modalHeight = 250
+    const modalHeight = 290
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
     
@@ -5550,6 +5527,278 @@ export default class Game {
         })
         
         wx.showToast({ title: '测试开始，请看控制台', icon: 'none' })
+      } },
+      { id: 'uploadPatient', text: '上传Patient图', color: '#9B59B6', action: () => {
+        // 初始化云开发环境
+        wx.cloud.init({ env: 'cloudbase-6gxf6ir4ef928555', traceUser: true })
+        
+        // 上传 patient 目录下的图片到云存储
+        const patientFiles = [
+          'patient_1_normal.png', 'patient_1_sick.png',
+          'patient_2_normal.png', 'patient_2_sick.png',
+          'patient_3_normal.png', 'patient_3_sick.png',
+          'patient_4_normal.png', 'patient_4_sick.png',
+          'patient_5_normal.png', 'patient_5_sick.png',
+          'patient_6_normal.png', 'patient_6_sick.png',
+          'patient_7_normal.png', 'patient_7_sick.png',
+          'patient_8_normal.png', 'patient_8_sick.png',
+          'patient_9_normal.png', 'patient_9_sick.png',
+          'patient_10_normal.png', 'patient_10_sick.png',
+          'patient_11_normal.png', 'patient_11_sick.png',
+          'patient_12_normal.png', 'patient_12_sick.png',
+          'patient_13_normal.png', 'patient_13_sick.png',
+          'patient_14_normal.png', 'patient_14_sick.png',
+          'patient_15_normal.png', 'patient_15_sick.png',
+          'patient_16_normal.png', 'patient_16_sick.png',
+          'patient_17_sick.png', 'patient_18_sick.png',
+          'patient_19_sick.png', 'patient_20_sick.png',
+          'patient_21_sick.png', 'patient_22_sick.png',
+          'patient_23_sick.png', 'patient_24_sick.png',
+          'patient_25_sick.png', 'patient_26_sick.png',
+          'patient_icon.png'
+        ]
+        const cloudBase = 'images/patient/'
+        let successCount = 0
+        let failCount = 0
+        
+        wx.showLoading({ title: '上传Patient...', mask: true })
+        
+        // 使用文件系统管理器读取代码包内文件并复制到临时目录
+        const fs = wx.getFileSystemManager()
+        
+        patientFiles.forEach((filename, index) => {
+          setTimeout(() => {
+            const localPath = `images/patient/${filename}`
+            const tempPath = `${wx.env.USER_DATA_PATH}/patient_${filename}`
+            
+            // 先复制文件到用户目录
+            fs.copyFile({
+              srcPath: localPath,
+              destPath: tempPath,
+              success: () => {
+                // 复制成功后上传（同名文件会自动覆盖）
+                wx.cloud.uploadFile({
+                  cloudPath: cloudBase + filename,
+                  filePath: tempPath,
+                  success: (res) => {
+                    successCount++
+                    console.log('✅ Patient上传成功:', filename, res.fileID)
+                    // 清理临时文件
+                    try { fs.unlinkSync(tempPath) } catch(e) {}
+                    checkComplete()
+                  },
+                  fail: (err) => {
+                    failCount++
+                    console.error('❌ Patient上传失败:', filename, err)
+                    checkComplete()
+                  }
+                })
+              },
+              fail: (err) => {
+                failCount++
+                console.error('❌ Patient复制文件失败:', filename, err)
+                checkComplete()
+              }
+            })
+          }, index * 200)
+        })
+        
+        function checkComplete() {
+          if (successCount + failCount === patientFiles.length) {
+            wx.hideLoading()
+            wx.showModal({
+              title: 'Patient上传完成',
+              content: `成功: ${successCount}, 失败: ${failCount}\n\n${successCount > 0 ? '请在控制台查看 fileID 映射' : ''}`,
+              showCancel: false
+            })
+            if (successCount > 0) {
+              console.log('=== 复制到 CloudImageManager.js CLOUD_IMAGE_MAP ===')
+              patientFiles.forEach((f) => {
+                const fileID = `cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/patient/${f}`
+                console.log(`  '${f}': '${fileID}',`)
+              })
+            }
+          }
+        }
+      } },
+      { id: 'uploadDoctor', text: '上传Doctor图', color: '#3498DB', action: () => {
+        // 初始化云开发环境
+        wx.cloud.init({ env: 'cloudbase-6gxf6ir4ef928555', traceUser: true })
+        
+        // 上传 doctor 目录下的图片到云存储
+        const doctorFiles = [
+          'doctor_1_idle.png', 'doctor_1_treat.png',
+          'doctor_2_idle.png', 'doctor_2_treat.png'
+        ]
+        const cloudBase = 'images/doctor/'
+        let successCount = 0
+        let failCount = 0
+        
+        wx.showLoading({ title: '上传Doctor...', mask: true })
+        
+        // 使用文件系统管理器读取代码包内文件并复制到临时目录
+        const fs = wx.getFileSystemManager()
+        
+        doctorFiles.forEach((filename, index) => {
+          setTimeout(() => {
+            const localPath = `images/doctor/${filename}`
+            const tempPath = `${wx.env.USER_DATA_PATH}/doctor_${filename}`
+            
+            // 先复制文件到用户目录
+            fs.copyFile({
+              srcPath: localPath,
+              destPath: tempPath,
+              success: () => {
+                // 复制成功后上传（同名文件会自动覆盖）
+                wx.cloud.uploadFile({
+                  cloudPath: cloudBase + filename,
+                  filePath: tempPath,
+                  success: (res) => {
+                    successCount++
+                    console.log('✅ Doctor上传成功:', filename, res.fileID)
+                    // 清理临时文件
+                    try { fs.unlinkSync(tempPath) } catch(e) {}
+                    checkComplete()
+                  },
+                  fail: (err) => {
+                    failCount++
+                    console.error('❌ Doctor上传失败:', filename, err)
+                    checkComplete()
+                  }
+                })
+              },
+              fail: (err) => {
+                failCount++
+                console.error('❌ Doctor复制文件失败:', filename, err)
+                checkComplete()
+              }
+            })
+          }, index * 200)
+        })
+        
+        function checkComplete() {
+          if (successCount + failCount === doctorFiles.length) {
+            wx.hideLoading()
+            wx.showModal({
+              title: 'Doctor上传完成',
+              content: `成功: ${successCount}, 失败: ${failCount}\n\n${successCount > 0 ? '请在控制台查看 fileID 映射' : ''}`,
+              showCancel: false
+            })
+            if (successCount > 0) {
+              console.log('=== 复制到 CloudImageManager.js CLOUD_IMAGE_MAP ===')
+              doctorFiles.forEach((f) => {
+                const fileID = `cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/doctor/${f}`
+                console.log(`  '${f}': '${fileID}',`)
+              })
+            }
+          }
+        }
+      } },
+      { id: 'uploadToolMachine', text: '上传tool_machine', color: '#E67E22', action: () => {
+        // 初始化云开发环境
+        wx.cloud.init({ env: 'cloudbase-6gxf6ir4ef928555', traceUser: true })
+        
+        // 上传 tool_machine 目录下的图片到云存储
+        const toolMachineFiles = [
+          'machine_blood.png', 'machine_brain.png', 'machine_ct.png',
+          'machine_heart.png', 'machine_report.png', 'machine_super.png'
+        ]
+        const cloudBase = 'images/tool_machine/'
+        let successCount = 0
+        let failCount = 0
+        const maxRetries = 3
+        
+        wx.showLoading({ title: '上传设备图...', mask: true })
+        
+        // 使用文件系统管理器读取代码包内文件并复制到临时目录
+        const fs = wx.getFileSystemManager()
+        
+        // 上传单个文件（带重试）
+        function uploadWithRetry(filename, retryCount = 0) {
+          const localPath = `images/tool_machine/${filename}`
+          const tempPath = `${wx.env.USER_DATA_PATH}/tool_${filename}`
+          
+          // 先复制文件到用户目录
+          fs.copyFile({
+            srcPath: localPath,
+            destPath: tempPath,
+            success: () => {
+              // 复制成功后上传
+              wx.cloud.uploadFile({
+                cloudPath: cloudBase + filename,
+                filePath: tempPath,
+                success: (res) => {
+                  successCount++
+                  console.log('✅ tool_machine上传成功:', filename, res.fileID)
+                  // 清理临时文件
+                  try { fs.unlinkSync(tempPath) } catch(e) {}
+                  checkComplete()
+                },
+                fail: (err) => {
+                  if (retryCount < maxRetries) {
+                    console.warn(`⚠️ ${filename} 上传失败，${retryCount + 1}秒后重试(${retryCount + 1}/${maxRetries})...`)
+                    setTimeout(() => {
+                      uploadWithRetry(filename, retryCount + 1)
+                    }, 1000 * (retryCount + 1))
+                  } else {
+                    failCount++
+                    console.error('❌ tool_machine上传失败（已重试3次）:', filename, err)
+                    checkComplete()
+                  }
+                }
+              })
+            },
+            fail: (err) => {
+              failCount++
+              console.error('❌ tool_machine复制文件失败:', filename, err)
+              checkComplete()
+            }
+          })
+        }
+        
+        // 串行上传，避免并发问题
+        async function uploadSequentially() {
+          for (let i = 0; i < toolMachineFiles.length; i++) {
+            const filename = toolMachineFiles[i]
+            console.log(`[${i + 1}/${toolMachineFiles.length}] 开始上传: ${filename}`)
+            
+            // 使用 Promise 包装上传
+            await new Promise((resolve) => {
+              const originalCheckComplete = checkComplete
+              checkComplete = () => {
+                originalCheckComplete()
+                resolve()
+              }
+              uploadWithRetry(filename)
+            })
+            
+            // 每个文件间隔500ms
+            if (i < toolMachineFiles.length - 1) {
+              await new Promise(r => setTimeout(r, 500))
+            }
+          }
+        }
+        
+        function checkComplete() {
+          if (successCount + failCount === toolMachineFiles.length) {
+            wx.hideLoading()
+            wx.showModal({
+              title: '设备图上传完成',
+              content: `成功: ${successCount}, 失败: ${failCount}\n\n${successCount > 0 ? '请在控制台查看 fileID 映射' : ''}`,
+              showCancel: false
+            })
+            if (successCount > 0) {
+              console.log('=== 复制到 CloudImageManager.js CLOUD_IMAGE_MAP ===')
+              toolMachineFiles.forEach((f) => {
+                const fileID = `cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/tool_machine/${f}`
+                console.log(`  '${f}': '${fileID}',`)
+              })
+            }
+          }
+        }
+        
+        // 开始串行上传
+        uploadSequentially()
       } }
     ]
     

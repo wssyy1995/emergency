@@ -1,6 +1,7 @@
 import { drawStar, fillRoundRect, strokeRoundRect } from './utils.js'
 import { GameConfig, getDiseaseById } from './GameConfig.js'
 import { getItemImage } from './Items.js'
+import cloudImageManager from './CloudImageManager.js'
 
 // ==================== 全局病人图片缓存 ====================
 const PatientImageCache = {
@@ -41,48 +42,77 @@ const PatientImageCache = {
   
   // 获取正常状态图片
   getNormalImage(patientType) {
+    const imageName = `patient_${patientType}_normal.png`
     if (!this.normalImages[patientType]) {
-      const img = wx.createImage()
-      img.onload = () => {
+      // 先尝试从云存储加载
+      cloudImageManager.loadImage(imageName).then(img => {
         this.normalImages[patientType] = img
-      }
-      img.onerror = () => {
-        console.warn(`Failed to load patient normal image: images/patient/patient_${patientType}_normal.png`)
-      }
-      img.src = `images/patient/patient_${patientType}_normal.png`
-      this.normalImages[patientType] = img
+      }).catch(() => {
+        // 回退到本地加载
+        const img = wx.createImage()
+        img.onload = () => {
+          this.normalImages[patientType] = img
+        }
+        img.onerror = () => {
+          console.warn(`Failed to load patient normal image: images/patient/${imageName}`)
+        }
+        img.src = `images/patient/${imageName}`
+      })
+      // 先返回一个空对象，避免 undefined 错误
+      this.normalImages[patientType] = { width: 0, height: 0 }
     }
     return this.normalImages[patientType]
   },
   
   // 获取生病状态图片
   getSickImage(patientType) {
+    const imageName = `patient_${patientType}_sick.png`
     if (!this.sickImages[patientType]) {
-      const img = wx.createImage()
-      img.onload = () => {
+      console.log(`[PatientImageCache] 开始加载 sick 图片: ${imageName}`)
+      // 先返回一个空对象，避免 undefined 错误
+      this.sickImages[patientType] = { width: 0, height: 0 }
+      
+      // 先尝试从云存储加载
+      cloudImageManager.loadImage(imageName).then(img => {
+        console.log(`[PatientImageCache] sick 图片加载成功: ${imageName}, width=${img.width}`)
         this.sickImages[patientType] = img
-      }
-      img.onerror = () => {
-        console.warn(`Failed to load patient sick image: images/patient/patient_${patientType}_sick.png`)
-      }
-      img.src = `images/patient/patient_${patientType}_sick.png`
-      this.sickImages[patientType] = img
+      }).catch((err) => {
+        console.warn(`[PatientImageCache] 云存储加载失败，回退本地: ${imageName}`, err?.message || err)
+        // 回退到本地加载
+        const img = wx.createImage()
+        img.onload = () => {
+          console.log(`[PatientImageCache] 本地 sick 图片加载成功: ${imageName}`)
+          this.sickImages[patientType] = img
+        }
+        img.onerror = () => {
+          console.error(`[PatientImageCache] 本地 sick 图片加载失败: images/patient/${imageName}`)
+        }
+        img.src = `images/patient/${imageName}`
+      })
     }
     return this.sickImages[patientType]
   },
   
   // 获取生气状态图片
   getAngryImage(patientType) {
+    const imageName = `patient_${patientType}_angry.png`
     if (!this.angryImages[patientType]) {
-      const img = wx.createImage()
-      img.onload = () => {
+      // 先尝试从云存储加载
+      cloudImageManager.loadImage(imageName).then(img => {
         this.angryImages[patientType] = img
-      }
-      img.onerror = () => {
-        console.warn(`Failed to load patient angry image: images/patient/patient_${patientType}_angry.png`)
-      }
-      img.src = `images/patient/patient_${patientType}_angry.png`
-      this.angryImages[patientType] = img
+      }).catch(() => {
+        // 回退到本地加载
+        const img = wx.createImage()
+        img.onload = () => {
+          this.angryImages[patientType] = img
+        }
+        img.onerror = () => {
+          console.warn(`Failed to load patient angry image: images/patient/${imageName}`)
+        }
+        img.src = `images/patient/${imageName}`
+      })
+      // 先返回一个空对象，避免 undefined 错误
+      this.angryImages[patientType] = { width: 0, height: 0 }
     }
     return this.angryImages[patientType]
   },
@@ -101,36 +131,48 @@ const PatientImageCache = {
     
     patientTypes.forEach(type => {
       // 预加载 normal 图片
-      if (!this.normalImages[type]) {
+      if (!this.normalImages[type] || this.normalImages[type].width === 0) {
         promises.push(new Promise((resolve) => {
-          const img = wx.createImage()
-          img.onload = () => {
+          const imageName = `patient_${type}_normal.png`
+          cloudImageManager.loadImage(imageName).then(img => {
             this.normalImages[type] = img
-            console.log(`[PatientImageCache] normal图片预加载成功: patient_${type}_normal.png`)
             resolve(true)
-          }
-          img.onerror = () => {
-            console.warn(`[PatientImageCache] normal图片预加载失败: patient_${type}_normal.png`)
-            resolve(false)
-          }
-          img.src = `images/patient/patient_${type}_normal.png`
+          }).catch(() => {
+            // 回退到本地加载
+            const img = wx.createImage()
+            img.onload = () => {
+              this.normalImages[type] = img
+              resolve(true)
+            }
+            img.onerror = () => {
+              console.warn(`[PatientImageCache] normal图片预加载失败: ${imageName}`)
+              resolve(false)
+            }
+            img.src = `images/patient/${imageName}`
+          })
         }))
       }
       
       // 预加载 sick 图片
-      if (!this.sickImages[type]) {
+      if (!this.sickImages[type] || this.sickImages[type].width === 0) {
         promises.push(new Promise((resolve) => {
-          const img = wx.createImage()
-          img.onload = () => {
+          const imageName = `patient_${type}_sick.png`
+          cloudImageManager.loadImage(imageName).then(img => {
             this.sickImages[type] = img
-            console.log(`[PatientImageCache] sick图片预加载成功: patient_${type}_sick.png`)
             resolve(true)
-          }
-          img.onerror = () => {
-            console.warn(`[PatientImageCache] sick图片预加载失败: patient_${type}_sick.png`)
-            resolve(false)
-          }
-          img.src = `images/patient/patient_${type}_sick.png`
+          }).catch(() => {
+            // 回退到本地加载
+            const img = wx.createImage()
+            img.onload = () => {
+              this.sickImages[type] = img
+              resolve(true)
+            }
+            img.onerror = () => {
+              console.warn(`[PatientImageCache] sick图片预加载失败: ${imageName}`)
+              resolve(false)
+            }
+            img.src = `images/patient/${imageName}`
+          })
         }))
       }
       
@@ -697,8 +739,14 @@ export default class Patient {
     const scale = this.width / this.baseWidth
     
     // 绘制病人图片（默认显示 sick 图片）
-    const currentImage = this.isAngry ? this.angryImage : this.sickImage
+    // 从缓存获取最新图片（支持异步加载完成后自动更新）
+    const cachedImage = this.isAngry 
+      ? PatientImageCache.getAngryImage(this.patientType) 
+      : PatientImageCache.getSickImage(this.patientType)
+    // 如果缓存返回的是新图片，更新实例引用
+    const currentImage = (cachedImage && cachedImage.width > 0) ? cachedImage : (this.isAngry ? this.angryImage : this.sickImage)
     
+
     if (currentImage && currentImage.width > 0) {
       // 使用图片绘制病人：targetHeight可以调整病人高度
       const targetHeight = 75

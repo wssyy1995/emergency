@@ -120,20 +120,39 @@ export async function preloadItemImages(callback) {
       const fileName = item.imageName || (item.imagePath && item.imagePath.split('/').pop())
       if (!fileName) continue
       
-      try {
-        // 先尝试云存储
-        const img = await cloudImageManager.loadImage(fileName)
-        imageCache[item.id] = img
-      } catch (e) {
-        // 云存储未配置或失败，回退到本地
-        console.log('[Items] 云存储未配置，回退本地:', item.imagePath)
+      // 检查图片是否配置了云存储
+      const shouldUseCloud = cloudImageManager.shouldUseCloud && cloudImageManager.shouldUseCloud(fileName)
+      
+      if (shouldUseCloud) {
+        // 使用云存储加载
+        try {
+          const img = await cloudImageManager.loadImage(fileName)
+          imageCache[item.id] = img
+        } catch (e) {
+          // 云存储失败，回退到本地
+          console.log('[Items] 云存储加载失败，回退本地:', item.imagePath)
+          await new Promise((resolve) => {
+            const img = wx.createImage()
+            img.onload = () => {
+              imageCache[item.id] = img
+              resolve()
+            }
+            img.onerror = () => resolve()
+            img.src = item.imagePath
+          })
+        }
+      } else {
+        // 未配置云存储，直接使用本地路径
         await new Promise((resolve) => {
           const img = wx.createImage()
           img.onload = () => {
             imageCache[item.id] = img
             resolve()
           }
-          img.onerror = () => resolve()
+          img.onerror = () => {
+            console.warn('[Items] 本地加载失败:', item.imagePath)
+            resolve()
+          }
           img.src = item.imagePath
         })
       }
