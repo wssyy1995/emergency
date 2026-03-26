@@ -114,34 +114,32 @@ export async function preloadItemImages(callback) {
 
   // 如果使用云存储，使用 CloudImageManager 加载
   if (useCloudStorage && cloudImageManager) {
-    const imageNames = allItems
-      .filter(item => item.imageName)
-      .map(item => item.imageName)
-    
-    try {
-      await cloudImageManager.preloadImages(imageNames, (loaded, total) => {
-        console.log(`[Items] 预加载进度: ${loaded}/${total}`)
-      })
+    // 加载所有物品（包括只有 imagePath 的）
+    for (const item of allItems) {
+      // 从 imageName 或 imagePath 中提取文件名
+      const fileName = item.imageName || (item.imagePath && item.imagePath.split('/').pop())
+      if (!fileName) continue
       
-      // 将加载的图片放入缓存
-      for (const item of allItems) {
-        if (item.imageName) {
-          try {
-            const img = await cloudImageManager.loadImage(item.imageName)
+      try {
+        // 先尝试云存储
+        const img = await cloudImageManager.loadImage(fileName)
+        imageCache[item.id] = img
+      } catch (e) {
+        // 云存储未配置或失败，回退到本地
+        console.log('[Items] 云存储未配置，回退本地:', item.imagePath)
+        await new Promise((resolve) => {
+          const img = wx.createImage()
+          img.onload = () => {
             imageCache[item.id] = img
-          } catch (e) {
-            console.warn('[Items] 加载失败:', item.imageName)
+            resolve()
           }
-        }
+          img.onerror = () => resolve()
+          img.src = item.imagePath
+        })
       }
-      
-      if (callback) callback()
-    } catch (err) {
-      console.error('[Items] 云存储预加载失败:', err)
-      // 回退到本地加载
-      useCloudStorage = false
-      preloadItemImages(callback)
     }
+    
+    if (callback) callback()
     return
   }
 
@@ -188,13 +186,15 @@ export async function loadItemImageAsync(itemId) {
   if (!item) return null
   
   // 使用云存储加载
-  if (useCloudStorage && cloudImageManager && item.imageName) {
+  // 从 imageName 或 imagePath 中提取文件名
+  const fileName = item.imageName || (item.imagePath && item.imagePath.split('/').pop())
+  if (useCloudStorage && cloudImageManager && fileName) {
     try {
-      const img = await cloudImageManager.loadImage(item.imageName)
+      const img = await cloudImageManager.loadImage(fileName)
       imageCache[itemId] = img
       return img
     } catch (e) {
-      console.warn('[Items] 云存储加载失败，回退到本地:', itemId)
+      console.warn('[Items] 云存储加载失败，回退到本地:', itemId, fileName)
     }
   }
   

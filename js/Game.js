@@ -9,6 +9,15 @@ import { audioManager } from './AudioManager.js'
 import { GameConfig, getLevelConfig, getRandomPatientDetail, getRandomDisease, checkPatientRage, getRageProbability, getAutoTreatTimeByDisease, getDiseaseById, getNewPlayerStatus, saveNewPlayerStatus, getLevelHintStatus, saveLevelHintStatus, getSelectedUpgrades, saveSelectedUpgrade, getUpgradesByType, getCurrentUpgrade, getInstanceUpgrade, saveInstanceUpgrade, getPurchasedUpgrades, isUpgradePurchased } from './GameConfig.js'
 import cloudImageManager from './CloudImageManager.js'
 
+// 读取云存储配置
+let projectConfig = {}
+try {
+  projectConfig = require('../project.config.json')
+} catch (e) {
+  console.warn('[Game] 无法读取 project.config.json')
+}
+const cloudStorageConfig = projectConfig.cloudStorage || {}
+
 // ==================== 马卡龙 UI 颜色配置（可自行调整）====================
 const UI_COLORS = {
   // 全局背景
@@ -248,9 +257,9 @@ export default class Game {
 
   // 初始化云存储
   initCloudStorage() {
-    // 云存储配置 - 默认关闭，使用本地图片
-    this.useCloudStorage = false
-    this.cloudEnvId = 'cloudbase-6gxf6ir4ef928555'
+    // 从 project.config.json 读取配置
+    this.useCloudStorage = cloudStorageConfig.enabled !== false  // 默认开启
+    this.cloudEnvId = cloudStorageConfig.envId || 'cloudbase-6gxf6ir4ef928555'
     
     if (this.useCloudStorage && wx.cloud) {
       // 初始化云开发
@@ -280,6 +289,10 @@ export default class Game {
     if (!this.useCloudStorage || !cloudImageManager) {
       return null
     }
+    // 检查图片是否在 CLOUD_IMAGE_MAP 中配置（混合模式下）
+    if (cloudImageManager.shouldUseCloud && !cloudImageManager.shouldUseCloud(imageName)) {
+      return null
+    }
     try {
       return await cloudImageManager.loadImage(imageName)
     } catch (e) {
@@ -299,48 +312,50 @@ export default class Game {
     this.loadIconsLocal()
   }
   
-  // 从云存储加载图标
+  // 从云存储加载图标（未配置的回退到本地）
   async loadIconsFromCloud() {
-    const imageNames = [
-      'honor.png',
-      'cured.png',
-      'timer.png',
-      'patient_icon.png',
-      'bed_area_bg.png'
-    ]
-    
     // 加载基础图标
-    for (const name of imageNames) {
-      const img = await this.loadImageFromCloud(name)
-      if (img) {
-        switch (name) {
-          case 'honor.png': this.honorImage = img; break
-          case 'cured.png': this.curedImage = img; break
-          case 'timer.png': this.timerImage = img; break
-          case 'patient_icon.png': this.patientIconImage = img; break
-          case 'bed_area_bg.png': this.bedAreaBgImage = img; break
-        }
-      }
-    }
+    this.honorImage = await this.loadImageWithFallback('honor.png', 'images/honor.png')
+    this.curedImage = await this.loadImageWithFallback('cured.png', 'images/cured.png')
+    this.timerImage = await this.loadImageWithFallback('timer.png', 'images/timer.png')
+    this.patientIconImage = await this.loadImageWithFallback('patient_icon.png', 'images/patient_icon.png')
+    this.bedAreaBgImage = await this.loadImageWithFallback('bed_area_bg.png', 'images/bed_area_bg.png')
     
     // 加载疾病图标
     this.diseaseImages = {}
     for (let i = 1; i <= 13; i++) {
-      const img = await this.loadImageFromCloud(`disease_${i}.png`)
-      if (img) {
-        this.diseaseImages[i] = img
-      }
+      this.diseaseImages[i] = await this.loadImageWithFallback(`disease_${i}.png`, `images/disease/disease_${i}.png`)
     }
     
     // 加载升级图片
     this.upgradeImages = {}
-    const upgradeNames = ['nurse_pro_1.png', 'nurse_pro_2.png', 'nurse_pro_3.png']
-    for (const name of upgradeNames) {
-      const img = await this.loadImageFromCloud(name)
-      if (img) {
-        this.upgradeImages[name] = img
-      }
-    }
+    this.upgradeImages['nurse_pro_1.png'] = await this.loadImageWithFallback('nurse_pro_1.png', 'images/nurse/nurse_pro_1.png')
+    this.upgradeImages['nurse_pro_2.png'] = await this.loadImageWithFallback('nurse_pro_2.png', 'images/nurse/nurse_pro_2.png')
+    this.upgradeImages['nurse_pro_3.png'] = await this.loadImageWithFallback('nurse_pro_3.png', 'images/nurse/nurse_pro_3.png')
+  }
+  
+  // 加载图片：先尝试云存储，未配置或失败则回退本地
+  loadImageWithFallback(fileName, localPath) {
+    return new Promise((resolve) => {
+      // 先尝试云存储
+      this.loadImageFromCloud(fileName).then(cloudImg => {
+        if (cloudImg) {
+          resolve(cloudImg)
+          return
+        }
+        // 回退到本地
+        const img = wx.createImage()
+        img.onload = () => resolve(img)
+        img.onerror = () => resolve(null)
+        img.src = localPath
+      }).catch(() => {
+        // 回退到本地
+        const img = wx.createImage()
+        img.onload = () => resolve(img)
+        img.onerror = () => resolve(null)
+        img.src = localPath
+      })
+    })
   }
   
   // 本地加载图标
@@ -396,10 +411,11 @@ export default class Game {
     
     // 加载升级图片缓存
     this.upgradeImages = {}
+    const nurseBase = 'images/nurse/'
     const upgradeImagePaths = [
-      'images/nurse/nurse_pro_1.png',
-      'images/nurse/nurse_pro_2.png',
-      'images/nurse/nurse_pro_3.png'
+      nurseBase + 'nurse_pro_1.png',
+      nurseBase + 'nurse_pro_2.png',
+      nurseBase + 'nurse_pro_3.png'
     ]
     upgradeImagePaths.forEach(path => {
       const img = wx.createImage()
@@ -708,6 +724,16 @@ export default class Game {
     this.waitingArea = new WaitingArea(waitingX, availableY + trayPadding, 
                                         waitingWidth - trayPadding * 2, 
                                         availableHeight - trayPadding * 2)
+    // 设置图片加载回调，图片加载完成后重绘
+    // 注意：使用 requestAnimationFrame 避免在初始化过程中渲染导致错误
+    this.waitingArea.setOnImageLoadCallback(() => {
+      requestAnimationFrame(() => {
+        if (this.isRunning) {
+          this.render()
+        }
+      })
+    })
+    
     // 保存托盘位置用于背景绘制
     this.waitingArea.trayX = this.mapX + gap
     this.waitingArea.trayY = availableY
@@ -836,6 +862,9 @@ export default class Game {
       // 非第一关直接显示按钮
       this.showStartButton = true
     }
+    
+    // 【重要】应用已购买的升级（因为 Nurse 实例被重新创建了）
+    this.loadSelectedUpgrades()
   }
   
   // 开始生成病人（提取为独立方法）
@@ -5325,7 +5354,7 @@ export default class Game {
     if (!this.debugModal || !this.debugModal.visible) return
     
     const modalWidth = 260
-    const modalHeight = 340
+    const modalHeight = 250
     const modalX = (this.screenWidth - modalWidth) / 2
     const modalY = (this.screenHeight - modalHeight) / 2
     
@@ -5362,7 +5391,6 @@ export default class Game {
     
     // 调试按钮配置
     const buttons = [
-      { id: 'addTime', text: '+30秒', color: '#3498DB', action: () => { this.timeRemaining += 30 } },
       { id: 'addCure', text: '+1治愈', color: '#27AE60', action: () => { this.curedCount++ } },
       { id: 'toggleBGM', text: this.bgmEnabled ? 'BGM:开' : 'BGM:关', color: this.bgmEnabled ? '#27AE60' : '#7F8C8D', action: () => { 
         // 切换BGM状态
@@ -5387,7 +5415,6 @@ export default class Game {
         // 触发游戏失败
         this.gameOverWithReason('调试：强制触发游戏失败')
       } },
-      { id: 'resetGame', text: '重置游戏', color: '#F39C12', action: () => { this.start() } },
       { id: 'addScore', text: '+100分', color: '#9B59B6', action: () => { this.score += 100 } },
       { id: 'jumpLevel', text: '跳转关卡', color: '#FF6B6B', action: () => { 
         // 显示输入框让用户输入关卡号
@@ -5415,21 +5442,129 @@ export default class Game {
             }
           }
         })
+      } },
+      { id: 'uploadNurse', text: '上传/更新护士图', color: '#1ABC9C', action: () => {
+          // 先初始化云开发环境
+          wx.cloud.init({ env: 'cloudbase-6gxf6ir4ef928555', traceUser: true })
+          
+          // 上传 nurse 目录下的图片到云存储
+          const nurseFiles = [
+            'nurse_desk.png', 'nurse.png', 'nurse_hello.png',
+            'nurse_pro.png', 'nurse_pro_1.png', 'nurse_pro_2.png', 'nurse_pro_3.png'
+          ]
+          const cloudBase = 'images/nurse/'
+          let successCount = 0
+          let failCount = 0
+          
+          wx.showLoading({ title: '上传中...', mask: true })
+          
+          // 使用文件系统管理器读取代码包内文件并复制到临时目录
+          const fs = wx.getFileSystemManager()
+          
+          nurseFiles.forEach((filename, index) => {
+            setTimeout(() => {
+              const localPath = `images/nurse/${filename}`
+              const tempPath = `${wx.env.USER_DATA_PATH}/${filename}`
+              
+              // 先复制文件到用户目录
+              fs.copyFile({
+                srcPath: localPath,
+                destPath: tempPath,
+                success: () => {
+                  // 复制成功后上传（同名文件会自动覆盖）
+                  wx.cloud.uploadFile({
+                    cloudPath: cloudBase + filename,
+                    filePath: tempPath,
+                    success: (res) => {
+                      successCount++
+                      console.log('✅ 上传成功:', filename, res.fileID)
+                      // 清理临时文件
+                      try { fs.unlinkSync(tempPath) } catch(e) {}
+                      checkComplete()
+                    },
+                    fail: (err) => {
+                      failCount++
+                      console.error('❌ 上传失败:', filename, err)
+                      checkComplete()
+                    }
+                  })
+                },
+                fail: (err) => {
+                  failCount++
+                  console.error('❌ 复制文件失败:', filename, err)
+                  checkComplete()
+                }
+              })
+            }, index * 300)
+          })
+          
+          function checkComplete() {
+            if (successCount + failCount === nurseFiles.length) {
+              wx.hideLoading()
+              wx.showModal({
+                title: '上传完成',
+                content: `成功: ${successCount}, 失败: ${failCount}\n\n${successCount > 0 ? '请在控制台查看 fileID 映射' : ''}`,
+                showCancel: false
+              })
+              if (successCount > 0) {
+                console.log('=== 复制到 CloudImageManager.js ===')
+                console.log('const CLOUD_IMAGE_MAP = {')
+                nurseFiles.forEach((f) => {
+                  const fileID = `cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/nurse/${f}`
+                  console.log(`  '${f}': '${fileID}',`)
+                })
+                console.log('}')
+              }
+            }
+          }
+      } },
+      { id: 'testCloudLoad', text: '测试云加载', color: '#E67E22', action: () => {
+        // 强制测试云存储加载护士图片
+        console.log('=== 测试云存储加载 ===')
+        
+        // 检查配置
+        import('./CloudImageManager.js').then(module => {
+          const { CLOUD_CONFIG, CLOUD_IMAGE_MAP } = module
+          console.log('云存储启用状态:', CLOUD_CONFIG.enabled)
+          console.log('混合模式:', CLOUD_CONFIG.hybridMode)
+          console.log('nurse.png 映射:', CLOUD_IMAGE_MAP['nurse.png'])
+          
+          // 尝试加载图片
+          const testImages = ['nurse.png', 'nurse_hello.png', 'nurse_desk.png']
+          testImages.forEach(name => {
+            console.log(`开始加载: ${name}`)
+            module.default.loadImage(name).then(img => {
+              console.log(`✅ ${name} 加载成功，尺寸: ${img.width}x${img.height}`)
+              console.log(`   图片src: ${img.src}`)
+              if (img.src.includes('tmp')) {
+                console.log(`   🔥 确认: 从云端加载（临时URL）`)
+              } else if (img.src.includes('cloud')) {
+                console.log(`   🔥 确认: 从云端加载（cloud协议）`)
+              } else {
+                console.log(`   ⚠️ 本地加载: ${img.src}`)
+              }
+            }).catch(err => {
+              console.error(`❌ ${name} 加载失败:`, err)
+            })
+          })
+        })
+        
+        wx.showToast({ title: '测试开始，请看控制台', icon: 'none' })
       } }
     ]
     
-    const btnWidth = 110
-    const btnHeight = 42
-    const btnGapX = 12
-    const btnGapY = 12
-    const startX = modalX + (modalWidth - btnWidth * 2 - btnGapX) / 2
-    const startY = modalY + 55
+    const btnWidth = 72
+    const btnHeight = 40
+    const btnGapX = 10
+    const btnGapY = 10
+    const startX = modalX + (modalWidth - btnWidth * 3 - btnGapX * 2) / 2
+    const startY = modalY + 50
     
     this.debugModal.buttons = []
     
     buttons.forEach((btn, index) => {
-      const row = Math.floor(index / 2)
-      const col = index % 2
+      const row = Math.floor(index / 3)
+      const col = index % 3
       const btnX = startX + col * (btnWidth + btnGapX)
       const btnY = startY + row * (btnHeight + btnGapY)
       
@@ -5445,14 +5580,22 @@ export default class Game {
       
       // 绘制按钮
       ctx.fillStyle = btn.color
-      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 6)
+      fillRoundRect(ctx, btnX, btnY, btnWidth, btnHeight, 4)
       
-      // 按钮文字
+      // 按钮文字（缩小字号以适应小按钮）
       ctx.fillStyle = '#FFF'
-      ctx.font = 'bold 14px "PingFang SC", sans-serif'
+      ctx.font = '10px "PingFang SC", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(btn.text, btnX + btnWidth / 2, btnY + btnHeight / 2)
+      // 文字过长时换行显示
+      const text = btn.text
+      if (text.length > 4) {
+        const mid = Math.ceil(text.length / 2)
+        ctx.fillText(text.slice(0, mid), btnX + btnWidth / 2, btnY + btnHeight / 2 - 6)
+        ctx.fillText(text.slice(mid), btnX + btnWidth / 2, btnY + btnHeight / 2 + 6)
+      } else {
+        ctx.fillText(text, btnX + btnWidth / 2, btnY + btnHeight / 2)
+      }
     })
   }
   
@@ -6296,15 +6439,18 @@ export default class Game {
       ctx.fillText(currentUpgrade.name, tagX + tagWidth / 2, tagY + tagHeight / 2 + 1)
       
       // 加载并绘制升级图片（不裁剪，直接显示）
+      // 从完整路径中提取文件名，使用 CloudImageManager 从云存储加载
       const imagePath = currentUpgrade.imagePath
-      let upgradeImg = this.upgradeImages[imagePath]
+      const fileName = imagePath.split('/').pop()
+      let upgradeImg = this.upgradeImages[fileName]
       
       if (!upgradeImg) {
-        const img = wx.createImage()
-        img.onload = () => {
-          this.upgradeImages[imagePath] = img
-        }
-        img.src = imagePath
+        // 使用 CloudImageManager 从云存储加载
+        cloudImageManager.loadImage(fileName).then(img => {
+          this.upgradeImages[fileName] = img
+        }).catch(err => {
+          console.warn('[升级弹窗] 加载图片失败:', fileName, err)
+        })
         upgradeImg = null
       }
       

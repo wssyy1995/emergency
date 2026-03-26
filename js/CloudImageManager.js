@@ -3,97 +3,116 @@
  * 支持从微信云开发的云存储加载图片
  */
 
-// 云存储配置
+// 读取项目配置
+let projectConfig = {}
+try {
+  projectConfig = require('../project.config.json')
+} catch (e) {
+  console.warn('[CloudImageManager] 无法读取 project.config.json')
+}
+
+const cloudConfig = projectConfig.cloudStorage || {}
+
+// 云存储配置（优先使用 project.config.json 中的配置）
+const envId = cloudConfig.envId || 'cloudbase-6gxf6ir4ef928555'
+const bucketId = cloudConfig.bucketId || '1409144239'  // 正确的 bucket ID
+
 const CLOUD_CONFIG = {
   // 云环境 ID
-  env: 'cloudbase-6gxf6ir4ef928555',
+  env: envId,
   // 云存储基础路径
-  basePath: 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/',
+  basePath: `cloud://${envId}.636c-${envId}-${bucketId}/images/`,
   // 是否使用云存储（开发时可以先关闭，使用本地图片）
-  enabled: false,
+  enabled: cloudConfig.enabled !== false,  // 默认 true
   // 本地图片基础路径
   localBasePath: 'images/',
   // 混合模式：true = 只有在 CLOUD_IMAGE_MAP 中配置的图片才用云存储，其他用本地
-  // false = 所有图片都用本地
-  hybridMode: true
+  // false = 所有图片都用云存储
+  hybridMode: cloudConfig.hybridMode !== false  // 默认 true
 }
 
 // 图片名称到云存储路径的映射
 // 上传图片到云存储后，在这里记录对应的云文件 ID
 const CLOUD_IMAGE_MAP = {
   // 物品图片
-  'adrenaline.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/adrenaline.png',
-  'aed.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/aed.png',
-  'antibiotic.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/antibiotic.png',
-  'painkiller.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/painkiller.png',
-  'injection.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/injection.png',
-  'tape.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/tape.png',
-  'scissors.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/scissors.png',
-  'thermometer.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/thermometer.png',
+  // 'adrenaline.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/adrenaline.png',
+  // 'aed.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/aed.png',
+  // 'antibiotic.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/antibiotic.png',
+  // 'painkiller.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/painkiller.png',
+  // 'injection.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/injection.png',
+  // 'tape.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/tape.png',
+  // 'scissors.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/scissors.png',
+  // 'thermometer.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/thermometer.png',
   
   // UI 图标
-  'cured.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/cured.png',
-  'curing.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/curing.png',
-  'honor.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/honor.png',
-  'timer.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/timer.png',
-  'patient_icon.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_icon.png',
-  'deliver.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/deliver.png',
-  'start_machine.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/start_machine.png',
-  'machine_report.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/tool_machine/machine_report.png',
+  // 'cured.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/cured.png',
+  // 'curing.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/curing.png',
+  // 'honor.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/honor.png',
+  // 'timer.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/timer.png',
+  // 'patient_icon.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_icon.png',
+  // 'deliver.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/deliver.png',
+  // 'start_machine.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/start_machine.png',
+  // 'machine_report.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/tool_machine/machine_report.png',
   
   // 病人相关
-  'boom.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/global_icon/boom.png',
-  'comfort.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/comfort.png',
+  // 'boom.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/global_icon/boom.png',
+  // 'comfort.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/comfort.png',
   
   // 场景图片
-  'bed.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/bed.png',
-  'bed_area_bg.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/bed_area_bg.png',
-  'seat_free.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/seat_free.png',
-  'seat_occupied.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/seat_occupied.png',
-  'tools_desk.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/tools_desk.png',
+  // 'bed.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/bed.png',
+  // 'bed_area_bg.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/bed_area_bg.png',
+  // 'seat_free.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/seat_free.png',
+  // 'seat_occupied.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/seat_occupied.png',
+  // 'tools_desk.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/tools_desk.png',
   
   // 护士台
-  'nurse_desk.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/nurse/nurse_desk.png',
-  'nurse.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/nurse/nurse.png',
-  'nurse_hello.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/nurse/nurse_hello.png',
-  'plant.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/plant.png',
-  'bookshelf.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/bookshelf.png',
-  'guide.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/guide.png',
-  'finger.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/finger.png',
-  'lightbulb.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/lightbulb.png',
+  'nurse_desk.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_desk.png',
+  'nurse.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse.png',
+  'nurse_hello.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_hello.png',
+  'nurse_hello.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_hello.png',
+  'nurse_pro.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro.png',
+  'nurse_pro_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro_1.png',
+  'nurse_pro_2.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro_2.png',
+  'nurse_pro_3.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro_3.png',
+  // 'plant.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/plant.png',
+  // 'bookshelf.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/bookshelf.png',
+  // 'guide.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/guide.png',
+  // 'finger.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/finger.png',
+  // 'lightbulb.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/lightbulb.png',
   
-  // 医生
-  'doctor_1_idle.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_1_idle.png',
-  'doctor_1_treat.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_1_treat.png',
-  'doctor_2_idle.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_2_idle.png',
-  'doctor_2_treat.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_2_treat.png',
+  // // 医生
+  // 'doctor_1_idle.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_1_idle.png',
+  // 'doctor_1_treat.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_1_treat.png',
+  // 'doctor_2_idle.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_2_idle.png',
+  // 'doctor_2_treat.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_2_treat.png',
   
-  // 疾病图标
-  'disease_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_1.png',
-  'disease_2.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_2.png',
-  'disease_3.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_3.png',
-  'disease_4.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_4.png',
-  'disease_5.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_5.png',
-  'disease_6.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_6.png',
-  'disease_7.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_7.png',
-  'disease_8.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_8.png',
-  'disease_9.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_9.png',
-  'disease_10.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_10.png',
-  'disease_11.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_11.png',
-  'disease_12.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_12.png',
-  'disease_13.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_13.png',
+  // // 疾病图标
+  // 'disease_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_1.png',
+  // 'disease_2.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_2.png',
+  // 'disease_3.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_3.png',
+  // 'disease_4.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_4.png',
+  // 'disease_5.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_5.png',
+  // 'disease_6.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_6.png',
+  // 'disease_7.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_7.png',
+  // 'disease_8.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_8.png',
+  // 'disease_9.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_9.png',
+  // 'disease_10.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_10.png',
+  // 'disease_11.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_11.png',
+  // 'disease_12.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_12.png',
+  // 'disease_13.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/disease/disease_13.png',
   
-  // 病人图片
-  'patient_1_normal.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_1_normal.png',
-  'patient_1_sick.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_1_sick.png',
-  'patient_1_angry.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_1_angry.png',
+  // // 病人图片
+  // 'patient_1_normal.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_1_normal.png',
+  // 'patient_1_sick.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_1_sick.png',
+  // 'patient_1_angry.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/patient/patient_1_angry.png',
   
-  // 升级图片
-  'nurse_pro_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/nurse/nurse_pro_1.png',
-  'nurse_pro_2.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/nurse/nurse_pro_2.png',
-  'nurse_pro_3.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/nurse/nurse_pro_3.png',
-  'doctor_pro_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_pro_1.png',
-  'seat_pro_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/seat_pro_1.png',
+  // // 升级图片
+  // 'nurse_pro.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro.png',
+  // 'nurse_pro_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro_1.png',
+  // 'nurse_pro_2.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro_2.png',
+  // 'nurse_pro_3.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1409144239/images/nurse/nurse_pro_3.png',
+  // 'doctor_pro_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/doctor/doctor_pro_1.png',
+  // 'seat_pro_1.png': 'cloud://cloudbase-6gxf6ir4ef928555.636c-cloudbase-6gxf6ir4ef928555-1326381979/images/seat_pro_1.png',
 }
 
 class CloudImageManager {
@@ -101,6 +120,11 @@ class CloudImageManager {
     this.imageCache = {}
     this.tempUrlCache = {}
     this.loadingPromises = {}
+    
+    // 自动初始化云环境
+    if (CLOUD_CONFIG.enabled && wx.cloud) {
+      this.initCloud()
+    }
   }
 
   /**
@@ -183,7 +207,13 @@ class CloudImageManager {
     
     // 检查是否正在加载
     if (this.loadingPromises[fileID]) {
-      return this.loadingPromises[fileID]
+      try {
+        const url = await this.loadingPromises[fileID]
+        return url
+      } catch (err) {
+        // 之前的加载失败了，清除缓存重试
+        delete this.loadingPromises[fileID]
+      }
     }
     
     // 开始加载
@@ -209,10 +239,18 @@ class CloudImageManager {
       wx.cloud.getTempFileURL({
         fileList: [fileID],
         success: (res) => {
-          if (res.fileList && res.fileList[0] && res.fileList[0].tempFileURL) {
-            resolve(res.fileList[0].tempFileURL)
+          console.log('[CloudImageManager] API返回:', res)
+          if (res.fileList && res.fileList[0]) {
+            const fileInfo = res.fileList[0]
+            if (fileInfo.tempFileURL) {
+              resolve(fileInfo.tempFileURL)
+            } else if (fileInfo.status === -1) {
+              reject(new Error('云文件不存在: ' + fileID))
+            } else {
+              reject(new Error('获取临时URL失败: ' + JSON.stringify(fileInfo)))
+            }
           } else {
-            reject(new Error('获取临时 URL 失败'))
+            reject(new Error('获取临时 URL 失败: 返回格式错误'))
           }
         },
         fail: (err) => {
@@ -229,22 +267,29 @@ class CloudImageManager {
    * @returns {Promise<HTMLImageElement>} 图片对象
    */
   async loadImage(imageName) {
-    // 检查缓存
-    if (this.imageCache[imageName]) {
-      return this.imageCache[imageName]
+    // 检查缓存：如果有且有效（width > 0），直接返回
+    const cached = this.imageCache[imageName]
+    if (cached && cached.width > 0) {
+      return cached
     }
     
     // 获取图片路径
     const path = this.getImagePath(imageName)
+    console.log(`[CloudImageManager] 加载图片: ${imageName}, 路径: ${path}`)
     
     // 如果是云存储路径，先获取临时 URL
     let imageUrl = path
     if (path.startsWith('cloud://')) {
+      console.log(`[CloudImageManager] 云路径 detected，开始获取临时 URL...`)
       try {
         imageUrl = await this.getTempUrl(path)
+        console.log(`[CloudImageManager] 获取临时 URL 成功: ${imageUrl.substring(0, 50)}...`)
       } catch (err) {
-        console.error('[CloudImageManager] 加载云图片失败，回退到本地:', imageName)
-        imageUrl = CLOUD_CONFIG.localBasePath + imageName
+        console.error('[CloudImageManager] 获取临时 URL 失败:', err)
+        console.error('[CloudImageManager] 回退到本地:', imageName)
+        // 从云路径中提取本地路径（cloud://.../images/nurse/xxx.png -> images/nurse/xxx.png）
+        const localPathMatch = path.match(/images\/.+$/)
+        imageUrl = localPathMatch ? localPathMatch[0] : CLOUD_CONFIG.localBasePath + imageName
       }
     }
     
@@ -253,6 +298,7 @@ class CloudImageManager {
       const img = wx.createImage()
       img.onload = () => {
         this.imageCache[imageName] = img
+        console.log(`[CloudImageManager] 图片加载成功: ${imageName}`)
         resolve(img)
       }
       img.onerror = (err) => {

@@ -1,5 +1,12 @@
 {
   "description": "急症室模拟器小游戏",
+  "cloudStorage": {
+    "enabled": true,
+    "envId": "cloudbase-6gxf6ir4ef928555",
+    "bucketId": "1409144239",
+    "hybridMode": true,
+    "description": "云存储配置：enabled=开关；bucketId=存储桶ID（在云开发控制台-存储-文件详情里查看）"
+  },
   "packOptions": {
     "ignore": [
       {

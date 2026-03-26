@@ -1,22 +1,42 @@
 import { fillRoundRect, strokeRoundRect } from './utils.js'
 import Nurse from './Nurse.js'
 import { getNewPlayerStatus } from './GameConfig.js'
+import cloudImageManager from './CloudImageManager.js'
 
 // ==================== 全局等候区图片缓存 ====================
 const WaitingAreaImageCache = {
   images: {},
   
-  getImage(key, src) {
-    if (!this.images[key]) {
-      const img = wx.createImage()
-      img.onload = () => {
+  getImage(key, src, onLoadCallback) {
+    // 检查缓存：如果没有，或者缓存的是空对象（width=0），则重新加载
+    const cached = this.images[key]
+    if (!cached || cached.width === 0) {
+      const filename = src.split('/').pop()
+      console.log(`[WaitingArea] 加载图片: ${key} -> ${filename}, 缓存状态: ${cached ? '空对象' : '无缓存'}`)
+      
+      // 先返回一个空对象，避免 undefined 错误
+      this.images[key] = { width: 0, height: 0 }
+      
+      cloudImageManager.loadImage(filename).then(img => {
+        console.log(`[WaitingArea] 云加载成功: ${key}, width=${img.width}`)
         this.images[key] = img
-      }
-      img.onerror = () => {
-        console.warn(`Failed to load image: ${src}`)
-      }
-      img.src = src
-      this.images[key] = img
+        if (onLoadCallback) onLoadCallback()
+      }).catch(err => {
+        console.warn(`[WaitingArea] 云加载失败，回退到本地: ${src}`, err)
+        // 回退到本地加载
+        const img = wx.createImage()
+        img.onload = () => {
+          console.log(`[WaitingArea] 本地加载成功: ${key}`)
+          this.images[key] = img
+          if (onLoadCallback) onLoadCallback()
+        }
+        img.onerror = () => {
+          console.warn(`[WaitingArea] 本地加载失败: ${src}`)
+        }
+        img.src = src
+      })
+    } else {
+      console.log(`[WaitingArea] 使用缓存: ${key}, width=${cached.width}`)
     }
     return this.images[key]
   }
@@ -33,6 +53,10 @@ export default class WaitingArea {
     // 创建护士位置（相对于内层舞台）
     this.nurse = new Nurse(this.x + this.width * 0.55, this.y + this.height * 0.22)
     this.nurse.setScale(this.width)
+    // 设置护士图片加载回调
+    this.nurse.setOnImageLoadCallback(() => {
+      if (this.onImageLoadCallback) this.onImageLoadCallback()
+    })
     
     this.standingQueue = []
     this.initStandingQueue()
@@ -44,12 +68,38 @@ export default class WaitingArea {
   }
 
   loadImages() {
-    this.nurseDeskImage = WaitingAreaImageCache.getImage('nurseDesk', 'images/nurse/nurse_desk.png')
-    this.plantImage = WaitingAreaImageCache.getImage('plant', 'images/plant.png')
-    this.bookshelfImage = WaitingAreaImageCache.getImage('bookshelf', 'images/bookshelf.png')
-    this.guideImage = WaitingAreaImageCache.getImage('guide', 'images/guide.png')
-    this.fingerImage = WaitingAreaImageCache.getImage('finger', 'images/finger.png')
-    this.lightbulbImage = WaitingAreaImageCache.getImage('lightbulb', 'images/lightbulb.png')
+    // 直接从 CloudImageManager 加载
+    const files = [
+      { name: 'nurse_desk.png', prop: 'nurseDeskImage' },
+      { name: 'plant.png', prop: 'plantImage' },
+      { name: 'bookshelf.png', prop: 'bookshelfImage' },
+      { name: 'guide.png', prop: 'guideImage' },
+      { name: 'finger.png', prop: 'fingerImage' },
+      { name: 'lightbulb.png', prop: 'lightbulbImage' }
+    ]
+    
+    files.forEach(({ name, prop }) => {
+      cloudImageManager.loadImage(name).then(img => {
+        this[prop] = img
+        // 触发重绘
+        if (this.onImageLoadCallback) this.onImageLoadCallback()
+      }).catch(err => {
+        console.warn(`[WaitingArea] ${name} 加载失败:`, err)
+      })
+    })
+  }
+  
+  // 图片加载完成回调
+  onImageLoaded() {
+    // 通知 Game 需要重绘
+    if (this.onImageLoadCallback) {
+      this.onImageLoadCallback()
+    }
+  }
+  
+  // 设置图片加载回调
+  setOnImageLoadCallback(callback) {
+    this.onImageLoadCallback = callback
   }
   
   // 设置新玩家模式
@@ -267,30 +317,8 @@ export default class WaitingArea {
         drawWidth,
         drawHeight
       )
-    } else {
-      // 图片未加载时的 fallback
-      ctx.fillStyle = '#FFF'
-      ctx.beginPath()
-      ctx.moveTo(centerX - deskWidth / 2, deskY)
-      ctx.lineTo(centerX + deskWidth / 2, deskY)
-      ctx.quadraticCurveTo(centerX + deskWidth / 2, deskY + deskHeight * 1.1, centerX, deskY + deskHeight * 1.15)
-      ctx.quadraticCurveTo(centerX - deskWidth / 2, deskY + deskHeight * 1.1, centerX - deskWidth / 2, deskY)
-      ctx.closePath()
-      ctx.fill()
-      
-      ctx.strokeStyle = '#FFB7B2'
-      ctx.lineWidth = 2
-      ctx.stroke()
-      
-      ctx.fillStyle = '#FFB7B2'
-      ctx.beginPath()
-      ctx.moveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
-      ctx.lineTo(centerX + deskWidth / 2 - deskWidth * 0.05, deskY + deskHeight * 0.4)
-      ctx.quadraticCurveTo(centerX + deskWidth / 2 - deskWidth * 0.05, deskY + deskHeight * 0.55, centerX, deskY + deskHeight * 0.6)
-      ctx.quadraticCurveTo(centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.55, centerX - deskWidth / 2 + deskWidth * 0.05, deskY + deskHeight * 0.4)
-      ctx.closePath()
-      ctx.fill()
     }
+    // 图片未加载时不绘制 fallback，避免一闪而过
     
     // 绘制植物（在护士台左边）
     if (this.plantImage && this.plantImage.width > 0) {

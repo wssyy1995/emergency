@@ -1,3 +1,5 @@
+import cloudImageManager from './CloudImageManager.js'
+
 export default class Nurse {
   constructor(x, y) {
     this.x = x
@@ -48,30 +50,49 @@ export default class Nurse {
     this.currentUpgradeId = null
     this.upgradedImage = null  // 升级后的图片
     
+    // 图片加载完成回调
+    this.onImageLoadCallback = null
+    
     this.loadImage()
+  }
+  
+  // 设置图片加载回调
+  setOnImageLoadCallback(callback) {
+    console.log('[Nurse] setOnImageLoadCallback 被调用')
+    this.onImageLoadCallback = callback
   }
 
   loadImage() {
-    // 加载普通护士图片
-    const img = wx.createImage()
-    img.onload = () => {
+    // 构建动态路径（避免编译时检查文件存在性）
+    const basePath = 'images/nurse/'
+    
+    // 使用 CloudImageManager 加载普通护士图片
+    cloudImageManager.loadImage('nurse.png').then(img => {
       this.nurseImage = img
-    }
-    img.onerror = () => {
-      console.warn('Failed to load nurse image: images/nurse/nurse.png')
-    }
-    img.src = 'images/nurse/nurse.png'
+      if (this.onImageLoadCallback) this.onImageLoadCallback()
+    }).catch(err => {
+      // 回退到本地加载
+      const img = wx.createImage()
+      img.onload = () => { 
+        this.nurseImage = img
+        if (this.onImageLoadCallback) this.onImageLoadCallback()
+      }
+      img.src = basePath + 'nurse.png'
+    })
     
-    // 加载新玩家欢迎图片
-    const helloImg = wx.createImage()
-    helloImg.onload = () => {
-      this.nurseHelloImage = helloImg
-    }
-    helloImg.onerror = () => {
-      console.warn('Failed to load nurse hello image: images/nurse/nurse_hello.png')
-    }
-    helloImg.src = 'images/nurse/nurse_hello.png'
-    
+    // 使用 CloudImageManager 加载新玩家欢迎图片
+    cloudImageManager.loadImage('nurse_hello.png').then(img => {
+      this.nurseHelloImage = img
+      if (this.onImageLoadCallback) this.onImageLoadCallback()
+    }).catch(err => {
+      // 回退到本地加载
+      const img = wx.createImage()
+      img.onload = () => { 
+        this.nurseHelloImage = img
+        if (this.onImageLoadCallback) this.onImageLoadCallback()
+      }
+      img.src = basePath + 'nurse_hello.png'
+    })
   }
   
   // 设置新玩家模式
@@ -156,6 +177,17 @@ export default class Nurse {
       ? this.nurseHelloImage 
       : this.getCurrentImage()
     
+    // 调试：每60帧输出一次（约1秒）
+    if (Math.random() < 0.02) {
+      console.log('[Nurse] render:', 
+        'isNewPlayer=', this.isNewPlayer,
+        'currentUpgradeId=', this.currentUpgradeId,
+        'upgradedImage=', !!this.upgradedImage,
+        'currentImage=', !!currentImage,
+        'currentImage.width=', currentImage?.width
+      )
+    }
+    
     if (currentImage && currentImage.width > 0) {
       // 使用图片绘制护士
       const targetHeight = 100
@@ -164,6 +196,14 @@ export default class Nurse {
       const drawHeight = targetHeight
       
       ctx.drawImage(currentImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
+    } else {
+      // 图片未加载完成，绘制占位矩形（调试用）
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.3)'
+      ctx.fillRect(-25, -50, 50, 100)
+      ctx.fillStyle = '#FFF'
+      ctx.font = '12px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Loading...', 0, 0)
     }
     
     ctx.restore()
@@ -393,40 +433,51 @@ export default class Nurse {
   
   // 【升级系统】设置升级
   setUpgrade(upgradeId) {
+    console.log('[Nurse] setUpgrade 被调用:', upgradeId, '当前:', this.currentUpgradeId)
     if (this.currentUpgradeId === upgradeId) return
     
     this.currentUpgradeId = upgradeId
     
     // 如果有升级，加载对应的升级图片
     if (upgradeId) {
-      const img = wx.createImage()
-      img.onload = () => {
+      const imageName = 'nurse_pro_' + upgradeId + '.png'
+      
+      console.log('[护士升级] 开始加载图片:', imageName)
+      cloudImageManager.loadImage(imageName).then(img => {
+        console.log('[护士升级] 图片加载成功:', imageName, 'width=', img.width)
         this.upgradedImage = img
-        console.log('[护士升级] 加载升级图片成功:', upgradeId)
-      }
-      img.onerror = () => {
-        console.warn('[护士升级] 加载升级图片失败:', upgradeId)
-        this.upgradedImage = null
-      }
-      // 根据升级ID确定图片路径
-      img.src = `images/nurse/nurse_pro_${upgradeId}.png`
+        // 触发重绘
+        console.log('[护士升级] 触发重绘, callback=', !!this.onImageLoadCallback)
+        if (this.onImageLoadCallback) this.onImageLoadCallback()
+      }).catch(err => {
+        console.warn('[护士升级] 加载失败:', upgradeId, err)
+        // 回退到本地加载
+        const img = wx.createImage()
+        img.onload = () => { 
+          this.upgradedImage = img
+          if (this.onImageLoadCallback) this.onImageLoadCallback()
+        }
+        img.onerror = () => { this.upgradedImage = null }
+        img.src = 'images/nurse/' + imageName
+      })
     } else {
       // 未升级状态，使用默认图片
       this.upgradedImage = null
     }
-    
-    console.log('[护士升级] 设置升级:', upgradeId)
   }
   
   // 【升级系统】获取当前显示的图片
   getCurrentImage() {
-    if (this.isNewPlayer && this.nurseHelloImage) {
+    if (this.isNewPlayer && this.nurseHelloImage && this.nurseHelloImage.width > 0) {
       return this.nurseHelloImage
     }
-    if (this.upgradedImage) {
+    if (this.upgradedImage && this.upgradedImage.width > 0) {
       return this.upgradedImage
     }
-    return this.nurseImage
+    if (this.nurseImage && this.nurseImage.width > 0) {
+      return this.nurseImage
+    }
+    return null
   }
   
   // 点击检测（扩大点击范围方便玩家点击）
